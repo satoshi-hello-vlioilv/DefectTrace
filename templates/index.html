@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>DefectTrace</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <span class="logo" title="検査計画像ビュワー">DefectTrace</span>
+  <nav id="crumb" class="crumb"></nav>
+  <span class="spacer"></span>
+  <button type="button" id="btnReset" class="ghost" title="表示項目の設定を初期状態に戻す">表示設定を初期化</button>
+</header>
+
+<main id="main">
+  <aside id="treePane">
+    <div class="pane-head">
+      <div class="fline"><input id="treeFilter" type="search" placeholder="絞込（ロットNo・時刻など）">
+        <button type="button" id="listCfg" class="mini" aria-expanded="false" title="ロット一覧の表示項目（ドラッグ中は自動で開きます）">項目▾</button></div>
+      <div class="dz chips listzone" data-drop="list" title="ロット一覧に表示する項目（ここへドラッグ）"><span class="dzl">一覧</span><span class="pins" data-place="list"></span></div>
+    </div>
+    <ul id="tree" class="tree" role="tree"></ul>
+  </aside>
+  <div class="split" data-split="treePane" title="ドラッグで幅を変更"></div>
+
+  <section id="center">
+    <div id="summary" class="dz summary" data-drop="summary" title="ロットサマリ（ロット情報をここへドラッグ）">
+      <span class="dzl">サマリ</span><span class="pins" data-place="summary"><span class="hint">ロットを選択</span></span>
+    </div>
+    <div class="toolbar">
+      <div id="viewSeg" class="seg" role="tablist">
+        <button type="button" data-v="grid" class="on">画像一覧</button>
+        <button type="button" data-v="pairs" title="表と裏で幅方向位置が近い欠陥の組">転写候補 <span id="pairCnt" class="cnt0"></span></button>
+        <button type="button" data-v="pitch" title="同一面・同一幅位置で等間隔に並ぶ欠陥">ピッチ候補 <span id="pitchCnt" class="cnt0"></span></button>
+      </div>
+      <div id="groupTabs" class="seg"></div>
+      <div class="dz chips cardzone" data-drop="card" title="各画像の下に表示する項目（画像単位の項目をここへドラッグ）"><span class="dzl">画像表示</span><span class="pins" data-place="card"></span></div>
+      <div id="prog" class="prog" hidden><div id="progBar"></div><span id="progTxt"></span></div>
+      <span class="spacer"></span>
+      <label class="sizer" id="sizerWrap">サイズ <input id="thumbSize" type="range" min="96" max="320" step="8" value="150"></label>
+    </div>
+    <div id="grid" tabindex="0"><div class="empty">左のツリーからロットを選択</div></div>
+    <div id="pairView" hidden>
+      <div class="pbar">
+        <div id="baseSeg" class="seg" title="どちらの面を基準に候補をまとめるか">
+          <button type="button" data-b="front" class="on">表基準</button>
+          <button type="button" data-b="back">裏基準</button>
+        </div>
+        <label class="fld" title="表と裏の幅方向位置(OS～)の差の許容範囲">幅差 ±
+          <input id="pTol" type="number" min="0" max="100" step="0.5" value="5"> mm
+          <input id="pTolR" type="range" min="0" max="30" step="0.5" value="5"></label>
+        <label class="fld" title="空欄＝制限なし">長さ差 ≤ <input id="pMaxDy" type="number" min="0" step="1" placeholder="制限なし"> m</label>
+        <label class="fld chk" title="裏面の幅方向が表面と逆向きに記録されている場合にON"><input id="pMirror" type="checkbox"> 裏面の幅方向を反転</label>
+        <label class="fld chk"><input id="pImgOnly" type="checkbox" checked> 画像ありのみ</label>
+        <label class="fld">並び <select id="pSort">
+          <option value="y">長さ方向順</option><option value="n">候補数の多い順</option><option value="dx">幅差の小さい順</option><option value="dy">長さ差の小さい順</option></select></label>
+        <span class="spacer"></span>
+        <button type="button" id="pCsv" title="表示中の候補をCSVで保存">CSV</button>
+      </div>
+      <div id="pSum" class="psum"></div>
+      <div id="pairList" tabindex="0"></div>
+    </div>
+    <div id="pitchView" hidden>
+      <div class="pbar">
+        <label class="fld" title="同一面で幅方向位置(OS～)の許容範囲（候補列の平均位置から）">幅差 ±
+          <input id="ptTol" type="number" min="0" max="100" step="0.5" value="5"> mm
+          <input id="ptTolR" type="range" min="0" max="30" step="0.5" value="5"></label>
+        <label class="fld" title="各間隔とピッチの差の許容範囲">ピッチ差 ± <input id="ptYtol" type="number" min="0" step="0.005" value="0.03"> m</label>
+        <label class="fld" title="連続するピッチ（間隔）の数の下限。3 = 欠陥4個以上">最小ピッチ数 <input id="ptN" type="number" min="1" max="50" step="1" value="3"></label>
+        <label class="fld" title="同じ欠陥の重複検出を除くための下限">ピッチ範囲 <input id="ptPmin" type="number" min="0" step="0.05" value="0.1"> 〜 <input id="ptPmax" type="number" min="0" step="0.1" placeholder="上限なし"> m</label>
+        <label class="fld" title="途中の欠陥が検出されていない（ピッチの2倍・3倍の間隔）場合も連続とみなす回数">欠け許容 <select id="ptSkip"><option value="0">なし</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+        <label class="fld chk"><input id="ptImgOnly" type="checkbox"> 全て画像ありのみ</label>
+        <label class="fld">並び <select id="ptSort">
+          <option value="n">個数の多い順</option><option value="y">長さ方向順</option><option value="p">ピッチ順</option><option value="dev">ばらつきの小さい順</option></select></label>
+        <span class="spacer"></span>
+        <button type="button" id="ptCsv" title="表示中のピッチ候補をCSVで保存">CSV</button>
+      </div>
+      <div id="ptSum" class="psum"></div>
+      <div id="pitchList" tabindex="0"></div>
+    </div>
+  </section>
+  <div class="split" data-split="infoPane" data-rev="1" title="ドラッグで幅を変更"></div>
+
+  <aside id="infoPane">
+    <details class="box dz" data-drop="image" open>
+      <summary>画像情報 <span id="imgTitle" class="sub"></span></summary>
+      <div id="imgInfo"><div class="hint">画像をクリックで表示</div></div>
+    </details>
+    <details class="box" open>
+      <summary>MAP <span id="mapTitle" class="sub"></span></summary>
+      <div class="mapbar"><div id="mapSide" class="seg"></div><span class="spacer"></span>
+        <label class="fld" title="MAPの記号の大きさ">記号 <input id="markSize" type="range" min="6" max="28" step="1" value="11"></label></div>
+      <canvas id="map" height="300"></canvas>
+      <div id="mapLegend" class="legend"></div>
+      <div class="slots">
+        <div class="dz slot" data-drop="mapx"><span class="dzl">横</span><span class="pins" data-place="mapx"></span></div>
+        <div class="dz slot" data-drop="mapy"><span class="dzl">縦</span><span class="pins" data-place="mapy"></span></div>
+      </div>
+      <div id="mapMsg" class="hint"></div>
+    </details>
+    <details class="box dz" data-drop="lot" open>
+      <summary>ロット情報</summary>
+      <div id="lotInfo"><div class="hint">ロットを選択すると表示</div></div>
+    </details>
+    <details class="box" id="srcBox">
+      <summary>データ項目 <span class="sub">（ドラッグで各表示先へ／同じ枠内で並べ替え）</span></summary>
+      <input id="srcFilter" type="search" placeholder="項目名・値で絞込">
+      <div id="srcList"><div class="hint">ロットを選択すると表示</div></div>
+    </details>
+  </aside>
+</main>
+
+<footer><span id="status">準備完了</span><span class="sub">クリック 選択 / ダブルクリック・Enter 拡大・比較 / ← → 送り（ピッチ：↑↓ 候補切替）/ Esc 閉じる / 項目はドラッグで表示先へ</span></footer>
+
+<div id="viewer" hidden>
+  <div class="vbar">
+    <span id="vName"></span>
+    <span class="spacer"></span>
+    <div class="seg" id="zoomSeg">
+      <button type="button" data-z="fit" class="on">全体</button>
+      <button type="button" data-z="1">1x</button>
+      <button type="button" data-z="2">2x</button>
+      <button type="button" data-z="4">4x</button>
+    </div>
+    <button type="button" id="vPrev">前</button>
+    <button type="button" id="vNext">次</button>
+    <button type="button" id="vClose" class="primary">閉じる</button>
+  </div>
+  <div class="vbody">
+    <div id="vStage" class="fit"><img id="vImg" alt=""></div>
+    <div id="vInfo"></div>
+  </div>
+</div>
+
+<div id="pv" hidden>
+  <div class="vbar">
+    <span id="pvTitle"></span>
+    <span class="spacer"></span>
+    <button type="button" id="pvPrev" title="前の候補 (←)">前</button>
+    <button type="button" id="pvNext" title="次の候補 (→)">次</button>
+    <button type="button" id="pvClose" class="primary">閉じる</button>
+  </div>
+  <div id="pvDelta" class="pvdelta"></div>
+  <div class="pvbody"><div class="pvside" id="pvA"></div><div class="pvside" id="pvB"></div></div>
+</div>
+
+<form id="pinPop" hidden>
+  <div class="pkey" id="pinKey"></div>
+  <label>表示名 <input id="pinLabel" type="text"></label>
+  <label>表示先 <select id="pinPlace"></select></label>
+  <label id="pinAllWrap" class="chk"><input id="pinAll" type="checkbox"> 繰り返し項目をまとめて表示</label>
+  <div class="pbtn"><button type="button" id="pinCancel">取消</button><button type="submit" class="primary">追加</button></div>
+</form>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
