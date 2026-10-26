@@ -1,0 +1,66 @@
+[package]
+name = "defecttrace-desktop"
+version = "4.0.0"
+description = "DefectTrace（検査計画像ビュワー）デスクトップ版"
+edition = "2021"
+rust-version = "1.90"
+publish = false
+
+# 窓に依らない処理（検査データ・画像・解析・更新と配布）。exe・試験・測る道具（examples）が使う
+[lib]
+name = "dt_core"
+path = "src/lib.rs"
+
+# exe の名前は program/app/brand.json の exe と同じ（src/brand.rs の試験が食い違いを止める）
+[[bin]]
+name = "DefectTrace"
+path = "src/main.rs"
+
+[features]
+# 起動画面を exe に埋め込む本番の形。外すと Tauri の開発の形になる
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+tauri-plugin-single-instance = "2.5"
+tauri-plugin-opener = "2.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+# 検査計の XML（Shift_JIS も）を読む
+roxmltree = "0.20"
+regex = "1"
+encoding_rs = "0.8"
+# 画像: CAB を exe の中で展開する（MSZIP〔deflate〕・LZX。src/cab.rs）・縮小画像を JPEG で書く・BMP 以外の画像を読む
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+lzxd = "0.2"
+jpeg-encoder = "0.6"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff", "bmp"] }
+# 更新: 配る ZIP を展開する・指紋（SHA-256）を確かめる
+zip = { version = "9", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+# ショートカットを作る（src/lnk.rs）・プロセスを PID で見る（src/proc.rs）。版は Tauri が使っているものに合わせる
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_Com", "Win32_UI_Shell", "Win32_Storage_FileSystem"] }
+
+[dev-dependencies]
+# 窓を使わずに画面を出す試しの入口（examples/serve.rs。画面の撮影・ブラウザでの確かめ）
+tiny_http = "0.12"
+# 試験で本物の MSZIP の CAB（塊をまたいで前の塊を辞書に使う）を作る
+cab = "0.6"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+# 試験・開発でも画像の処理は速く（縮小・展開は最適化しないと 10 倍以上遅い）
+[profile.dev.package."*"]
+opt-level = 3

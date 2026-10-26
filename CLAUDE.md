@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-このリポジトリで作業するときの決まり（利用者が決めたこと）。
+このリポジトリで作業するときの決まり（利用者が決めたこと）。中身の作りは「リポジトリの形」、配り方は `program/docs/DISTRIBUTION.md`。
 
 ## 返答・報告・解説は、常に日本語で書く
 
@@ -10,6 +10,20 @@
 - 途中の一言（いま何をしているか）
 - 状況報告（CI の結果、PR の状態、定期確認の結果、マージ、exe の配置）
 - PR の説明
+
+## リポジトリの形
+
+| 場所 | 中身 |
+|---|---|
+| `desktop/` | exe（Rust・Tauri）。窓・起動・更新と配布（`src/main.rs`・`updater.rs`）と、窓に依らない中身（`src/lib.rs` の下: 検査データ・画像・解析・画面の問い合わせ `app.rs`） |
+| `desktop/examples/` | 試しの入口 `serve.rs`（窓を使わずブラウザで画面を出す・撮影用）と、測る道具 `imgbench.rs`・`openbench.rs` |
+| `desktop/bundle/` | 配る ZIP の組み立て `bundle.py` と、本物の窓での更新の通し `verify.py` |
+| `program/app/` | 配る物: 画面（`static/` の HTML・JS・CSS）・名前（`brand.json`）・版（`version.py`）・アイコン（`app_icon.py`。作るときに描く） |
+| `program/config/` | 配る設定の既定（利用者の設定は PC の作業場所 `%LOCALAPPDATA%\DefectTrace\config.json`） |
+| `program/tests/` | 試験のロットを作る `fixture_lot.py`・正解データを作る `make_golden.py`・Python の試験 |
+| `program/tools/` | 画面の撮影（`ui-check.mjs`・`ui-variants.mjs`）・採点（`ui_score.py`）・採点の記録（`proposals/`） |
+
+使う PC には Python も Flask も要らない（exe だけで動く）。Python は作る・試す・測る道具だけに使う。
 
 ## push の決まり
 
@@ -25,32 +39,35 @@
 
 ```sh
 # 1. 型・構文（JavaScript・Python・Rust）
-bash program/tools/js-check.sh   # import を使う .js はモジュールとして確かめる（node --check だけでは見逃す）
-python -m compileall -q program
+bash program/tools/js-check.sh   # import を使う .js・.mjs はモジュールとして確かめる（node --check だけでは見逃す）
+python -m compileall -q program desktop/bundle
 (cd desktop && cargo build --locked)
 # 2. lint（Python・Rust）
-ruff check program
-(cd desktop && cargo fmt --check && cargo clippy --all-targets -- -D warnings)
-# 3. テスト（Python・Rust）
+ruff check program desktop/bundle
+(cd desktop && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings)
+# 3. テスト（Python・Rust。Rust の試験には、版 3.8〈Flask 版〉の答えとの突き合わせ tests/golden.rs を含む）
 (cd program && python -m unittest discover -s tests -t .)
 python -m unittest discover -s desktop/bundle -t desktop/bundle
 (cd desktop && cargo test --locked)
 ```
 
 - 型検査の道具（TypeScript・mypy）は入れていないので、JavaScript・Python は構文の確かめで代えている。入れたら差し替える。Rust はコンパイラが型を確かめる。
-- JavaScript の lint の設定は無い（2 は Python と Rust）。JavaScript のテスト（`npm test`）も、このリポジトリにはまだ無い。
-- CI（`.github/workflows/ci.yml`）も同じ物を流す。ruff と Rust（clippy）は手元と同じ版に留めてある（ruff 0.15.20・Rust 1.97.0。
+- JavaScript の lint の設定は無い（2 は Python と Rust）。JavaScript のテスト（`npm test`）も、このリポジトリにはまだ無い（画面は自己診断 `desktop/src/selftest.js` が本物の窓で確かめる）。
+- CI（`.github/workflows/ci.yml`）も同じ物を流す。ruff と Rust（clippy）は手元と同じ版に留める（ruff 0.15.20・Rust 1.97.0。
   版が上がると決まりが増え、手元で通った物が CI で落ちるため）。上げるときは手元と CI を一緒に上げる。
-- `program` の中身を変えたら、版を上げて `cd program && python app_build.py --release` で `RELEASE` を書き直す（`tests/test_version.py` が止める）。
+- `program/app`・`program/config` の中身を変えたら、版を上げて（`program/app/version.py` の APP_VERSION と CHANGELOG・`desktop/Cargo.toml`・`desktop/tauri.conf.json`）
+  `cd program && python app_build.py --release` で `RELEASE` を書き直す（`tests/test_version.py` が止める）。まだ配っていない版を直しただけなら `--amend`。
+- 版 3.8（Flask 版）と答えを変えるときは、変える理由を `program/tests/make_golden.py`（正解データの作り方）と `desktop/tests/golden.rs` に書き、
+  正解データを作り直す（`pip install flask pillow` のうえで `python program/tests/make_golden.py desktop/tests/golden.json`）。
 - 窓（`desktop/`。Tauri）を Linux で作るには WebKitGTK などが要る（`libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev`）。
 - Windows だけのコード（`#[cfg(windows)]`）は Linux の確かめではコンパイルされない。変えたときは `rustup target add x86_64-pc-windows-msvc` のうえで
   `cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings` も通す。窓全体が Linux から Windows 向けに組めないときは、その部分だけを
   `windows` クレートに頼る小さな作業用クレートへ写し、`cargo check --target x86_64-pc-windows-msvc` で型を確かめる。
-- 起動・更新・配布の流れ（`desktop/src/install.rs`・`update.rs`・`distribute.rs`・`main.rs`）を変えたら、`desktop/bundle/verify.py` の通し
-  （local・update・distribute）を本物の窓で確かめる（Windows は CI。手元の Linux では Windows だけの部分を差し替えて流す）。
-- Windows の本物の WebView2 での自己診断は CI（`.github/workflows/desktop.yml`）が行う。手順の考え方は `program/docs/DESKTOP_MIGRATION_DESIGN.md`。
-- 結果は**終了コードと「Ran … / OK / FAILED」の行で**読む。出力の最後の 1 行だけ（`tail -1` など）で判断しない
-  （Python の試験は最後に ResourceWarning が出ることがあり、FAILED の行が隠れる。版 3.5.0 で、これを見落として CI で初めて失敗に気づいた）。
+- 起動・更新・配布の流れ（`desktop/src/update.rs`・`distribute.rs`・`install.rs`・`release.rs`・`main.rs`・`updater.rs`）を変えたら、
+  本物の窓で更新の通しを流す: `xvfb-run -a python desktop/bundle/verify.py update --exe desktop/target/debug/DefectTrace`（Windows は CI）。
+- 本物の窓での自己診断（`DT_SELFTEST`）は CI が Linux（WebKitGTK）と Windows（WebView2・`.github/workflows/desktop.yml`）で流す。
+- 結果は**終了コードと「Ran … / OK / FAILED」「test result」の行で**読む。出力の最後の 1 行だけ（`tail -1` など）で判断しない
+  （Python の試験は最後に ResourceWarning が出ることがあり、FAILED の行が隠れる）。
 - 失敗が残っているときは push しない。直せない理由があるときは、push せずに利用者へ伝える。
 
 ## 改良するときは、別のエージェントが現物を撮って採点し、合格点以上の案に決める
@@ -58,24 +75,27 @@ python -m unittest discover -s desktop/bundle -t desktop/bundle
 UI/UX に限らず、何かを改良するときは、必ず次の順で設計する。案を文章だけで採点しない。案を作った者が自分の案を採点しない。
 利用者に選んでもらうのを待たず、この流れで自律的に 1 案に決めて作る。
 
-1. 今の物を撮り（`ui-check.mjs`）、画像を見て、何が使いにくいか・分かりにくいかを、画像で見えたことを根拠に挙げる
-   （画面に出ない改良〈速さ・作り・保存の確かさ など〉は、動かして測った数を根拠にする）
+1. 今の物を撮り（`node program/tools/ui-check.mjs <出力>`）、画像を見て、何が使いにくいか・分かりにくいかを、画像で見えたことを根拠に挙げる
+   （画面に出ない改良〈速さ・作り・保存の確かさ など〉は、動かして測った数を根拠にする。測る道具を作り、`desktop/examples/` などに残す）
 2. 改良案を**最低 5 案**出す。案の方向（何で解くか: 置き場・見せ方・減らし方・流れの変え方 など）を並べ、偏っていないかを確かめる
-3. **採点に渡す前に、案を作った者が自分で画像を見て確かめる**（利用者が決めた。2026-10-17）。案ごとに `ui-variants.mjs` で撮った画像
+3. **採点に渡す前に、案を作った者が自分で画像を見て確かめる**。案ごとに `node program/tools/ui-variants.mjs <出力> <案の定義.mjs>` で撮った画像
    （1728・1536・1280）を自分で開き、案の狙いどおりに見えるか・再現の崩れ（切れ・重なり・折り返し・空白・届かない操作）が無いかを見て、
    崩れていれば案の定義を直して撮り直す。確かめたこと・直したことは採点のファイルの回の `"self_check"` に書く（無ければ `ui_score.py` が判定しない）。
-   作った後（6）も、採点に渡す前に自分で前後の画像を見て確かめる
+   作った後（7）も、採点に渡す前に自分で前後の画像を見て確かめる
 4. 採点は**別のエージェント**（Agent。案を作っていない者）に頼む。採点する者は、自分で案ごとに画面を撮り（`ui-variants.mjs`）、
-   画像の現物を直接見て採点する（画面に出ない改良は、自分で動かして測る）。採点の物差しは下の加点と減点。結果は採点のファイル（JSON）に書き、
-   `ui_score.py` で合計と判定を出す
-5. 1 位が**合格点以上**なら、1 位に決める（同じ点なら、重い分類の点が高い方）。合格点は**案出しの回によらず一律 80 点**
-   （利用者が決めた。2026-10-17。前の「1 回目 95・2 回目 90・3 回目から 80 点」は、採点のファイルに `"rule"` が無い記録だけに使う）。
-   採点のファイルには `"rule": "2026-10-17"` を書く
+   画像の現物を直接見て採点する（画面に出ない改良は、自分で動かして測る）。採点の物差しは下の加点と減点。結果は採点のファイル（JSON。
+   `program/tools/proposals/`）に書き、`python program/tools/ui_score.py <採点.json>` で合計と判定を出す
+5. 1 位が**合格点以上**なら、1 位に決める（同じ点なら、重い分類の点が高い方）。合格点は**案出しの回によらず一律 80 点**。
+   採点のファイルには決まりの日付 `"rule": "2026-10-17"` を書く
 6. 合格点に届かないときは決めない。低い項目と減点を見直し、**案出しからやり直す**（5 案以上。前の回で効いた所は持ち越してよいが、
    新しい案を 3 案以上入れる）。採点はまた別のエージェントが、撮り直した画像で付ける。3 回目でも届かなければ、いちばん高い案に決め、
    足りない点とその理由を利用者に伝える
-7. 決めた案を作ったら、作る前と後を `ui-check.mjs` で撮り、別のエージェントが同じ物差しで採点する（採点のファイルの `"built"`）。
-   作った後も、合格点以上か、減点が残っていないかを確かめ、届かなければ直して撮り直す。比べた画像は比較のページ（Artifact）で見せる
+7. 決めた案を作ったら、作る前と後を `ui-check.mjs` で撮り（画面に出ない改良は同じ道具で測り）、別のエージェントが同じ物差しで採点する
+   （採点のファイルの `"built"`）。作った後も、合格点以上か、減点が残っていないかを確かめ、届かなければ直して撮り直す。
+   比べた画像・数は比較のページ（Artifact）で見せる
+
+画面の撮影は、試しの入口（`desktop/examples/serve.rs`）を試験のロット（`program/tests/fixture_lot.py`）で起こして行う（`ui-harness.mjs` が自動でする）。
+窓だけが答えること（更新・配布・ショートカット）は、`ui-harness.mjs` の作り物の答え（FAKE）で撮る。
 
 **加点**（100 点満点。4 分類・11 項目を 0〜10 で付け、重みを掛けて足す）
 
