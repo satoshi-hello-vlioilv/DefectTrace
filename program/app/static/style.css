@@ -74,6 +74,10 @@ aside{background:var(--pane);display:flex;flex-direction:column;min-height:0;fle
 /* image card : frame color = face (group) / mark = class map_mark */
 .th{--sc:#9aa3ad;position:relative;width:calc(var(--ts) + 40px);cursor:pointer;user-select:none;background:var(--card);padding:2px;border-radius:3px;outline:3px solid transparent;outline-offset:1px}
 .th:hover{outline-color:#b9c8dc}
+/* 画面の外のカードは描かない（数万枚でも並べる・送るが重くならない）。大きさは最後に描いた時の物を使う */
+#grid .th{content-visibility:auto;contain-intrinsic-size:auto calc(var(--ts) + 48px) auto calc(var(--ts) + 80px + var(--rows) * 15px)}
+#grid .th:empty{height:calc(var(--ts) + 80px + var(--rows) * 15px)}
+#grid{--rows:3}
 .th.sel{outline-color:var(--acc)}
 .th fieldset{margin:0;border:2px solid var(--sc);padding:4px 6px 6px;min-width:0}
 .th legend{font:12px "Yu Gothic UI",sans-serif;padding:0 4px;white-space:nowrap}

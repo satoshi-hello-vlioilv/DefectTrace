@@ -3,7 +3,8 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const q = (o) => new URLSearchParams(o).toString();
-  const natcmp = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+  // 名前の数の順（localeCompare に毎回 options を渡すと、比べるたびに照合器を作り直して 100 倍遅い。1 つを使い回す）
+  const natcmp = new Intl.Collator(undefined, { numeric: true }).compare;
   const PLACE = { list: "ロット一覧", summary: "サマリ", lot: "ロット情報", card: "画像表示（各画像の下）", image: "画像情報", mapx: "MAP 横軸", mapy: "MAP 縦軸" };
   const NEED = { list: "lot", summary: "lot", lot: "lot", card: "image", image: "any", mapx: "image", mapy: "image" };
 
@@ -156,9 +157,11 @@
   async function openLot(li) {
     clearInterval(S.poll);
     S.lot = { path: li.dataset.path, name: li.dataset.name, eq: li.dataset.eq };
-    Object.assign(S, { items: [], cur: -1, group: null, seen: new Set(), LOT: null, img: null, imap: {}, map: null, sides: {}, kinds: {},
+    Object.assign(S, { items: [], cur: -1, group: null, seen: new Set(), named: false, queue: [], LOT: null, img: null, imap: {}, map: null, sides: {}, kinds: {},
       P: null, D: new Map(), psel: null, pselRef: null, pairN: {}, plist: [], plistPairs: [], pshow: 150, PT: null, ptsel: null });
     S.gen++;
+    Object.assign(S, { t0: performance.now(), samples: [], drawn: 0, total: 0, st: null, cardVer: (S.cardVer || 0) + 1,
+      phase: { info: "run", link: "wait", map: "wait", pairs: "wait", pitch: "wait" } });
     $("pitchList").innerHTML = '<div class="empty">読込中...</div>'; $("ptSum").textContent = ""; $("pitchCnt").textContent = "";
     const gen = S.gen;
     localStorage.setItem("lastLot", S.lot.path);
@@ -166,6 +169,7 @@
     li.classList.add("sel");
     const n = S.lot.name;
     $("crumb").innerHTML = `${esc(S.lot.eq)} › ${esc(n.slice(0, 10).replace(/_/g, "/"))} › <b>${esc(n.slice(11).replace(/_/g, ":"))}</b>`;
+    cardIO.disconnect(); seenCards.clear();   // 前のロットの枠を見張らない
     $("grid").innerHTML = '<div class="empty">展開中...</div>';
     $("groupTabs").innerHTML = ""; $("groupTabs").dataset.g = "";
     $("imgInfo").innerHTML = '<div class="hint">画像をクリックで表示</div>'; $("imgTitle").textContent = "";
@@ -183,25 +187,30 @@
   async function poll(gen) {
     if (gen !== S.gen) return;
     let st;
-    try { st = await api("/api/status?" + q({ lot: S.lot.path })); } catch (e) { status(e.message, true); clearInterval(S.poll); return; }
+    // 名前を全部受け取ったら、後は数だけを問う（2 万枚で 1 回 250KB → 数 KB）
+    try { st = await api("/api/status?" + q({ lot: S.lot.path, ...(S.named ? { brief: 1 } : {}) })); } catch (e) { status(e.message, true); clearInterval(S.poll); return; }
     if (gen !== S.gen) return;
     const groups = [...new Set(st.cabs.map((c) => c.group))];
     if (!S.group) S.group = groups.length ? groups[0] : "img";   // no image folder : defect data only
     renderTabs(groups);
     renderGrid(st);
-    // 名前は開いた瞬間に分かる（CAB の頭だけを読む）。縮小画像は裏で画面の頭から作るので、その進みを出す
-    const tt = st.thumbs_total || 0;
-    $("prog").hidden = st.finished || !tt;
-    $("progBar").style.width = (tt ? Math.round((st.thumbs / tt) * 100) : 100) + "%";
-    $("progTxt").textContent = `縮小画像 ${st.thumbs}/${tt}`;
+    if (st.named) S.named = true;   // この答え（名前つき）で全部の名前を受け取った
+    S.st = st;
+    S.samples.push([performance.now(), st.thumbs]);
+    loadProgress();
     if (!st.total) $("grid").innerHTML = '<div class="empty">このロットには画像がありません（img フォルダに CAB・画像フォルダ・画像ファイルなし）</div>';
     if (st.named && S.mapGen !== gen) { S.mapGen = gen; loadImgMap(gen); }
-    if (st.finished) {
-      clearInterval(S.poll);
-      const ng = st.cabs.filter((c) => c.state === "error").length;
-      const kd = st.kinds || {}, kl = [kd.cab ? `CAB ${kd.cab}` : "", kd.dir ? `フォルダ ${kd.dir}` : "", kd.loose ? "直下" : ""].filter(Boolean).join("・");
-      status(`${S.items.length} 枚 / ${kl || "画像なし"}${ng ? ` / 失敗 ${ng}` : ""} / ${st.elapsed}秒`, ng > 0);
-    }
+    if (st.finished) clearInterval(S.poll);
+    finishIfDone();
+  }
+  // 済んだら下の帯に結果を出す（縮小画像・カード・対応付けの全部が済んでから）
+  function finishIfDone() {
+    const st = S.st;
+    if (!st || !st.finished || S.queue.length || S.phase.link !== "done" || S.finishedGen === S.gen) return;
+    S.finishedGen = S.gen;
+    const ng = st.cabs.filter((c) => c.state === "error").length;
+    const kd = st.kinds || {}, kl = [kd.cab ? `CAB ${kd.cab}` : "", kd.dir ? `フォルダ ${kd.dir}` : "", kd.loose ? "直下" : ""].filter(Boolean).join("・");
+    status(`${S.items.length} 枚 / ${kl || "画像なし"}${ng ? ` / 失敗 ${ng}` : ""} / ${((performance.now() - S.t0) / 1000).toFixed(1)}秒`, ng > 0);
   }
 
   function renderTabs(groups) {
@@ -214,7 +223,8 @@
       b.type = "button"; b.textContent = g; b.dataset.g = g; b.classList.toggle("on", g === S.group);
       b.title = "画像フォルダ切替";
       b.addEventListener("click", async () => {
-        Object.assign(S, { group: g, seen: new Set(), items: [], cur: -1, imap: {}, map: null });
+        Object.assign(S, { group: g, seen: new Set(), items: [], cur: -1, imap: {}, map: null, queue: [], named: false, drawn: 0 });
+        cardIO.disconnect(); seenCards.clear();
         $("grid").innerHTML = ""; await poll(S.gen); loadImgMap(S.gen);
       });
       box.appendChild(b);
@@ -222,19 +232,23 @@
   }
 
   // ================================================================ thumbnails as cards
+  // 数万枚でも画面を止めない: 塊（CAB）の順を覚えて 1 塊ずつまとめて差し込み（2 乗にしない）、カードは 1 回 12ms までに分けて並べる
+  // （並べる間も進みが動き、操作できる）。並べるのは空の枠だけで、中身（見出し・画像・欠陥）は画面に近づいた枠にだけ描く。
+  // 対応付けなどが届いたら版（cardVer）を上げ、見えている枠だけ描き直す（ほかは見えたときに描く）
   const key = (it) => `${it.g}/${it.cab}/${it.name}`;
   const mkey = (it) => `${it.cab}/${it.name}`;
-  function insertItem(it) {
-    let i = S.items.findIndex((x) => { const c = natcmp(x.cab, it.cab); return c > 0 || (c === 0 && natcmp(x.name, it.name) > 0); });
-    if (i < 0) i = S.items.length;
-    S.items.splice(i, 0, it);
-    if (S.cur >= i) S.cur++;
+  const BUDGET = 12;
+  function insertBlock(rank, its) {
+    let lo = 0, hi = S.items.length;   // 後ろの塊（rank が大きい）の最初の位置
+    while (lo < hi) { const m = (lo + hi) >> 1; if (S.items[m].rank > rank) hi = m; else lo = m + 1; }
+    S.items.splice(lo, 0, ...its);
+    if (S.cur >= lo) S.cur += its.length;
   }
   function renderGrid(st) {
     const box = $("grid");
     const empty = box.querySelector(".empty"); if (empty && st.total) empty.remove();
-    for (const c of st.cabs) {
-      if (c.group !== S.group) continue;
+    st.cabs.forEach((c, rank) => {
+      if (c.group !== S.group) return;
       const id = "cab_" + c.cab;
       let sec = document.getElementById(id);
       if (!sec) {
@@ -244,64 +258,135 @@
         const ph = document.createElement("div"); ph.className = "ph"; ph.id = id + "_ph"; ph.textContent = "読込中";
         box.appendChild(ph);
       }
+      const n = c.images ? c.images.length : c.n;
       const s = sec.querySelector(".st");
       s.className = "st " + c.state;
-      s.textContent = { pending: "読込中", running: "読込中", done: `${c.images.length}枚`, error: "失敗" }[c.state];
+      s.textContent = { pending: "読込中", running: "読込中", done: `${n}枚`, error: "失敗" }[c.state];
       if (c.error) s.title = c.error;
-      const ph = document.getElementById(id + "_ph");
-      if (c.state === "done" && !S.seen.has(c.cab)) {
-        S.seen.add(c.cab);
-        let anchor = ph || sec;
-        for (const name of c.images) {
-          const it = { g: c.group, cab: c.cab, name };
-          insertItem(it);
-          const d = document.createElement("div");
-          d.className = "th"; d.dataset.key = key(it);
-          d.innerHTML = cardHtml(it);
-          d.querySelector("img").src = "/thumb?" + q({ lot: S.lot.path, g: it.g, cab: it.cab, name });
-          d.addEventListener("click", () => select(idxOf(it)));
-          d.addEventListener("dblclick", () => { select(idxOf(it)); openViewer(); });
-          anchor.after(d); anchor = d;
-        }
-        if (ph) ph.remove();
-        if (S.cur < 0 && S.items.length) select(0);
-      } else if (ph) ph.textContent = s.textContent;
-    }
+      const sk = c.group + "/" + c.cab;
+      if (c.state === "done" && c.images && !S.seen.has(sk)) {
+        S.seen.add(sk);
+        const its = c.images.map((name) => ({ g: c.group, cab: c.cab, name, rank }));
+        insertBlock(rank, its);
+        S.queue.push({ id, its, at: 0 });
+      } else if (c.state !== "done") { const ph = document.getElementById(id + "_ph"); if (ph) ph.textContent = s.textContent; }
+    });
+    S.total = st.cabs.filter((c) => c.group === S.group).reduce((a, c) => a + (c.images ? c.images.length : c.n || 0), 0);
+    drainCards(S.gen);
+  }
+  // 並べ待ちのカードを、1 回 BUDGET ms まで描いて次の画面の描き替えに譲る
+  function drainCards(gen) {
+    if (S.draining) return;
+    S.draining = true;
+    const step = () => {
+      if (gen !== S.gen) { S.draining = false; return; }
+      const t = performance.now();
+      while (S.queue.length && performance.now() - t < BUDGET) {
+        const job = S.queue[0], ph = document.getElementById(job.id + "_ph");
+        const anchor = job.last || ph || document.getElementById(job.id);
+        const part = job.its.slice(job.at, job.at + 1000);
+        anchor.insertAdjacentHTML("afterend", part.map((it) => `<div class="th" data-key="${esc(key(it))}"></div>`).join(""));
+        job.last = anchor;
+        for (let k = 0; k < part.length; k++) { job.last = job.last.nextElementSibling; cardIO.observe(job.last); }
+        job.at += part.length;
+        S.drawn = (S.drawn || 0) + part.length;
+        if (job.at >= job.its.length) { if (ph) ph.remove(); S.queue.shift(); }
+      }
+      if (S.cur < 0 && S.items.length && document.querySelector("#grid .th")) select(0);
+      loadProgress();
+      if (S.queue.length) requestAnimationFrame(step);
+      else { S.draining = false; finishIfDone(); }
+    };
+    requestAnimationFrame(step);
   }
   const unitLabel = (c) => (c.kind === "dir" ? `${c.cab}/` : c.kind === "loose" ? "(直下の画像)" : `${c.cab}.cab`);
-  const idxOf = (it) => S.items.findIndex((x) => key(x) === key(it));
+  const idxOf = (it) => S.items.findIndex((x) => x.cab === it.cab && x.name === it.name && x.g === it.g);
+  const thumbSrc = (it) => "/thumb?" + q({ lot: S.lot.path, g: it.g, cab: it.cab, name: it.name });
 
   const markHtml = (m) => `<span class="mk" style="color:${m.kcolor}" title="${esc(m.kname)}">${esc(m.kmark || "●")}</span>`;
-  function cardHtml(it) {
-    const m = S.imap[mkey(it)];
-    const head = m && m.no != null ? `欠陥No:${m.no}` : esc(`${it.cab}/${it.name}`);
+  // カード = 枠（見出し・画像）＋欠陥の中身（cm）。対応付けが届いたら見出しと cm だけを書き替える（画像は読み直さない）
+  const seenCards = new Set();
+  const cardIO = new IntersectionObserver((es) => {
+    for (const e of es) { if (e.isIntersecting) { seenCards.add(e.target); fillCard(e.target); } else seenCards.delete(e.target); }
+  }, { root: $("grid"), rootMargin: "800px 0px" });
+  function fillCard(th) {
+    if (th.dataset.v === String(S.cardVer)) return;
+    const it = itemOf(th), m = S.imap[mkey(it)];
+    if (!th.firstChild) th.innerHTML = `<fieldset><legend></legend><div class="ph-img"><img loading="lazy" decoding="async" alt="" draggable="false" src="${esc(thumbSrc(it))}"></div></fieldset><div class="cm"></div>`;
+    th.querySelector(":scope>fieldset>legend").innerHTML = cardHead(it, m);
+    th.querySelector(":scope>.cm").innerHTML = cardMeta(it, m);
+    th.style.setProperty("--sc", m ? m.scolor : "#9aa3ad");
+    th.title = m ? `${m.sname} / ${m.kname}` : "";
+    th.dataset.v = S.cardVer;
+  }
+  const cardHead = (it, m) => (m && m.no != null ? `欠陥No:${m.no}` : esc(`${it.cab}/${it.name}`));
+  function cardMeta(it, m) {
     const meta = m
       ? `<fieldset class="meta"><legend>${esc(m.kname)}${markHtml(m)}</legend>` +
         S.card.map((c, i) => `<div class="rw"><span>${esc(c.label)}</span><b>${esc(m.vals[i] ?? "")}</b></div>`).join("") + `</fieldset>`
       : `<fieldset class="meta"><legend class="sub">${Object.keys(S.imap).length ? "欠陥データなし" : "…"}</legend></fieldset>`;
     const pn = m ? S.pairN[m.d] || 0 : 0;
     const face = m ? `<span style="color:${m.scolor}">■ ${esc(m.sname)}${pn ? ` <span class="tbadge" data-pairs="${m.d}" title="転写候補を表示">転写候補 ${pn}</span>` : ""}</span>` : "<span></span>";
-    return `<fieldset><legend>${head}</legend><div class="ph-img"><img loading="lazy" decoding="async" alt="" draggable="false"></div></fieldset>${meta}<div class="nm2">${face}<span>${esc(it.cab)}/${esc(it.name)}</span></div>`;
+    return `${meta}<div class="nm2">${face}<span>${esc(it.cab)}/${esc(it.name)}</span></div>`;
   }
+  // 描いたカードの中身を書き替える（対応付け・転写候補が届いたとき）。いま見えている枠だけ。ほかは見えたときに描く
   function updateCards() {
-    for (const th of document.querySelectorAll(".th")) {
-      const [g, cab, name] = th.dataset.key.split("/");
-      const it = { g, cab, name };
-      const img = th.querySelector("img").src;
-      const m = S.imap[mkey(it)];
-      th.innerHTML = cardHtml(it);
-      th.querySelector("img").src = img;
-      th.style.setProperty("--sc", m ? m.scolor : "#9aa3ad");
-      th.title = m ? `${m.sname} / ${m.kname}` : "";
-    }
+    S.cardVer = (S.cardVer || 0) + 1;
+    $("grid").style.setProperty("--rows", S.card.length);
+    for (const th of seenCards) if (th.isConnected) fillCard(th); else seenCards.delete(th);
+  }
+  $("grid").addEventListener("click", (e) => { const th = e.target.closest(".th"); if (th && !e.target.closest(".tbadge")) select(idxOf(itemOf(th))); });
+  $("grid").addEventListener("dblclick", (e) => { const th = e.target.closest(".th"); if (th) { select(idxOf(itemOf(th))); openViewer(); } });
+  const itemOf = (th) => { const [g, cab, name] = th.dataset.key.split("/"); return { g, cab, name }; };
+
+  // ================================================================ loading progress
+  // 読み込みの段階（何を・どこまで・あとどれくらい）。数は /api/status と、画面で描いた数から
+  function loadModel() {
+    const st = S.st || { total: 0, done: 0, thumbs: 0, thumbs_total: 0 }, ph = S.phase || {};
+    const now = performance.now(), el = (now - (S.t0 || now)) / 1000;
+    // 縮小画像の速さ: 直近 3 秒の進み（始めは全体の平均）
+    const sm = S.samples || [], last = sm[sm.length - 1];
+    const old = sm.find((x) => x[0] >= now - 3000) || sm[0];
+    const rate = last && old && last[0] > old[0] ? ((last[1] - old[1]) * 1000) / (last[0] - old[0]) : 0;
+    const left = st.thumbs_total - st.thumbs;
+    const eta = st.finished ? 0 : rate > 0 ? left / rate : null;
+    const an = ["map", "pairs", "pitch"].filter((k) => ph[k] === "done").length;
+    const steps = [
+      { k: "names", label: "画像の一覧", done: st.done, total: st.total, state: st.total && st.done >= st.total ? "done" : "run" },
+      { k: "info", label: "欠陥データ", state: ph.info },
+      { k: "cards", label: "画像の枠", done: S.drawn || 0, total: S.total || 0, state: S.named && !S.queue.length ? "done" : "run" },
+      { k: "link", label: "画像と欠陥の対応", state: ph.link },
+      { k: "analysis", label: "MAP・転写・ピッチ", done: an, total: 3, state: an === 3 ? "done" : ph.link === "done" ? "run" : "wait" },
+      { k: "thumbs", label: "縮小画像", done: st.thumbs, total: st.thumbs_total, state: st.finished ? "done" : "run", rate, eta },
+    ];
+    const ready = steps.filter((s) => s.k !== "thumbs").every((s) => s.state === "done" || s.state === "error");
+    const all = ready && st.finished;
+    return { steps, el, rate, eta, ready, all, st };
+  }
+  let progFrame = 0;
+  function loadProgress() {
+    if (progFrame) return;
+    progFrame = requestAnimationFrame(() => { progFrame = 0; renderLoad(loadModel()); });
+  }
+  const fmtN = (n) => Number(n || 0).toLocaleString("ja-JP");
+  const fmtSec = (s) => (s == null ? "計算中" : s < 1 ? "1 秒未満" : s < 60 ? `約 ${Math.ceil(s)} 秒` : `約 ${Math.floor(s / 60)} 分 ${Math.round(s % 60)} 秒`);
+  function renderLoad(m) {
+    const tt = m.st.thumbs_total || 0;
+    $("prog").hidden = m.all || !S.lot;
+    $("progBar").style.width = (tt ? Math.round((m.st.thumbs / tt) * 100) : 0) + "%";
+    const cur = m.steps.find((s) => s.state === "run");
+    $("progTxt").textContent = cur ? `${cur.label} ${cur.total ? `${fmtN(cur.done)}/${fmtN(cur.total)}` : "…"}${cur.k === "thumbs" ? ` あと${fmtSec(m.eta)}` : ""}` : "";
+    $("prog").dataset.progress = "1";
   }
 
   // ================================================================ detect data
   async function loadImgMap(gen) {
     if (!S.lot || !S.group) return;
     let d;
-    try { d = await api("/api/imgmap?" + q({ lot: S.lot.path, g: S.group })); } catch (e) { return; }
+    if (S.phase.link !== "done") { S.phase.link = "run"; loadProgress(); }
+    try { d = await api("/api/imgmap?" + q({ lot: S.lot.path, g: S.group })); } catch (e) { if (gen === S.gen) { S.phase.link = "error"; loadProgress(); } return; }
     if (gen !== S.gen) return;
+    S.phase.link = "done";
     S.imap = d.map; S.sides = d.sides || {}; S.kinds = d.kinds || {}; S.card = d.card || [];
     updateCards();
     renderMapSide();
@@ -375,11 +460,11 @@
     try {
       const d = await api("/api/info?" + q({ lot: S.lot.path }));
       if (gen !== S.gen) return;
-      S.LOT = d;
+      S.LOT = d; S.phase.info = "done"; loadProgress();
       if (!Object.keys(S.sides).length) S.sides = d.sides || {};
       if (!Object.keys(S.kinds).length) S.kinds = d.kinds || {};
       renderLot(); renderSources(); renderImgInfo(); renderMapSide();
-    } catch (e) { if (gen === S.gen) $("lotInfo").innerHTML = `<div class="hint err">${esc(e.message)}</div>`; }
+    } catch (e) { if (gen === S.gen) { $("lotInfo").innerHTML = `<div class="hint err">${esc(e.message)}</div>`; S.phase.info = "error"; loadProgress(); } }
   }
   const lotPins = (place) => (S.LOT ? S.LOT.pinned.filter((p) => p.place === place) : []);
   function renderLot() {
@@ -634,7 +719,7 @@
     let d;
     try { d = await api("/api/map?" + q({ lot: S.lot.path, g: S.group })); } catch (e) { return; }
     if (gen !== S.gen) return;
-    S.map = d;
+    S.map = d; S.phase.map = "done"; loadProgress();
     $("mapMsg").textContent = d.ok ? "" : d.msg;
     $("mapTitle").textContent = d.ok ? `${d.points.length}件（画像あり ${d.points.filter((p) => p[4]).length}）` : "";
     renderMapSide();
@@ -803,7 +888,7 @@
     try { d = await api("/api/pairs?" + q({ lot: S.lot.path, g: S.group || "img", tol, maxdy: md, mirror: $("pMirror").checked ? 1 : 0 })); }
     catch (e) { $("pSum").textContent = e.message; return; }
     if (gen !== S.gen) return;
-    S.P = d;
+    S.P = d; S.phase.pairs = "done"; loadProgress();
     S.D = new Map((d.defects || []).map((x) => [x.i, x]));
     S.pairN = {};
     for (const [f, b] of d.pairs || []) { S.pairN[f] = (S.pairN[f] || 0) + 1; S.pairN[b] = (S.pairN[b] || 0) + 1; }
@@ -811,7 +896,8 @@
     S.pselRef = null; S.psel = null;
     updateCards();
     const t = S.items[S.cur]; if (t) { const el = document.querySelector(`.th[data-key="${CSS.escape(key(t))}"]`); if (el) el.classList.add("sel"); }
-    renderPairs();
+    // 一覧は見ているときだけ描く（候補が数万組あると描くのに 0.5 秒かかる。切り替えたとき setView が描く）
+    if (S.view === "pairs") renderPairs();
   }
 
   function groupsOf() {
@@ -996,9 +1082,9 @@
         n: $("ptN").value, pmin: $("ptPmin").value, pmax: $("ptPmax").value, skip: $("ptSkip").value }));
     } catch (e) { $("ptSum").textContent = e.message; return; }
     if (gen !== S.gen) return;
-    S.PT = d; S.ptsel = null;
+    S.PT = d; S.ptsel = null; S.phase.pitch = "done"; loadProgress();
     $("pitchCnt").textContent = d.ok ? `${d.chains.length}` : "";
-    renderPitch();
+    if (S.view === "pitch") renderPitch();
   }
   function pitchRows() {
     const d = S.PT; if (!d || !d.ok) return [];
