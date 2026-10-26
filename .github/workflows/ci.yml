@@ -1,0 +1,95 @@
+# CLAUDE.md の「push 前の確かめ」を GitHub でも回す（型・構文・lint〔ruff・clippy〕・試験）。
+# - program: 画面の JS の構文・道具の Python（正解データ・版の管理・採点の評価関数）
+# - desktop: 窓（Rust・Tauri）の書式・作成・試験（版 3.8 の答えとの突き合わせを含む）と、本物の窓（WebKitGTK）での自己診断・更新の通し
+#   （Windows の WebView2 は desktop.yml）
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  program:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: 型・構文（画面の JS・道具の JS）
+        run: bash program/tools/js-check.sh
+      - name: 型・構文（Python）
+        run: python -m compileall -q program desktop/bundle
+      # 手元と同じ版の ruff（版が変わると決まりが増えて、手元で通った物が落ちる）
+      - name: lint（Python・ruff）
+        run: |
+          pip install ruff==0.15.20
+          ruff check program desktop/bundle
+      - name: test（Python・道具と版の管理）
+        working-directory: program
+        run: python -m unittest discover -s tests -t .
+      - name: test（Python・配る ZIP の組み立て）
+        run: python -m unittest discover -s desktop/bundle -t desktop/bundle
+
+  desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      DT_PYTHON: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: 窓を作る部品（WebKitGTK）と画面の無い X
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev xvfb
+      # 手元と同じ版（clippy は版が上がると決まりが増え、手元で通った物が落ちる）。上げるときは手元と一緒に上げる
+      - uses: dtolnay/rust-toolchain@1.97.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+      - name: lint（Rust の書式）
+        working-directory: desktop
+        run: cargo fmt --check
+      - name: typecheck（Rust）
+        working-directory: desktop
+        run: cargo build --locked
+      - name: lint（Rust・clippy）
+        working-directory: desktop
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: test（Rust・版 3.8 の答えとの突き合わせを含む）
+        working-directory: desktop
+        run: cargo test --locked
+      - name: 自己診断（本物の窓・WebKitGTK）
+        run: |
+          python program/tests/fixture_lot.py "$RUNNER_TEMP/fx"
+          python program/tests/selftest_config.py "$RUNNER_TEMP/fx" "$RUNNER_TEMP/root"
+          export DT_LOCAL_ROOT="$RUNNER_TEMP/root" DT_SELFTEST="$RUNNER_TEMP/selftest.json"
+          exe="$(python desktop/bundle/bundle.py brand exe | sed 's/\.exe$//')"
+          cd "$RUNNER_TEMP" && timeout 240 xvfb-run -a "$GITHUB_WORKSPACE/desktop/target/debug/$exe" || true
+          python - <<'PY'
+          import json, os, sys
+          path = os.environ["DT_SELFTEST"]
+          if not os.path.exists(path):
+              sys.exit("結果のファイルがありません")
+          r = json.load(open(path, encoding="utf-8"))
+          for x in r.get("results", []):
+              print("PASS" if x["ok"] else "FAIL", x["name"], "--", x["info"])
+          if r.get("error"):
+              print("ERROR:", r["error"])
+          sys.exit(0 if r.get("ok") else 1)
+          PY
+      # 更新の通し（desktop/bundle/verify.py）: 共有から写る → 裏で取り込む → 次の起動で入れ替わる → 閉じている間に置いた版に 1 回の起動で入れ替わる → 開けない版は控えへ戻す → 配る版を戻す → 配る入口から新しい PC
+      - name: 更新の通し（本物の窓・WebKitGTK）
+        run: xvfb-run -a python desktop/bundle/verify.py update --exe desktop/target/debug/$(python desktop/bundle/bundle.py brand exe | sed 's/\.exe$//') --work "$RUNNER_TEMP/verify"
+      - name: 記録
+        if: always()
+        run: tail -n 40 "$RUNNER_TEMP"/root/logs/*.log || true

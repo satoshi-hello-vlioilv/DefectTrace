@@ -1,0 +1,8 @@
+{
+  "_about": "アプリの名前（1か所の定義）。name・subtitle・exe は変えてよい（exe を変えたら desktop/Cargo.toml の [[bin]] name と desktop/tauri.conf.json の mainBinaryName、name を変えたら productName も同じにする。desktop/src/brand.rs の試験が食い違いを止める）。app_id は変えない（更新の置き場で「このアプリの版」を見分ける・WebView の保存先）。data_dir はこの PC の作業場所のフォルダ名。",
+  "name": "DefectTrace",
+  "subtitle": "検査計画像ビュワー",
+  "exe": "DefectTrace.exe",
+  "app_id": "local.defecttrace.desktop",
+  "data_dir": "DefectTrace"
+}

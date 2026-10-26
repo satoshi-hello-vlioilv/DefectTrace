@@ -1,0 +1,118 @@
+# デスクトップ版（desktop/・Tauri）を Windows で本番の作り方（--release）で作り、本物の WebView2 で自己診断する。
+# 更新の通し（verify.py）を流し、通った exe・配る ZIP（release.json・.sha256 つき）・自己診断の結果を Artifacts に置く。
+# main に入ったとき（と手で動かしたとき）は、確かめ終えた配る ZIP を GitHub の Releases にも版の札（v<版>）で載せる（release）。
+name: desktop
+
+on:
+  pull_request:
+    paths: ["desktop/**", "program/**", ".github/workflows/desktop.yml"]
+  push:
+    branches: [main]
+    paths: ["desktop/**", "program/**", ".github/workflows/desktop.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONIOENCODING: utf-8
+      DT_PYTHON: python
+      # exe が名乗る「作ったコミット」（/__desktop/info の commit）
+      DT_BUILD_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+      - name: test（Rust・Windows）
+        working-directory: desktop
+        run: cargo test --locked
+      - name: exe を作る
+        working-directory: desktop
+        run: cargo build --release --locked
+      # exe の名前は program/app/brand.json の1か所（ここには書かない）
+      - name: exe の名前
+        run: '"EXE=" + (Get-Content program/app/brand.json -Raw -Encoding utf8 | ConvertFrom-Json).exe | Out-File -Append -Encoding utf8 $env:GITHUB_ENV'
+      - name: 自己診断（本物の WebView2・ポートなし）
+        run: |
+          python program\tests\fixture_lot.py "$env:RUNNER_TEMP\fx"
+          python program\tests\selftest_config.py "$env:RUNNER_TEMP\fx" "$env:RUNNER_TEMP\root"
+          $env:DT_LOCAL_ROOT = "$env:RUNNER_TEMP\root"
+          $env:DT_SELFTEST = "$env:RUNNER_TEMP\selftest.json"
+          Start-Process -FilePath "desktop\target\release\$env:EXE" -WorkingDirectory $env:RUNNER_TEMP
+          $deadline = (Get-Date).AddSeconds(240)
+          while (-not (Test-Path $env:DT_SELFTEST) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+          Wait-Process -Name ([IO.Path]::GetFileNameWithoutExtension($env:EXE)) -Timeout 30 -ErrorAction SilentlyContinue
+          Get-ChildItem "$env:DT_LOCAL_ROOT\logs" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.Name)"; Get-Content $_.FullName -Tail 25 -Encoding utf8 }
+          if (-not (Test-Path $env:DT_SELFTEST)) { Write-Host "結果のファイルがありません"; exit 2 }
+          $r = Get-Content $env:DT_SELFTEST -Raw -Encoding utf8 | ConvertFrom-Json
+          $r.results | ForEach-Object { Write-Host ("{0}: {1} -- {2}" -f ($(if ($_.ok) { "PASS" } else { "FAIL" })), $_.name, $_.info) }
+          if ($r.error) { Write-Host "ERROR: $($r.error)" }
+          if (-not $r.ok) { exit 1 }
+      # 更新の通し（desktop/bundle/verify.py）: 共有から写る → 裏で取り込む → 次の起動で入れ替わる → 閉じている間に置いた版に 1 回の起動で入れ替わる → 開けない版は控えへ戻す → 配る版を戻す → 配る入口から新しい PC
+      - name: 更新の通し（本物の WebView2）
+        run: python desktop\bundle\verify.py update --exe "desktop\target\release\$env:EXE" --work "$env:RUNNER_TEMP\verify"
+      - name: 配る ZIP を作る
+        run: python desktop\bundle\bundle.py build --exe "desktop\target\release\$env:EXE" --out "$env:RUNNER_TEMP\release"
+      - name: 成果物をまとめる
+        if: always()
+        run: |
+          $out = "$env:RUNNER_TEMP\out"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          if (Test-Path "desktop\target\release\$env:EXE") { Copy-Item "desktop\target\release\$env:EXE" $out }
+          if (Test-Path "$env:RUNNER_TEMP\selftest.json") { Copy-Item "$env:RUNNER_TEMP\selftest.json" $out }
+          Get-ChildItem "$env:RUNNER_TEMP\release" -File -ErrorAction SilentlyContinue | Copy-Item -Destination $out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-windows
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: warn
+
+  # 確かめ終えた配る ZIP を GitHub の Releases に載せる（main だけ。PR では動かない）。説明はその版の更新履歴から作る（bundle.py notes）。
+  # 書き込みの権限はこの job にだけ渡す。同じ版の札が既にあれば上書きしない（版を上げずに入った変更。配った ZIP と指紋を変えない）。
+  release:
+    needs: windows
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-windows
+          path: out
+      - name: Releases に載せる
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(python desktop/bundle/bundle.py version)
+          tag="v$version"
+          read -r built zip < <(python -c 'import json; r = json.load(open("out/release.json", encoding="utf-8")); print(r["version"], r["zip"])')
+          if [ "$built" != "$version" ]; then echo "::error::作った ZIP の版（$built）と program の版（$version）が違います"; exit 1; fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::warning::$tag は既に Releases にあります（上書きしません）。配る物を変えたときは版を上げてください。"
+            exit 0
+          fi
+          python desktop/bundle/bundle.py notes --release out/release.json > notes.md
+          gh release create "$tag" "out/$zip" "out/$zip.sha256" out/release.json \
+            --target "$GITHUB_SHA" --title "版 $version" --notes-file notes.md --latest

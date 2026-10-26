@@ -1,0 +1,193 @@
+{
+ "title": "画像の読み込み方（版 4.0.0・画面に出ない改良。説明と測った数は 2026-10-26-image-loading.md）",
+ "rule": "2026-10-17",
+ "evaluator": "採点する者（案を作っていない別のエージェント。Claude Opus 5.5・2026-10-26）。desktop/examples/imgbench.rs を読み、案ごとの中身が md の説明どおりかと測り方の偏りを確かめた（名前を先に読む 4096 バイトは、100 枚の CAB の一覧が 2334 バイトで終わるので足りる。Pool は優先の高い順。芯は 4 本なので v1 の糸 4 本とほかの案の糸の数は同じ）。偏りとして点に入れた物: v4 の screen には 9.3 MB の原寸 BMP を画面で縮める重さが入っていない。v5 の lot2＝0 秒は、次に開くロットを当てて裏で用意を終えている前提（用意に約 3 秒・431 MB の書き込み・共有の回線を使う）。v7 の view は 1 回だけ（原寸を開くたびに共有の CAB 約 13 MB を読み直す重さは毎回かかる）。自分で cargo build --release --example imgbench を作り、試験のロット（CAB 20 個 × 100 枚・266 MB、同じ日の 2 ロット）で、共有を真似る形（3ms・110MB/s）を 2 回、手元のディスク（--latency-ms 0 --mbps 100000）を 2 回流し、その数を根拠に採点した。今（版 3.8）は md の表の数で付けた。",
+ "rounds": [
+  {
+   "name": "1 回目",
+   "images": "画面に出ない改良なので画像の代わりに desktop/examples/imgbench.rs で測った数（2026-10-26-image-loading.md）",
+   "self_check": "案を作った者が 7 案すべてを imgbench で流し、狙いどおりに動くかを数で確かめた。直したこと: v3 の view が負の数になった（原寸を開く前に、開く画像の CAB を始めから最優先にしていた＝先を知っている測り方）ので、0.3 秒後に割り込ませる形に直して測り直した。v4 は縮小画像を作らないので screen_kb が原寸の量（約 9 MB）になることを確かめた。v5 の lot2 は用意済みのため 0 秒になる（用意にかかった回線と書き込みは lot2 の cache_mb に出る）。",
+   "proposals": {
+    "v1 Rust で同じ流れ": {
+     "score": {
+      "order": 4,
+      "chunk": 3,
+      "hierarchy": 3,
+      "visual": 3,
+      "steps": 5,
+      "effortless": 4,
+      "intuitive": 4,
+      "form": 7,
+      "place": 6,
+      "layout": 5,
+      "tone": 4
+     },
+     "minus": [
+      {
+       "kind": "hidden_state",
+       "where": "共有を真似る 2 回: lot1 の names 2.64・2.64 秒（手元 1.65〜1.70 秒）。CAB を全部展開し終えるまで、カードの枠も数も出せない"
+      }
+     ],
+     "seen": "共有: names 2.64/2.64・screen 0.68/0.61・all 2.74/2.80・view 1.74/1.74 秒・cache 431 MB。手元: names 1.70/1.65・screen 0.20/0.30・all 1.85/1.80・view 0.91/0.86。版 3.8 より展開は速いが、流れは同じ。名前と開いた原寸を待つ時間（共有で 1.7 秒）が残る"
+    },
+    "v2 メモリで一度に": {
+     "score": {
+      "order": 4,
+      "chunk": 3,
+      "hierarchy": 3,
+      "visual": 2,
+      "steps": 5,
+      "effortless": 4,
+      "intuitive": 3,
+      "form": 7,
+      "place": 6,
+      "layout": 5,
+      "tone": 4
+     },
+     "minus": [
+      {
+       "kind": "hidden_state",
+       "where": "共有を真似る 2 回: names 3.05・2.84 秒（lot2 は 3.31・3.20 秒）。全部の縮小画像がそろうまで名前が出ない（v1 より遅い）"
+      }
+     ],
+     "seen": "共有: names 3.05/2.84・screen 0.76/0.50・all 3.05/2.84・view 1.85/1.73（lot2 は 2.04/1.94）・cache 431 MB。手元: screen 0.15/0.16 と速いが、names 2.31/1.78・view 1.12/0.81。読み直しを省いても、共有では回線が詰まり、v1 より遅い所がある"
+    },
+    "v3 見ている所から": {
+     "score": {
+      "order": 7,
+      "chunk": 7,
+      "hierarchy": 7,
+      "visual": 9,
+      "steps": 7,
+      "effortless": 7,
+      "intuitive": 8,
+      "form": 6,
+      "place": 6,
+      "layout": 5,
+      "tone": 4
+     },
+     "minus": [],
+     "seen": "共有: names 0.09/0.07・screen 0.58/0.70・all 3.48/3.52・view 0.34/0.34・cache 431 MB。手元: names 0.07/0.08・screen 0.49/0.38・all 2.28/2.54・view 0.04/0.01。名前と開いた原寸はすぐ出る。ただ画面の頭（screen）は v1 と変わらない。all は案の中でいちばん遅い（共有で v1 より約 0.7 秒遅い）。1 枚ずつの縮小が CAB の読み込みより先に回り、回線が空く時間ができるため"
+    },
+    "v4 縮小画像を作らない": {
+     "score": {
+      "order": 3,
+      "chunk": 3,
+      "hierarchy": 3,
+      "visual": 2,
+      "steps": 5,
+      "effortless": 4,
+      "intuitive": 4,
+      "form": 5,
+      "place": 5,
+      "layout": 3,
+      "tone": 2
+     },
+     "minus": [
+      {
+       "kind": "hidden_state",
+       "where": "共有を真似る 2 回: names 2.80・2.80 秒。展開し終えるまで枠と数が出ない"
+      }
+     ],
+     "seen": "共有: names 2.80/2.80・screen 0.30/0.49・view 1.73/1.73・cache 412 MB。手元: screen 0.12/0.17。screen_kb 9265 KB と画面 1 枚に縮小画像の 21 倍を送る。screen が速く見えるのは、画面で 9 MB の BMP を縮める重さが測りに入っていないため。原寸も v1 と同じく 1.7 秒待つ"
+    },
+    "v5 先回り": {
+     "score": {
+      "order": 7,
+      "chunk": 7,
+      "hierarchy": 7,
+      "visual": 9,
+      "steps": 8,
+      "effortless": 8,
+      "intuitive": 8,
+      "form": 5,
+      "place": 5,
+      "layout": 4,
+      "tone": 3
+     },
+     "minus": [],
+     "seen": "lot1 は v3 と同じ（共有: names 0.03/0.03・screen 0.76/0.57・all 3.26/3.20・view 0.34/0.34。手元: screen 0.24/0.26・view 0.006/0.008）。lot2 はどれも 0 秒。ただし次に開くロットを当てたときだけ効く。用意には約 3 秒と 431 MB の書き込みがかかり、共有の回線も使う。当たらなければ無駄になる。作りも v3 に推測が加わり、重くなる"
+    },
+    "v6 CAB のまま持つ": {
+     "score": {
+      "order": 7,
+      "chunk": 7,
+      "hierarchy": 7,
+      "visual": 9,
+      "steps": 7,
+      "effortless": 7,
+      "intuitive": 7,
+      "form": 6,
+      "place": 7,
+      "layout": 6,
+      "tone": 6
+     },
+     "minus": [],
+     "seen": "共有: names 0.02/0.03・screen 0.45/0.57・all 3.07/3.18・view 0.45/0.42・cache 298 MB。手元: screen 0.24/0.18・all 2.28/1.26・view 0.15/0.18。名前はすぐ出る。原寸は開くたびに手元の CAB をメモリで伸ばすので、手元でも毎回 0.1〜0.2 秒待つ。書く量は 3 割減るだけ"
+    },
+    "v7 縮小画像だけを持つ": {
+     "score": {
+      "order": 8,
+      "chunk": 8,
+      "hierarchy": 8,
+      "visual": 9,
+      "steps": 8,
+      "effortless": 8,
+      "intuitive": 7,
+      "form": 8,
+      "place": 8,
+      "layout": 8,
+      "tone": 9
+     },
+     "minus": [],
+     "seen": "共有: names 0.02/0.02・screen 0.35/0.46（lot2 0.33/0.29）・all 2.80/2.90・view 0.34/0.34・cache 19.6 MB。手元: names 0.02/0.03・screen 0.11/0.15・all 1.30/1.39・view 0.009/0.004。名前・画面の頭・全部・開いた原寸のどれも、7 案でいちばん速いかそれに近い。書く量は 22 分の 1。弱い所: 原寸は開くたびに共有の CAB（約 13 MB）を読み直す。裏の読み込みが済んだ後でも、共有では 1 枚ごとに約 0.12 秒以上かかる（今の版 3.8 は展開済みの原寸を手元から出す）。共有につながらないと原寸が出ない。同じ CAB の続きを見るときのために、最後の CAB をメモリに残すとよい"
+    }
+   },
+   "baseline": {
+    "今（版 3.8）": {
+     "score": {
+      "order": 3,
+      "chunk": 3,
+      "hierarchy": 2,
+      "visual": 2,
+      "steps": 3,
+      "effortless": 3,
+      "intuitive": 3,
+      "form": 5,
+      "place": 5,
+      "layout": 4,
+      "tone": 3
+     },
+     "minus": [
+      {
+       "kind": "hidden_state",
+       "where": "md の版 3.8 の表: 全部の名前が分かるまで 2.3〜2.7 秒（手元のディスク）。それまでカードの枠も数も出ない"
+      }
+     ],
+     "seen": "md の数（手元）: 1 つめの CAB 0.16 秒・names 2.3〜2.7・all 2.5〜3.0 秒・書く量は原寸 410 MB ＋ 縮小画像。原寸はその CAB の展開を待つ。CAB ごとに expand を起こす（Windows では遅い）。共有では、この上に開くたびの遅れと回線の細さが効く"
+    }
+   }
+  }
+ ],
+ "built": {
+  "name": "作った後（版 4.0.0・XML の後戻りを直した後）",
+  "images": "画面に出ない改良なので、画像の代わりに desktop/examples/openbench.rs で測った数。採点する者（作っていない別のエージェント）が、直した images.rs（CAB を伸ばす道を unpacked() の 1 つにまとめ、ここで XML を書く。run_unit もここを通る）と、tests/golden.rs の image_xml_is_kept_when_the_original_is_opened_first を読んだ。cargo test --release --test golden を 3 回流し、3 回とも 2 passed。cargo build --release --example openbench を組み、試験のロット（CAB 20 個 × 100 枚・2000 枚・手元のディスク・芯 4）で openbench --runs 3 を 2 回（合計 6 回）流した。前に作った XML 入りのロット（CAB 10 個 × 50 枚＋画像ごとの XML）でも、使い捨ての例で確かめた（3 回。例は消した）。開いてすぐ CAB 0009 の原寸を開き、finished の後に /api/imginfo の xml を見た",
+  "result": {
+   "score": {
+    "order": 8,
+    "chunk": 8,
+    "hierarchy": 8,
+    "visual": 9,
+    "steps": 9,
+    "effortless": 8,
+    "intuitive": 7,
+    "form": 8,
+    "place": 9,
+    "layout": 8,
+    "tone": 9
+   },
+   "minus": [],
+   "seen": "openbench 6 回（手元・芯 4）: names 0.004〜0.007 秒・screen 0.121〜0.191・all 1.13〜1.60・view 0.081〜0.237・next 0.000（6 回とも）・cold 0.078〜0.095・done_ok 6/6・cache_mb 19.601（6 回とも）・rss_mb 331〜380（VmHWM。1 つの糸の中で前の回からの最大）。XML 入りのロット 3 回: 原寸を先に開いた CAB 0009 の画像情報に 0009.cab/0451.xml が出る（前は 0 件）。開いていない CAB 0000 にも 0000.cab/0001.xml が出る。縮小画像は 500/500 そろう。golden の試験は 3 回とも 2 passed。CAB を伸ばす所が 1 か所になり、原寸を開くときも縮小づくりも同じ道を通る（置き場がそろった）。そのため、裏の縮小は CAB を全部伸ばしてから配る形になったが、screen は前と変わらない（0.11〜0.22 秒）。v7 のとおりの作り（名前を先に・縮小画像だけを書く・画面の順・URGENT の割り込み・最近の CAB を覚える〈160 MB〉）は保たれている。残る弱い所: view は手元でも 0.08〜0.24 秒（CAB を全部伸ばしてから返すため。案の v7 の測り方は 1 枚目で止めて 0.02 秒だった）。共有の遅れを真似た作った物の数は無い（案の v7 は imgbench の共有の真似で view 0.34・all 2.9 秒）。前の採点: 直す前は 77.8 点（finished が早く立つ −3）、直した後は 71.7 点（原寸を先に開いた CAB の XML が消える −10）。どちらも直っていることを確かめた"
+  }
+ }
+}
