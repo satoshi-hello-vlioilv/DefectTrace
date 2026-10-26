@@ -64,11 +64,12 @@ fn short(v: &Value) -> String {
     s.chars().take(120).collect()
 }
 
-fn norm(v: &Value, root: &str) -> Value {
+/// 値の木の中の文字（鍵も）の from を to に置き換える（JSON の文字にしてから置き換えると、Windows の場所の \ が壊れる）。
+fn swap(v: &Value, from: &str, to: &str) -> Value {
     match v {
-        Value::String(s) => json!(s.replace(root, "<ROOT>")),
-        Value::Array(a) => Value::Array(a.iter().map(|x| norm(x, root)).collect()),
-        Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.replace(root, "<ROOT>"), norm(x, root))).collect()),
+        Value::String(s) => json!(s.replace(from, to)),
+        Value::Array(a) => Value::Array(a.iter().map(|x| swap(x, from, to)).collect()),
+        Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.replace(from, to), swap(x, from, to))).collect()),
         x => x.clone(),
     }
 }
@@ -76,7 +77,8 @@ fn norm(v: &Value, root: &str) -> Value {
 #[test]
 fn answers_match_the_python_version() {
     let root = fixture("answers");
-    let rs = root.display().to_string();
+    // 正解データは Linux で作った（区切りは /）。場所の区切りは OS の流儀なので、渡すのも比べるのも / にそろえる（Windows も / を読める）
+    let rs = root.display().to_string().replace('\\', "/");
     let home = root.join("_home");
     let cfg = Config::from_value(
         json!({"equipments": [{"name": "LS3", "path": format!("{rs}/LS3")}, {"name": "DL2", "path": format!("{rs}/DL2")}, {"name": "NS1", "path": format!("{rs}/NS1")}],
@@ -99,7 +101,7 @@ fn answers_match_the_python_version() {
                 format!("{}={}", enc(k), enc(v))
             })
             .collect();
-        let body = serde_json::to_vec(&norm(&g["req"], "<ROOT>").to_string().replace("<ROOT>", &rs).parse::<Value>().unwrap()).unwrap();
+        let body = serde_json::to_vec(&swap(&g["req"], "<ROOT>", &rs)).unwrap();
         let body = if g["req"].is_null() { vec![] } else { body };
         // 開いたら、画像の名前と縮小画像が済むまで待つ（版 3.8 の展開を待つのと同じ）
         let r = app.handle(method, path, &query.join("&"), &body).unwrap_or_else(|| panic!("答えが無い: {method} {url}"));
@@ -127,7 +129,7 @@ fn answers_match_the_python_version() {
             continue;
         }
         let mut got: Value = serde_json::from_slice(&r.body).unwrap();
-        got = norm(&got, &rs);
+        got = swap(&swap(&got, "\\", "/"), &rs, "<ROOT>");
         let mut want = g["body"].clone();
         if path == "/api/status" {
             for k in ["thumbs", "thumbs_total", "named", "elapsed"] {
