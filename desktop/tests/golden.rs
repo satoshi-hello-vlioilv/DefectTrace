@@ -64,14 +64,27 @@ fn short(v: &Value) -> String {
     s.chars().take(120).collect()
 }
 
-/// 値の木の中の文字（鍵も）の from を to に置き換える（JSON の文字にしてから置き換えると、Windows の場所の \ が壊れる）。
-fn swap(v: &Value, from: &str, to: &str) -> Value {
+/// 値の木の中の文字（鍵も）を f で変える。
+fn map_str(v: &Value, f: &dyn Fn(&str) -> String) -> Value {
     match v {
-        Value::String(s) => json!(s.replace(from, to)),
-        Value::Array(a) => Value::Array(a.iter().map(|x| swap(x, from, to)).collect()),
-        Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.replace(from, to), swap(x, from, to))).collect()),
+        Value::String(s) => json!(f(s)),
+        Value::Array(a) => Value::Array(a.iter().map(|x| map_str(x, f)).collect()),
+        Value::Object(m) => Value::Object(m.iter().map(|(k, x)| (f(k), map_str(x, f))).collect()),
         x => x.clone(),
     }
+}
+
+/// 値の木の中の from を to に置き換える（JSON の文字にしてから置き換えると、Windows の場所の \ が壊れる）。
+fn swap(v: &Value, from: &str, to: &str) -> Value {
+    map_str(v, &|s| s.replace(from, to))
+}
+
+/// 「開けません: 場所 (理由)」の理由は OS の言葉（Windows と Linux で違う）なので、比べる前に同じ印にする。
+fn os_reason(v: &Value) -> Value {
+    map_str(v, &|s| match (s.starts_with("開けません: "), s.rfind(" (")) {
+        (true, Some(i)) if s.ends_with(')') => format!("{} (<OS の理由>)", &s[..i]),
+        _ => s.to_string(),
+    })
 }
 
 #[test]
@@ -129,8 +142,8 @@ fn answers_match_the_python_version() {
             continue;
         }
         let mut got: Value = serde_json::from_slice(&r.body).unwrap();
-        got = swap(&swap(&got, "\\", "/"), &rs, "<ROOT>");
-        let mut want = g["body"].clone();
+        got = os_reason(&swap(&swap(&got, "\\", "/"), &rs, "<ROOT>"));
+        let mut want = os_reason(&g["body"]);
         if path == "/api/status" {
             for k in ["thumbs", "thumbs_total", "named", "elapsed"] {
                 got.as_object_mut().unwrap().remove(k);

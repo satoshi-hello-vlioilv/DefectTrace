@@ -315,10 +315,10 @@ def make_ls3(root: Path, name: str, n_cab: int, per_cab: int, w: int, h: int, fm
     (lot / "option").mkdir(exist_ok=True)
     (lot / "cond" / "COND01.xml").write_bytes(cond_xml(LS3_KINDS, "L2610-0042", COMMENTS))
     (lot / "cond" / "Common.xml").write_bytes(common_xml([("裏面", "30,90,168"), ("表面", "200,60,40")]))
-    (lot / "cond" / "SystemCond.xml").write_text(system_xml([("0", [(0, 560), (560, 1120), (1120, 1700)]),
-                                                             ("1", [(0, 560), (560, 1120), (1120, 1700)])]), encoding="utf-8")
+    (lot / "cond" / "SystemCond.xml").write_bytes(system_xml([("0", [(0, 560), (560, 1120), (1120, 1700)]),
+                                                              ("1", [(0, 560), (560, 1120), (1120, 1700)])]).encode("utf-8"))
     (lot / "option" / "InspectDataInfo.xml").write_bytes(defs_xml().encode("cp932"))
-    (lot / "option" / "InspCondDef.xml").write_text(INSP_DEF, encoding="utf-8")
+    (lot / "option" / "InspCondDef.xml").write_bytes(INSP_DEF.encode("utf-8"))
     n_img = n_cab * per_cab
     recs = detects_for(ref, max(n_img, 40), rnd)
     write_dat(lot / "DETECT_INFO.dat", "DETECT_INFO", recs)
@@ -360,7 +360,7 @@ def make_ls3(root: Path, name: str, n_cab: int, per_cab: int, w: int, h: int, fm
     write_dat(lot / "STAT_INFO.dat", "STAT_INFO", [{"seq": i, "time": ticks(ref + timedelta(minutes=i), kind=0, utc=False), "count": i * 3}
                                                   for i in range(12)])
     write_dat(lot / "SLIT_MASK_STAT.dat", "SLIT_MASK_STAT", [{"date_time": ticks(ref - timedelta(minutes=2)), "mask": [3, 5]}])
-    (lot / "notes.txt").write_text("memo", encoding="utf-8")
+    (lot / "notes.txt").write_bytes(b"memo")
     return lot
 
 
