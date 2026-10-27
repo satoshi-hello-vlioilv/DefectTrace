@@ -43,18 +43,21 @@ mod imp {
     use std::path::{Path, PathBuf};
     use windows::core::{Interface, HSTRING, PWSTR};
     use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, IPersistFile, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
+        CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, IPersistFile, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
         STGM_READ,
     };
     use windows::Win32::UI::Shell::{
         FOLDERID_Desktop, FOLDERID_Programs, FOLDERID_RoamingAppData, IShellLinkW, SHChangeNotify, SHGetKnownFolderPath, ShellLink,
-        KF_FLAG_DEFAULT, SHCNE_UPDATEITEM, SHCNF_PATHW,
+        KF_FLAG_DEFAULT, SHCNE_UPDATEITEM, SHCNF_FLUSHNOWAIT, SHCNF_PATHW,
     };
 
     /// COM を使えるようにして 1 件こなし、片付ける。
+    /// 呼ぶのは画面の問い合わせごとの糸（窓の糸ではない・Windows の知らせを汲まない）なので、マルチスレッドの部屋（MTA）で使う。
+    /// 1 つの部屋（STA）にすると、本物のデスクトップ（OneDrive など）へ保存するときに部屋への呼び戻しを汲めず、
+    /// ショートカットはできても答えが返らないことがある（版 4.4.0 まで: 「作る」を押しても帯が消えない）。ShellLink はどちらの部屋でも動く。
     fn with_link<T>(f: impl FnOnce(&IShellLinkW) -> windows::core::Result<T>) -> Result<T, String> {
         unsafe {
-            let init = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            let init = CoInitializeEx(None, COINIT_MULTITHREADED);
             let r = CoCreateInstance::<_, IShellLinkW>(&ShellLink, None, CLSCTX_INPROC_SERVER).and_then(|l| f(&l));
             if init.is_ok() {
                 CoUninitialize();
@@ -64,6 +67,7 @@ mod imp {
     }
 
     /// 作って保存し、Windows（エクスプローラー・タスクバー）へ「このショートカットが変わった」と知らせる（絵を読み直させる）。
+    /// 知らせは届くのを待たない（FLUSHNOWAIT。エクスプローラーが忙しくても答えを止めない）。
     pub fn make(link: &Path, to: &Link, description: &str) -> Result<(), String> {
         let path = HSTRING::from(link.as_os_str());
         with_link(|l| unsafe {
@@ -74,7 +78,7 @@ mod imp {
             l.cast::<IPersistFile>()?.Save(&path, true)
         })
         .map_err(|e| format!("ショートカットを保存できません: {e}"))?;
-        unsafe { SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, Some(path.as_ptr() as *const _), None) };
+        unsafe { SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, Some(path.as_ptr() as *const _), None) };
         Ok(())
     }
 
