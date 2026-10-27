@@ -87,6 +87,12 @@ try {
         check(buf.subarray(0, 2).toString() === "PK" && buf.length > 1000 && name.endsWith(".xlsx"), `${view.width}: Excel（.xlsx）を書き出す（${buf.length} バイト・${name}）`);
       }
     }
+    // 読み直す: 範囲のロットを元のファイルから読み直す（ふだんは覚えた値を使う）。読み直した後も同じ値・同じ行の数
+    const before = await page.$$eval("#lvBody tr[data-path]", (t) => t.map((r) => r.innerText).join("\n"));
+    await page.click("#lvReload");
+    await page.waitForFunction(() => document.querySelector("#lvLoad").hidden && !document.querySelector("#lvBody td.lv-wait"), null, { timeout: 15000 });
+    const after = await page.$$eval("#lvBody tr[data-path]", (t) => t.map((r) => r.innerText).join("\n"));
+    check(after === before && after.length > 0, `${view.width}: 「↻ 読み直す」で読み直しても同じ値（${after.split("\n").length} 行）`);
     // 画像を見るに戻る（前の見方へ。画像の一覧が出る）
     await page.click('#modeBar [data-mode="grid"]');
     // 同じ項目は同じ値: サマリの札（名前・値）と、ロット表の同じ名前の列の、開いているロットの行

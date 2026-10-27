@@ -13,6 +13,7 @@ pub mod install;
 pub mod locate;
 pub mod lot;
 pub mod lotlist;
+pub mod lotstore;
 pub mod pins;
 pub mod pool;
 pub mod pyfmt;

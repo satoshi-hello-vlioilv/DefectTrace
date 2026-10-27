@@ -34,8 +34,9 @@ export const FAKE = {
     problems: [], me: { canRelease: true, login: "maint", current: "4.0.0" }, checkedAt: "2026-10-26T09:12:00" },
 };
 
-/** 試しの入口を試験のロットで起こす（more: 足す設備 [{name, path}]。測る道具が大きなロットの束を足す） */
-export async function launch(fake = FAKE, more = []) {
+/** 試しの入口を試験のロットで起こす（more: 足す設備 [{name, path}]。測る道具が大きなロットの束を足す。
+    home: 作業場所（渡せば閉じても消さない。アプリを起こし直しても残る物〈覚えた値〉を測るため）） */
+export async function launch(fake = FAKE, more = [], { home } = {}) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "dt-ui-"));
   execFileSync("python3", [path.join(REPO, "program/tests/fixture_lot.py"), path.join(work, "fx")]);
   const fx = path.join(work, "fx");
@@ -44,7 +45,7 @@ export async function launch(fake = FAKE, more = []) {
   const exe = path.join(REPO, "desktop/target/release/examples/serve");
   if (!fs.existsSync(exe)) execFileSync("cargo", ["build", "--release", "--example", "serve"], { cwd: path.join(REPO, "desktop"), stdio: "inherit" });
   const port = 5600 + Math.floor(Math.random() * 300);
-  const proc = spawn(exe, ["--port", String(port), "--config", cfg, "--home", path.join(work, "home")],
+  const proc = spawn(exe, ["--port", String(port), "--config", cfg, "--home", home || path.join(work, "home")],
     { env: { ...process.env, DT_FAKE_DESKTOP: JSON.stringify(fake) }, stdio: "ignore" });
   const url = `http://127.0.0.1:${port}/`;
   for (let i = 0; i < 100; i++) { try { if ((await fetch(url)).ok) break; } catch { /* 起動待ち */ } await new Promise((r) => setTimeout(r, 100)); }

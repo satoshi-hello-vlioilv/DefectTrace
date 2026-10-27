@@ -1,0 +1,14 @@
+{
+ "title": "ロット表の読み込みの速さ・読み直さない作り（版 4.3.0・画面に出ない改良。説明と測った数は 2026-10-27-lot-table-speed.md）",
+ "rule": "2026-10-17",
+ "evaluator": "",
+ "rounds": [
+  {
+   "name": "1 回目",
+   "images": "画面に出ない改良なので、画像の代わりに program/tools/lotlist-bench.mjs（5 つの場面）と desktop/examples/listbench.rs（1 ロットの手順ごと）で測った数。試しの設備は利用者の LS3 の本物のロットを 600 個（md に書いた）",
+   "self_check": "案を作った者が、作った順に足しながら lotlist-bench を流し（今・A の一部・＋B・＋C・D・D で同時 1 本）、listbench を今と A の後で流した。数は md の表のとおり。作らなかった案（E・F・G）は、効きの上限を測った数で書いた（G は Python の試作 scratchpad の py_lotlist.py を同じ 600 ロットで流した）。確かめた事: D で lotlist-check.mjs（表示列・式の列・並べ替え・検索・CSV・Excel・読み直す・サマリと同じ値）全部 OK、cargo test（golden を含む）全部 OK。偏りとして分かっている事: 手元のディスクで測った（共有フォルダの遅れは、読んだバイト数・回数で代えた）。lotlist-bench の 1 回目はページの読み込みが 30 秒止まる事がある（試しの入口だけ。待ったままの問い合わせを出して開き直す）。",
+   "proposals": {},
+   "baseline": {}
+  }
+ ]
+}

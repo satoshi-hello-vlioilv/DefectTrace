@@ -18,10 +18,20 @@
 | 確かめたこと | 結果（5 設備とも） |
 |---|---|
 | 入れ物（頭 ＋ 件数 ×（1 件 ＋ 印 1 バイト）＝ 大きさ） | 60 ファイルすべて余り 0。印は 0。1 件のバイト数は設備によらず同じ（DETECT_INFO 394・INSP_INFO 306・IMAGE_LINK 12・STAT_INFO 424）。dirinfo.dat は別の形（読まない） |
-| dataVersion | ファイルの値（DETECT_INFO 136402005 など）は定義の structure id（INSP_INFO は 1000）と合わない。定義の system_default の dataVersion で構造を選ぶ（アプリの読み方のとおり） |
+| dataVersion | ファイルの値（DETECT_INFO 136402005・INSP_INFO 1982001・ROLL_INFO 136401001 など）は、本物の定義（InspectDataInfo.xml）に同じ structure id がある。アプリはその構造で読む（無ければ system_default の dataVersion）。※ 2026-10-27 の 1 度目は定義の先頭 20 行だけを見て「合わない」と書いたが、誤りだった |
 | 日時 | INSP_INFO・DETECT_INFO とも Kind 0（時刻の種類なし）＝そのままの現地時刻。検査開始はフォルダ名の時刻と秒まで同じ。欠陥 12,460 件すべてが検査の間 |
 | 画像と欠陥 | IMAGE_LINK の欠陥の記録の番号の記録に、同じ画像の ID がある（12,029 件すべて）。番号で引けば合う |
 | 単位 | 検査長 insp_end_y と欠陥の長さ方向の位置は同じ単位（mm）。検査長(m) は × 0.001（サマリの表示項目の倍率） |
 | 記録の種類 | 1＝欠陥・2＝多量（kindID 1100・LS3 397 件）・5（DL2 に 1 件。画像なし。欠陥に数えない） |
 
 - ロット表は、表示項目と同じ項目（ファイル・鍵が同じ）を、表示項目と同じ倍率・日時の形で出す（版 4.2.0 では、検査長が mm のまま「(m)」の名前で出ていた。4.2.1 で直した）
+
+### 本物の定義で読んで確かめたこと（2026-10-27・利用者が添付した LS3 の InspectDataInfo.xml・Common.xml）
+
+- 本物の定義を 5 設備のロットに置き、アプリの読み方（試しの入口の /api/dat）で .dat を読んだ。DETECT_INFO・INSP_INFO・IMAGE_LINK・FM_IMAGE_LINK・
+  ROLL_INFO・SLIT_MASK_STAT・STAT_INFO・THICK_INFO の 40 ファイルすべて誤りなし（1 件のバイト数が定義と一致・余り 0）
+- ROLL_INFO.dat の comment1（ロットNo）は、どの設備もそのロットの cond/COND*.xml の comment[0] と同じ（N5451A0・L6061Y0・L8115X0・LY94P52・L8113N0）。
+  ロットNo・材質などは、ロットの中の COND*.xml から読むので合っている（同じ番号の COND0005.xml でも、ほかのロットの物は中身が違う）
+- INSP_INFO.classification_count（分類別件数）は、DETECT_INFO の type=1 の記録を kindID ごとに数えた数と 5 設備とも一致
+- INSP_INFO.detect_total_cnt（表示項目「欠陥数」）は、欠陥以外の記録も数える（LS3: 7,413 ＝ 欠陥 7,016 ＋ 多量 397。DL2: 639 ＝ 欠陥 638 ＋ type 5 の 1 件）
+- STAT_INFO の日時は Kind 1・2（UTC で保存）。時差（+9 時間）を足すと、検査開始の 1 秒後から並ぶ（アプリの読み方のとおり）

@@ -296,6 +296,27 @@ impl LotRes {
         }
     }
 
+    /// ロットの中のファイルを形（cond/COND*.xml など）で探す。開いたときにたどった一覧から探し、フォルダを読み直さない
+    /// （共有フォルダでは、フォルダの一覧を読むたびに行き来の待ちがかかる）。一覧に無い img・fm_img・wavedata の下はディスクで探す
+    pub fn glob(&self, pattern: &str) -> Vec<PathBuf> {
+        let parts: Vec<&str> = pattern.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
+        if parts.len() > 1 && WALK_SKIP.contains(&parts[0].to_lowercase().as_str()) {
+            return glob(&self.lot, pattern);
+        }
+        let comps = |p: &Path| -> Vec<String> {
+            p.strip_prefix(&self.lot).map(|r| r.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect()).unwrap_or_default()
+        };
+        let mut out: Vec<(Vec<String>, PathBuf)> = self
+            .rel
+            .iter()
+            .map(|p| (comps(p), p.clone()))
+            .filter(|(c, _)| c.len() == parts.len() && c.iter().zip(&parts).all(|(n, w)| wild(w, n)))
+            .collect();
+        // 並びは glob と同じ（段ごとに名前の自然な順）
+        out.sort_by(|a, b| a.0.iter().zip(&b.0).map(|(x, y)| natcmp(x, y)).find(|o| o.is_ne()).unwrap_or(std::cmp::Ordering::Equal));
+        out.into_iter().map(|(_, p)| p).collect()
+    }
+
     pub fn cfg(&self) -> &Config {
         &self.cfg
     }
@@ -375,7 +396,7 @@ impl LotRes {
     }
 
     pub fn cond_xml(&self) -> Option<PathBuf> {
-        if let Some(p) = glob(&self.lot, "cond/COND*.xml").into_iter().next() {
+        if let Some(p) = self.glob("cond/COND*.xml").into_iter().next() {
             return Some(p);
         }
         static R: OnceLock<Regex> = OnceLock::new();
@@ -588,6 +609,13 @@ impl LotCache {
         self.m.stats()
     }
 
+    /// 覚えを捨てる（「読み直す」。次に問い合わせたとき、ロットを読み直す）。
+    pub fn forget(&self, paths: &[String]) {
+        for p in paths {
+            self.m.remove(p);
+        }
+    }
+
     pub fn clear(&self) {
         self.m.clear();
     }
@@ -611,7 +639,7 @@ pub fn resolve_lot_pin(res: &LotRes, p: &Value) -> String {
             None => String::new(),
         };
     }
-    for fp in glob(&res.lot, file) {
+    for fp in res.glob(file) {
         let vals = xml::match_values(&xml::pairs(&fp), key);
         if !vals.is_empty() {
             return vals.into_iter().filter(|v| !v.is_empty()).collect::<Vec<_>>().join(" ");

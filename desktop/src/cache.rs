@@ -101,6 +101,13 @@ impl<K: Eq + Hash + Clone, V: Clone> Lru<K, V> {
         }
     }
 
+    pub fn remove(&self, k: &K) {
+        let mut g = self.inner.lock().unwrap();
+        if let Some(e) = g.map.remove(k) {
+            g.total -= e.w;
+        }
+    }
+
     pub fn clear(&self) {
         let mut g = self.inner.lock().unwrap();
         g.map.clear();

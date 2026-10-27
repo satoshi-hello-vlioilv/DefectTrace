@@ -14,7 +14,7 @@
   const LC = () => window.LotListColumns;
   const TARGET = "defecttrace:lots";            // 表示列の設定の名前（表は 1 つ）
   const KNOWN = "dt.lotlist.known.v1";          // 見たことのある列（新しく出た列は隠して足す。数百の XML の項目を一度に並べない）
-  const BATCH = 40;
+  const BATCH = 40, CONC = 3;
   const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 覚えられなくても動く */ } };
 
@@ -35,6 +35,7 @@
         <span class="lv-count" id="lvCount"></span>
         <span class="spacer"></span>
         <input id="lvSearch" type="search" placeholder="一覧を検索（どの列の字でも）" autocomplete="off">
+        <button type="button" id="lvReload" title="範囲のロットを、元のファイルから読み直す（ふだんは 1 度読んだ値を覚えて使い、同じロットは読み直しません）">↻ 読み直す</button>
         <button type="button" id="lvCols" title="出す列・並び・表示名・幅・値の整え方・計算で作る列・読み替え（LotScope と同じ表示列の設定）">表示列…</button>
         <button type="button" id="lvCsv" title="いまの検索・並びの全件を、表示列の見え方のまま CSV で保存">CSV</button>
         <button type="button" id="lvXlsx" class="primary" title="いまの検索・並びの全件を、表示列の見え方のまま Excel（.xlsx）で保存">Excel に出力</button>
@@ -43,8 +44,18 @@
       <div class="lv-wrap" id="lvWrap"><table class="ll-grid lv-grid" id="lvGrid"><colgroup id="lvColgroup"></colgroup><thead id="lvHead"></thead><tbody id="lvBody"></tbody></table>
         <div class="empty" id="lvEmpty">左の木で設備・年・月・日を選ぶと、その下のロットをここに一覧にします</div></div>
       <style id="lvTint"></style>`;
+    $("lvReload").addEventListener("click", () => {
+      if (!V.lots.length || V.busy) return;
+      V.lots.forEach((l) => V.cache.delete(l.path));
+      render();
+      fill(V.gen, true);
+    });
     $("lvSearch").addEventListener("input", () => { V.q = $("lvSearch").value.trim().toLowerCase(); render(); });
-    $("lvCols").addEventListener("click", () => { if (!V.cols.length) return; setContext(); LC().toggle(); });
+    $("lvCols").addEventListener("click", async () => {
+      if (!V.cols.length) return;
+      await readSample(V.gen, V.cols.filter(heavy));   // 重い列の見本（窓の「見え方」に出す）
+      setContext(); LC().toggle();
+    });
     $("lvCsv").addEventListener("click", () => exportAs("csv"));
     $("lvXlsx").addEventListener("click", () => exportAs("xlsx"));
     $("lvWrap").addEventListener("scroll", () => { if (!V.raf) V.raf = requestAnimationFrame(() => { V.raf = 0; paintBody(); }); }, { passive: true });
@@ -108,12 +119,21 @@
     V.cols = cat.map((c) => { const name = count.get(c.label) > 1 ? `${c.label}（${c.group}）` : c.label; V.byName.set(name, c); return name; });
     V.lotCol = V.cols.find((c) => V.byName.get(c).id === "@lot|lot") || V.cols[0] || "";
     await seedLayout();
-    // 見本のロットは、すべての列の値を読んでおく（表示列の窓の「見え方（実データ 1 件）」に、隠している列の値も出す）
+    // 見本のロットは、軽い列の値を読んでおく（表示列の窓の「見え方（実データ 1 件）」に、隠している列の値も出す）。
+    // 欠陥の記録を読む重い列（分類別・分類の合計）の見本は、表示列の窓を開くときに読む（範囲を変えるたびには読まない）
+    V.pick = pick;
+    await readSample(gen, V.cols.filter((k) => !heavy(k)));
+  }
+  // 欠陥の記録（DETECT_INFO・数 MB）を読む列
+  const heavy = (k) => { const c = V.byName.get(k); return !!c && (c.file === "@class" || c.id === "@check|defects"); };
+  async function readSample(gen, cols) {
+    const pick = (V.pick || []).filter((p) => cols.some((k) => !(k in (V.cache.get(p) || {}))));
+    if (!pick.length || !cols.length) return;
     try {
       const d = await (await fetch("/api/lotrows", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paths: pick, cols: V.cols.map(spec) }) })).json();
+        body: JSON.stringify({ paths: pick, cols: cols.map(spec) }) })).json();
       if (gen !== V.gen) return;
-      pick.forEach((p) => { const v = d[p]; if (!Array.isArray(v)) return; const c = V.cache.get(p) || {}; V.cols.forEach((k, j) => { c[k] = v[j]; }); V.cache.set(p, c); });
+      pick.forEach((p) => { const v = d[p]; if (!Array.isArray(v)) return; const c = V.cache.get(p) || {}; cols.forEach((k, j) => { c[k] = v[j]; }); V.cache.set(p, c); });
     } catch (e) { /* 見本が無くても一覧は出せる */ }
   }
   // 1 つの列の問い合わせ（{file, key} と、同じ項目の表示項目の scale・fmt）
@@ -162,36 +182,60 @@
   }
 
   // ---------------------------------------------------------------- 値（足りない列だけ・40 ロットずつ）
-  async function fill(gen) {
+  // 値を集める: まず覚え（裏の lotvalues.json）にある分を 1 度に並べ、覚えに無いロットだけを読む（CONC 本を同時に）
+  async function fill(gen, refresh = false) {
     // 読む役は範囲ごと（gen）に 1 つ。前の範囲の読みは gen が変わった所で止まるので、待たずに今の範囲の読みを始める
     if (V.busy === gen || !V.lots.length) return;
     const cols = neededCols();
-    const todo = V.lots.filter((l) => { const c = V.cache.get(l.path); return !c || cols.some((k) => !(k in c)); });
+    const lacks = (l) => { const c = V.cache.get(l.path); return !c || cols.some((k) => !(k in c)); };
+    let todo = V.lots.filter(lacks);
     if (!todo.length) { progress(null); return; }
-    V.busy = gen; V.need = todo.length; V.got = 0;
-    const t0 = performance.now();
-    try {
-      for (let i = 0; i < todo.length; i += BATCH) {
-        if (gen !== V.gen) return;
-        const part = todo.slice(i, i + BATCH);
-        const miss = cols.filter((k) => part.some((l) => !(k in (V.cache.get(l.path) || {}))));
-        const body = { paths: part.map((l) => l.path), cols: miss.map(spec) };
-        let d = {};
-        try { d = await (await fetch("/api/lotrows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json(); } catch (e) { d = {}; }
-        if (gen !== V.gen) return;
-        for (const l of part) {
-          const c = V.cache.get(l.path) || {}, v = d[l.path];
-          miss.forEach((k, j) => { c[k] = Array.isArray(v) ? v[j] : ""; });
-          if (v && v.error) c.__error = v.error;
-          V.cache.set(l.path, c);
-        }
-        V.got += part.length;
-        const el = (performance.now() - t0) / 1000, rate = V.got / Math.max(el, 0.001);
-        progress({ phase: "ロットの値を読んでいます", n: V.got, total: V.need, eta: rate > 0 ? (V.need - V.got) / rate : null });
-        // 読む間は行だけを描き直す（0.5 秒に 1 度まで。列の幅・見出しは変わらないので作り直さない）。読み終えたら全部を描く
-        if (V.got >= V.need) render();
-        else if (performance.now() - (V.drawnAt || 0) > 500) { refreshRows(); V.drawnAt = performance.now(); }
+    V.busy = gen;
+    const take = (part, d, miss, onlyHit) => {
+      for (const l of part) {
+        const v = d[l.path];
+        if (onlyHit && !Array.isArray(v)) continue;
+        const c = V.cache.get(l.path) || {};
+        miss.forEach((k, j) => { if (!onlyHit || (Array.isArray(v) && v[j] != null)) c[k] = Array.isArray(v) ? v[j] ?? "" : ""; });
+        if (v && v.error) c.__error = v.error;
+        V.cache.set(l.path, c);
       }
+    };
+    const ask = async (paths, miss, extra) => {
+      try { return await (await fetch("/api/lotrows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paths, cols: miss.map(spec), ...extra }) })).json(); }
+      catch (e) { return {}; }
+    };
+    try {
+      // 1. 覚えている分（読まない。数千ロットでも 1 度の問い合わせ）
+      if (!refresh) {
+        progress({ phase: "覚えている値を並べています", n: 0, total: 0 });
+        const d = await ask(todo.map((l) => l.path), cols, { cached: true });
+        if (gen !== V.gen) return;
+        take(todo, d, cols, true);
+        todo = todo.filter(lacks);
+        refreshRows();
+      }
+      // 2. 覚えに無いロットを読む（BATCH ロットずつ・CONC 本を同時に）
+      V.need = todo.length; V.got = 0;
+      const t0 = performance.now(), queue = [];
+      for (let i = 0; i < todo.length; i += BATCH) queue.push(todo.slice(i, i + BATCH));
+      const worker = async () => {
+        for (let part; (part = queue.shift());) {
+          if (gen !== V.gen) return;
+          const miss = cols.filter((k) => part.some((l) => !(k in (V.cache.get(l.path) || {}))));
+          const d = await ask(part.map((l) => l.path), miss, refresh ? { refresh: true } : {});
+          if (gen !== V.gen) return;
+          take(part, d, miss, false);
+          V.got += part.length;
+          const el = (performance.now() - t0) / 1000, rate = V.got / Math.max(el, 0.001);
+          progress({ phase: "ロットの値を読んでいます", n: V.got, total: V.need, eta: rate > 0 ? (V.need - V.got) / rate : null });
+          // 読む間は行だけを描き直す（0.5 秒に 1 度まで。列の幅・見出しは変わらないので作り直さない）
+          if (performance.now() - (V.drawnAt || 0) > 500) { refreshRows(); V.drawnAt = performance.now(); }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(CONC, queue.length) }, worker));
+      if (gen !== V.gen) return;
+      render();   // 読み終えたら全部を描く（列の幅も）
     } finally { if (V.busy === gen) V.busy = 0; }
     if (gen !== V.gen) return;
     progress(null);
@@ -240,11 +284,11 @@
       $("lvHead").innerHTML = ""; $("lvBody").innerHTML = ""; $("lvColgroup").innerHTML = ""; V.shown = null;
       $("lvCount").textContent = V.scope && !V.lots.length && !V.busy ? "ロットがありません" : "";
       empty.hidden = false;
-      ["lvCols", "lvCsv", "lvXlsx"].forEach((id) => { $(id).disabled = true; });
+      ["lvReload", "lvCols", "lvCsv", "lvXlsx"].forEach((id) => { $(id).disabled = true; });
       return;
     }
     empty.hidden = true;
-    ["lvCols", "lvCsv", "lvXlsx"].forEach((id) => { $(id).disabled = false; });
+    ["lvReload", "lvCols", "lvCsv", "lvXlsx"].forEach((id) => { $(id).disabled = false; });
     const t = TARGET;
     setContext();
     const cols = shownCols(), L = LC().get(t);
