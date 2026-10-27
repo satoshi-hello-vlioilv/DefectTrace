@@ -2,7 +2,8 @@
 //
 //   node program/tools/ui-variants.mjs 出力フォルダ 案の定義.mjs [--states lot,release] [--views 1728x1152,1536x864,1280x720] [--only A,B]
 //
-// 案の定義（ES モジュール）は PROPOSALS = [{ key, name, css, ops }] と、任意で STATES = { 状態: "頁の中で動かす文" } を書き出す。
+// 案の定義（ES モジュール）は PROPOSALS = [{ key, name, css, ops }] と、任意で STATES = { 状態: "頁の中で動かす文" } を書き出す
+// （文が Promise を返せば〈return (async () => …)()〉、終わるまで待ってから撮る）。
 // 今の画面に案ごとの CSS と DOM の組み替え（ops）を当て、ロットを開いた画面で、状態ごと・大きさごとに撮る（状態-幅-案.png）。
 // 状態ごとに全案を並べた一覧（sheet-状態-幅.png）も作る。一覧で全体を、1 枚ずつの画像で細部を見て採点する（ui_score.py）。
 //
@@ -85,7 +86,7 @@ try {
         new Function("ops", `(${fn})(ops)`)(ops);
       }, { css: p.css || "", ops: p.ops || [], fn: applyOps.toString() });
       for (const state of STATES) {
-        await page.evaluate((js) => { document.body.dataset.state = ""; new Function(js)(); }, STATE_JS[state] || "");
+        await page.evaluate(async (js) => { document.body.dataset.state = ""; await new Function(js)(); }, STATE_JS[state] || "");
         await page.waitForTimeout(200);
         const id = `${state}-${view.width}-${p.key}`;
         await page.screenshot({ path: path.join(OUT, `${id}.png`) });

@@ -55,7 +55,13 @@ export async function launch(fake = FAKE) {
       const ctx = await browser.newContext({ viewport: view, deviceScaleFactor: 1.25, locale: "ja-JP" });
       const page = await ctx.newPage();
       await page.addInitScript((lot) => { window.__dtFx = lot; }, path.join(fx, "LS3/2026/2026_10/2026_10_25/2026_10_25_22_03_53"));
-      await page.goto(url);
+      // 開くのが 30 秒で終わらないことがまれにある（再現できていない）。待ったままの問い合わせを書き出し、1 度だけ開き直す
+      const pend = new Set();
+      page.on("request", (r) => pend.add(r)); page.on("requestfinished", (r) => pend.delete(r)); page.on("requestfailed", (r) => pend.delete(r));
+      await page.goto(url).catch(async (e) => {
+        console.error(`開くのが終わらない（${e.message.split("\n")[0]}）。待ったまま: ${[...pend].map((r) => r.url()).join(" , ") || "なし"}。開き直す`);
+        await page.goto(url);
+      });
       await page.waitForFunction(() => window.__dtReady === true);
       return page;
     },

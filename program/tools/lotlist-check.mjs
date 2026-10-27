@@ -25,12 +25,19 @@ try {
     await page.waitForFunction(() => document.querySelectorAll("#lvBody tr").length > 0 && !document.querySelector("#lvBody td.lv-wait"), null, { timeout: 15000 });
     const day = await page.$$eval("#lvBody tr", (t) => t.length);
     check(day === 2, `${view.width}: 開いているロットの日（10/25）の 2 ロットが並ぶ（${day}）`);
-    // 範囲を設備全体へ（木の設備を押す）
+    // 範囲のパンくずで月へ広げる（木の側で範囲を決め直し、木の上でも範囲の節が光る）
+    await page.click('#lvScope button[data-i="2"]');
+    await page.waitForFunction(() => /2026\/10$/.test(document.querySelector("#lvScope b")?.innerText || "") && document.querySelector("#lvLoad").hidden, null, { timeout: 15000 });
+    const lit = await page.$$eval("#tree li.scope > .row .nm", (e) => e.map((x) => x.textContent));
+    check(lit.length === 1 && lit[0] === "2026/10", `${view.width}: パンくずで範囲を月に広げ、木でも月の節が示される（${lit.join("・")}）`);
+    // 範囲を設備全体へ（木の設備を押す。表の窓では押した節を開いたまま範囲にする＝木が畳まれない）
     await page.click("#tree > li > .row");
-    await page.waitForFunction(() => !/2026/.test(document.querySelector("#lvScope").innerText) && document.querySelectorAll("#lvBody tr").length > 0 && !document.querySelector("#lvBody td.lv-wait"), null, { timeout: 15000 });
+    await page.waitForFunction(() => !/2026/.test(document.querySelector("#lvScope").innerText) && document.querySelector("#lvLoad").hidden && !document.querySelector("#lvBody td.lv-wait"), null, { timeout: 15000 });
     const all = await page.$$eval("#lvBody tr", (t) => t.length);
     const scope = await page.$eval("#lvScope", (e) => e.innerText.replace(/\s+/g, " ").trim());
     check(all === 2 && /LS3/.test(scope), `${view.width}: 木の設備を押すと、範囲が設備の下の全ロットになる（${all} ロット・範囲「${scope}」）`);
+    const open = await page.$eval("#tree > li > ul", (u) => !u.hidden);
+    check(open, `${view.width}: 設備を押しても木が畳まれない`);
     await shot("list");
     // 表示列の窓（LotScope と同じ）
     await page.click("#lvCols");

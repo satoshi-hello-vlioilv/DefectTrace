@@ -20,13 +20,14 @@
 
   const V = {
     host: null, scope: null, lots: [], cols: [], byName: new Map(), lotCol: "", cache: new Map(),
-    sort: { col: "", dir: 1 }, q: "", gen: 0, need: 0, got: 0, busy: false, bound: false,
+    sort: { col: "", dir: 1 }, q: "", gen: 0, need: 0, got: 0, busy: 0, bound: false,
     onOpen: null, defaults: [],
   };
 
   // ---------------------------------------------------------------- 器
-  function mount(host, { onOpen } = {}) {
-    V.host = host; V.onOpen = onOpen || null;
+  // onOpen(path): 行のロットを開く。onPick(path): 範囲のパンくずで節を選んだ（木の側が範囲を決め直して setScope を呼ぶ）
+  function mount(host, { onOpen, onPick } = {}) {
+    V.host = host; V.onOpen = onOpen || null; V.onPick = onPick || null;
     host.innerHTML = `
       <div class="lv-bar">
         <nav class="lv-scope" id="lvScope" aria-label="一覧にするロットの範囲"></nav>
@@ -45,7 +46,7 @@
     $("lvCols").addEventListener("click", () => { if (!V.cols.length) return; setContext(); LC().toggle(); });
     $("lvCsv").addEventListener("click", () => exportAs("csv"));
     $("lvXlsx").addEventListener("click", () => exportAs("xlsx"));
-    $("lvScope").addEventListener("click", (e) => { const b = e.target.closest("[data-path]"); if (b) setScope({ path: b.dataset.path, eq: V.scope.eq, crumbs: V.scope.crumbs.slice(0, +b.dataset.i + 1) }); });
+    $("lvScope").addEventListener("click", (e) => { const b = e.target.closest("[data-path]"); if (!b) return; if (V.onPick) V.onPick(b.dataset.path); else setScope({ path: b.dataset.path, eq: V.scope.eq, crumbs: V.scope.crumbs.slice(0, +b.dataset.i + 1) }); });
     $("lvHead").addEventListener("click", (e) => {
       const th = e.target.closest("th[data-col]"); if (!th || e.target.closest(".col-resize")) return;
       const c = th.dataset.col;
@@ -144,11 +145,12 @@
 
   // ---------------------------------------------------------------- 値（足りない列だけ・40 ロットずつ）
   async function fill(gen) {
-    if (V.busy || !V.lots.length) return;
+    // 読む役は範囲ごと（gen）に 1 つ。前の範囲の読みは gen が変わった所で止まるので、待たずに今の範囲の読みを始める
+    if (V.busy === gen || !V.lots.length) return;
     const cols = neededCols();
     const todo = V.lots.filter((l) => { const c = V.cache.get(l.path); return !c || cols.some((k) => !(k in c)); });
     if (!todo.length) { progress(null); return; }
-    V.busy = true; V.need = todo.length; V.got = 0;
+    V.busy = gen; V.need = todo.length; V.got = 0;
     const t0 = performance.now();
     try {
       for (let i = 0; i < todo.length; i += BATCH) {
@@ -170,7 +172,8 @@
         progress({ phase: "ロットの値を読んでいます", n: V.got, total: V.need, eta: rate > 0 ? (V.need - V.got) / rate : null });
         render();
       }
-    } finally { V.busy = false; }
+    } finally { if (V.busy === gen) V.busy = 0; }
+    if (gen !== V.gen) return;
     progress(null);
     if (neededCols().some((k) => V.lots.some((l) => !(k in (V.cache.get(l.path) || {}))))) fill(gen);   // 読む間に列が増えた
   }

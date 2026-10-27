@@ -64,7 +64,7 @@ aside{background:var(--pane);display:flex;flex-direction:column;min-height:0;fle
 .seg button.on{background:var(--acc);color:#fff;border-color:var(--acc);position:relative}
 .seg button .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px;border:1px solid #fff}
 .sizer{display:flex;align-items:center;gap:6px;color:var(--sub);font-size:12px}
-.sizer input{width:110px;padding:0}
+.sizer{white-space:nowrap}.sizer .seg{flex-wrap:nowrap}.sizer .seg button{min-width:28px;padding:2px 6px}
 #grid{flex:1;overflow:auto;padding:8px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px;--ts:150px}
 #grid[hidden]{display:none}
 .empty{color:var(--sub);margin:auto;padding:20px;text-align:center}
@@ -88,6 +88,8 @@ aside{background:var(--pane);display:flex;flex-direction:column;min-height:0;fle
 .th .rw{display:flex;justify-content:space-between;gap:6px;font-size:11px;line-height:15px}
 .th .rw b{font:400 11px Consolas,monospace;white-space:nowrap}
 .th .nm2{font:10px Consolas,monospace;color:var(--sub);display:flex;justify-content:space-between;gap:4px}
+/* 幅は中身が入るように決める（fitThumbs）。測りきれない字があっても 1 行のまま末尾を切る（折れて縦に伸びない） */
+.th .rw>span,.th .nm2>*{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ph{width:calc(var(--ts) + 40px);height:calc(var(--ts) + 90px);border:1px dashed var(--line);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:11px}
 .box{border:1px solid var(--line);border-radius:6px;background:var(--pane);flex:0 0 auto}
 .box>summary{cursor:pointer;padding:5px 8px;font-weight:700;color:var(--acc);border-bottom:1px solid var(--line2)}
@@ -380,3 +382,6 @@ table.ll-grid{border-collapse:separate;border-spacing:0;font-size:13px;table-lay
 .ll-grid td.lv-wait{color:var(--sub)}
 .ll-grid td.c-ok{color:var(--ok);font-weight:700}.ll-grid td.c-ng{color:var(--ng);font-weight:700}.ll-grid td.c-warn{color:#8a5a00;font-weight:700}.ll-grid td.c-muted{color:var(--sub)}
 @media (prefers-color-scheme:dark){.ll-grid tbody tr.is-odd td{background:#1b1e24}.ll-grid thead th{background:#2a3646}}
+/* 表の範囲の節（表の窓の間だけ。木の上で、表がどこの下のロットかを示す） */
+.tree li.scope>.row{background:var(--accbg);box-shadow:inset 3px 0 0 var(--acc)}
+.tree li.scope>.row .nm{font-weight:700;color:var(--acc)}

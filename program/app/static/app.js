@@ -52,7 +52,14 @@
     const li = document.createElement("li");
     li.dataset.path = d.path; li.dataset.eq = eq;
     li.innerHTML = `<div class="row${isEq ? " eq" : ""}" title="${esc(d.path)}"><span class="tw">▶</span><span class="nm">${esc(isEq ? d.name : dirLabel(d.name))}</span><span class="cnt"></span></div><ul hidden></ul>`;
-    li.firstChild.addEventListener("click", () => { toggle(li); S.folder = li; if (S.view === "list") window.DTLotList.setScope(listScope()); });
+    // 表の窓では、押した節を開いて表の範囲にする（今の範囲の節を押したときだけ畳む）。画像の窓では開く・畳むだけ
+    li.firstChild.addEventListener("click", () => {
+      const again = S.folder === li;
+      S.folder = li;
+      if (S.view !== "list") { toggle(li); return; }
+      toggle(li, again ? undefined : true);
+      setListScope();
+    });
     return li;
   }
   async function toggle(li, open) {
@@ -89,6 +96,13 @@
       crumbs.unshift({ path: x.dataset.path, label: isEq ? x.dataset.eq : x.querySelector(":scope>.row .nm").textContent });
     }
     return { path: li.dataset.path, eq: li.dataset.eq, crumbs };
+  }
+  // 表の範囲を表に渡し、木の上でも範囲の節を示す（表の窓の間だけ）
+  function setListScope() {
+    const sc = listScope();
+    document.querySelectorAll("#tree li.scope").forEach((x) => x.classList.remove("scope"));
+    if (S.view === "list" && sc) document.querySelector(`#tree li[data-path="${CSS.escape(sc.path)}"]`)?.classList.add("scope");
+    if (S.view === "list") window.DTLotList.setScope(sc);
   }
   // 一覧の行（ロット）を開く: 木にまだ無いロットも開けるよう、木と同じ形の節を作って渡す
   function openLotPath(path) {
@@ -317,7 +331,7 @@
       if (S.cur < 0 && S.items.length && document.querySelector("#grid .th")) select(0);
       loadProgress();
       if (S.queue.length) requestAnimationFrame(step);
-      else { S.draining = false; finishIfDone(); }
+      else { S.draining = false; fitThumbs(); finishIfDone(); }
     };
     requestAnimationFrame(step);
   }
@@ -351,10 +365,45 @@
     const face = m ? `<span style="color:${m.scolor}">■ ${esc(m.sname)}${pn ? ` <span class="tbadge" data-pairs="${m.d}" title="転写候補を表示">転写候補 ${pn}</span>` : ""}</span>` : "<span></span>";
     return `${meta}<div class="nm2">${face}<span>${esc(it.cab)}/${esc(it.name)}</span></div>`;
   }
+  // ---------------------------------------------------------------- サムネイルの大きさ（列の数で決め、一覧の幅に合わせる）
+  // 1 枚の幅＝(一覧の幅 − すき間) ÷ 列の数。ただし、カードの中身（項目名と値・面と転写候補の札・ファイル名）が切れずに入る幅より狭くしない。
+  // その幅から、入る列の数の最大が決まる（選べるボタンは 1〜最大だけ）。決め方は 2 回の案出しと採点で I に決めた
+  // （program/tools/proposals/2026-10-27-thumb-cols*）。中身の幅はロットのデータから測る（描いたカードによらず、送っても変わらない）
+  const GAP = 8, PAD = 16, CARD_EXTRA = 40, MAX_COLS = 12;
+  let measureCtx = null;
+  const textW = (t, font) => { measureCtx ??= document.createElement("canvas").getContext("2d"); measureCtx.font = font; return measureCtx.measureText(t).width; };
+  const longest = (xs) => xs.reduce((a, x) => (String(x ?? "").length > a.length ? String(x ?? "") : a), "");
+  function cardNeed() {
+    const k = `${S.lot?.path}|${S.cardVer}|${S.card.length}|${S.items.length}`;
+    if (S.need && S.need.k === k) return S.need.w;
+    const ui = getComputedStyle(document.body).fontFamily, mono = "Consolas,monospace", ms = Object.values(S.imap);
+    // 項目の行: 項目名（11px）＋値（11px 等幅）＋すき間 6px
+    const rows = S.card.map((c, i) => textW(c.label, `11px ${ui}`) + textW(longest(ms.map((m) => m.vals?.[i])), `11px ${mono}`) + 6);
+    // 下の札（枠の外）: 「■ 面」＋（あれば）空白と転写候補の札（10px 太字・左右 4px）＋すき間 4px＋ファイル名（10px 等幅）
+    const side = textW("■ " + longest(Object.values(S.sides).map((x) => x.name ?? x)), `10px ${mono}`);
+    const badge = Object.keys(S.pairN).length ? textW(" ", `10px ${mono}`) + textW(`転写候補 ${Math.max(...Object.values(S.pairN))}`, `700 10px ${ui}`) + 8 : 0;
+    const file = textW(longest(S.items.map((it) => `${it.cab}/${it.name}`)), `10px ${mono}`);
+    // 項目の行は枠の中（枠の内側の余白 6px×2・枠線 2px×2）、どちらもカードの余白（2px×2）の内側。画像は 90px より小さくしない
+    const w = Math.ceil(Math.max(90 + CARD_EXTRA, Math.max(0, ...rows) + 12 + 4 + 4, side + badge + 4 + file + 4));
+    S.need = { k, w };
+    return w;
+  }
+  function fitThumbs() {
+    const g = $("grid"), w = g.clientWidth - PAD;
+    if (w <= 0) return;   // 一覧が隠れている（ほかの窓）。出たときに ResizeObserver がまた呼ぶ
+    S.cols ??= +(localStorage.getItem("thumbCols") || 5);
+    const max = Math.max(1, Math.min(MAX_COLS, Math.floor((w + GAP) / (cardNeed() + GAP)))), k = Math.min(S.cols, max);
+    g.style.setProperty("--ts", Math.floor((w - GAP * (k - 1)) / k) - CARD_EXTRA + "px");
+    const seg = $("colSeg");
+    if (seg.childElementCount !== max) seg.innerHTML = Array.from({ length: max }, (_, i) => `<button type="button" data-cols="${i + 1}">${i + 1}</button>`).join("");
+    seg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", +b.dataset.cols === k));
+    $("sizerWrap").title = `一覧の幅に合わせて、この列の数で並べる（今の幅とカードの項目では最大 ${max} 列。項目を減らすか窓を広げると増える）`;
+  }
   // 描いたカードの中身を書き替える（対応付け・転写候補が届いたとき）。いま見えている枠だけ。ほかは見えたときに描く
   function updateCards() {
     S.cardVer = (S.cardVer || 0) + 1;
     $("grid").style.setProperty("--rows", S.card.length);
+    fitThumbs();
     for (const th of seenCards) if (th.isConnected) fillCard(th); else seenCards.delete(th);
   }
   $("grid").addEventListener("click", (e) => { const th = e.target.closest(".th"); if (th && !e.target.closest(".tbadge")) select(idxOf(itemOf(th))); });
@@ -958,7 +1007,7 @@
     document.querySelectorAll("#viewSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
     $("grid").hidden = v !== "grid"; $("pairView").hidden = v !== "pairs"; $("pitchView").hidden = v !== "pitch"; $("listView").hidden = v !== "list";
     $("loadBand").classList.toggle("off", v === "list");   // 画像の読み込みの帯は画像の画面だけ
-    if (v === "list") window.DTLotList.setScope(listScope());
+    setListScope();
     document.querySelector(".cardzone").style.display = v === "grid" ? "" : "none";
     $("sizerWrap").style.display = v === "grid" ? "" : "none";
     if (v === "pairs") { if (S.mapSide !== "all") { S.mapSide = "all"; renderMapSide(); } renderPairs(); }
@@ -1331,10 +1380,9 @@
   const setListCfg = (open) => { document.querySelector(".listzone").classList.toggle("open", open); $("listCfg").setAttribute("aria-expanded", open); $("listCfg").textContent = open ? "項目▴" : "項目▾"; localStorage.setItem("listCfg", open ? "1" : "0"); };
   $("listCfg").addEventListener("click", () => setListCfg($("listCfg").getAttribute("aria-expanded") !== "true"));
   setListCfg(localStorage.getItem("listCfg") === "1");
-  const ts = $("thumbSize");
-  ts.value = localStorage.getItem("thumbSize") || 150;
-  const setTs = () => { $("grid").style.setProperty("--ts", ts.value + "px"); localStorage.setItem("thumbSize", ts.value); };
-  ts.addEventListener("input", setTs); setTs();
+  $("colSeg").addEventListener("click", (e) => { const b = e.target.closest("button[data-cols]"); if (b) { S.cols = +b.dataset.cols; localStorage.setItem("thumbCols", S.cols); fitThumbs(); } });
+  new ResizeObserver(() => fitThumbs()).observe($("grid"));
+  fitThumbs();
   window.addEventListener("resize", drawMap);
 
   // 保存（CSV・Excel・表示列の設定）は、どれも LotScope の部品と同じ TPA.download で行い、知らせも 1 つにそろえる。
@@ -1342,7 +1390,10 @@
   window.addEventListener("dt:saved", (e) => window.dispatchEvent(new CustomEvent("tpa:saved", { detail: e.detail })));
 
   (async () => {
-    window.DTLotList.mount($("listView"), { onOpen: openLotPath });
+    window.DTLotList.mount($("listView"), {
+      onOpen: openLotPath,
+      onPick: (path) => { const li = document.querySelector(`#tree li[data-path="${CSS.escape(path)}"]`); if (li) { S.folder = li; setListScope(); } },
+    });
     try { S.pins = await api("/api/pins"); renderPinZones(); renderMapSide(); await loadEquipments(); status("設備を選択してください"); }
     catch (e) { status(e.message, true); }
     // 画面が開けた合図（入れ替えた直後の版は、これが来なければ前の版へ戻す）
