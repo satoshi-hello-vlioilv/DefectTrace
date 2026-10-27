@@ -1,7 +1,7 @@
 {
  "title": "データ項目をモーダルにする（版 4.0.1）",
  "rule": "2026-10-17",
- "evaluator": "採点専用のエージェント（案を作っていない者）。2026-10-26 に自分で node program/tools/ui-variants.mjs <出力> program/tools/proposals/2026-10-26-data-items.mjs を流し（now と A〜F の 7 つ × browse・search・drag × 1728・1536・1280 の 63 枚と sheet）、1728 は全案の browse・drag と A の search を、1280 は now・A・E・F の browse と A・B・C・D の drag を 1 枚ずつ直接開いて見て採点した。案の定義・コードは変えていない。 2 回目は別の採点専用のエージェント（案を作っておらず、1 回目の採点者とも別）が、2026-10-27 に自分で node program/tools/ui-variants.mjs <出力> program/tools/proposals/2026-10-26-data-items-2.mjs を流し（now と A2・G・J・H・K の 6 つ × browse・search・drag × 1728・1536・1280 の 54 枚）、1728 は全案の browse・drag と A2・G・J・H・K の search を、1280 は A2・G・J・K の browse と A2・G・J・H・K の drag を、1536 は A2・G の browse を直接開き、右端の追加ボタンは切り出して拡大して見て採点した。案の定義・コードは変えていない。 3 回目はさらに別の採点専用のエージェント（案を作っておらず、1・2 回目の採点者とも別）が、2026-10-27 に自分で node program/tools/ui-variants.mjs <出力> program/tools/proposals/2026-10-26-data-items-3.mjs を流し（now と A3・L・M・N・O の 6 つ × browse・search・drag × 1728・1536・1280 の 54 枚）、1728 は全案の browse・search・drag と now の browse を、1280 は全案の browse・search・drag を 1 枚ずつ直接開いて見て採点した。案の定義・コードは変えていない。",
+ "evaluator": "採点専用のエージェント（案を作っていない者）。2026-10-26 に自分で node program/tools/ui-variants.mjs <出力> program/tools/proposals/2026-10-26-data-items.mjs を流し（now と A〜F の 7 つ × browse・search・drag × 1728・1536・1280 の 63 枚と sheet）、1728 は全案の browse・drag と A の search を、1280 は now・A・E・F の browse と A・B・C・D の drag を 1 枚ずつ直接開いて見て採点した。案の定義・コードは変えていない。 2 回目は別の採点専用のエージェント（案を作っておらず、1 回目の採点者とも別）が、2026-10-27 に自分で node program/tools/ui-variants.mjs <出力> program/tools/proposals/2026-10-26-data-items-2.mjs を流し（now と A2・G・J・H・K の 6 つ × browse・search・drag × 1728・1536・1280 の 54 枚）、1728 は全案の browse・drag と A2・G・J・H・K の search を、1280 は A2・G・J・K の browse と A2・G・J・H・K の drag を、1536 は A2・G の browse を直接開き、右端の追加ボタンは切り出して拡大して見て採点した。案の定義・コードは変えていない。 3 回目はさらに別の採点専用のエージェント（案を作っておらず、1・2 回目の採点者とも別）が、2026-10-27 に自分で node program/tools/ui-variants.mjs <出力> program/tools/proposals/2026-10-26-data-items-3.mjs を流し（now と A3・L・M・N・O の 6 つ × browse・search・drag × 1728・1536・1280 の 54 枚）、1728 は全案の browse・search・drag と now の browse を、1280 は全案の browse・search・drag を 1 枚ずつ直接開いて見て採点した。案の定義・コードは変えていない。 作った後の採点者（案を作った者・作った者・1〜3 回目の採点者のどれとも別のエージェント）: 2026-10-27 に自分で node program/tools/data-items-check.mjs <出力>/di を 4 回流し（1728・1280 の browse・search・pick・dropped と操作の確かめ）、node program/tools/ui-check.mjs <出力>/built で画面全体も撮り、di の 8 枚と built の lot-1280 を Read で直接開いて採点した。「置く先▾」の色は style.css の .dgo（var(--acc) に opacity .45）から白地とのコントラストを計算した。画面のファイルは変えていない。",
  "rounds": [
   {
    "name": "1 回目",
@@ -543,5 +543,35 @@
     }
    }
   }
- ]
+ ],
+ "built": {
+  "name": "作った後",
+  "images": "/tmp/claude-0/-home-user-DefectTrace/8b0618f2-8701-47ca-9646-31c2c70c99c9/scratchpad/grade/di2（data-items-check.mjs。browse・search・pick・dropped × 1728・1280）と /tmp/claude-0/-home-user-DefectTrace/8b0618f2-8701-47ca-9646-31c2c70c99c9/scratchpad/grade/built（ui-check.mjs）",
+  "result": {
+   "score": {
+    "order": 8,
+    "chunk": 8,
+    "hierarchy": 8,
+    "visual": 9,
+    "steps": 9,
+    "effortless": 9,
+    "intuitive": 8,
+    "form": 8,
+    "place": 9,
+    "layout": 8,
+    "tone": 8
+   },
+   "minus": [
+    {
+     "kind": "cut",
+     "where": "browse-1728・browse-1280・pick-1280 の右の表示先: 『画像表示（各画像の下）』の説明が『各…』で切れる（ほかの表示先は『左の一覧の各行』『右列の上』と読めるのに、この 1 つだけ字が切れて意味をなさない）"
+    },
+    {
+     "kind": "unreadable",
+     "where": "browse-1728・browse-1280 の各行の右端『置く先▾』: 11.5px の青を opacity .45 で薄め、白地とのコントラストが約 2.2:1（指すか選ぶまで読みにくい）。押して置く手の入口なのに目に入りにくい"
+    }
+   ],
+   "seen": "良い: 案 M の形どおり。左に分類（件数・0 件は薄く）、中に探す欄と項目（名前・キー・『画像ごと』の札・値・置き済みの札）、右に表示先（位置の図・置ける種類の札・置いた項目の札）が 3 列で一目に分かれる（browse-1728）。案の採点で減点した件数の食い違いは直っていた: search-1728・search-1280 で『幅』が 4 件、表も画像ごと 3 件＋ロット 1 件（板幅）で合う（確かめも OK）。pick-1728・pick-1280 で行の下に『置く先: 画像表示（各画像の下）・画像情報・MAP 横軸・MAP 縦軸』のボタン（位置の図つき）と『名前を付けて置く…』が開き、置けない先（サマリ・ロット）は出さない。dropped-1728・dropped-1280 で『ピークレベル明』が右の画像表示の札に入り、窓の後ろのカードにも『ピークレベル明 216』などが出て、下の帯に『「画像表示（各画像の下）」に設定しました』と出る（結果が 3 か所で見える）。1280 でも窓は切れず、横のスクロールも無い（metrics の hscroll false）。悪い: 減点の 2 つ（『各…』の切れ・『置く先▾』の薄さ）。1280 では右の表示先が窓に入り切らず、MAP 縦軸が下で切れて枠の中を送る（browse-1280。窓の外の本物の枠にも置けるので減点にはしない）。検索欄の『✕』（消す）は search-1728 では見えるが同じ語の pick-1728 では出ない（触れている時だけ）。1728 では値と置き済みの札の間が広く空く。操作の確かめ（data-items-check.mjs）は 4 回のうち 2 回、どちらかの幅で『行をドラッグして画像表示に置ける』が 3 → 3 で落ち、続く『画像の下に出る』『Esc で閉じる』も落ちた（1 回目は 1728、2 回目は 1280、3・4 回目は両方 OK）。揺れの元が画面か試験の道具かは画像からは決められないので減点にはしないが、ドラッグの通し（直感的・見た目どおりに動く）には疑いが残るため intuitive は 8 に留めた。"
+  }
+ }
 }

@@ -356,12 +356,12 @@
     const an = ["map", "pairs", "pitch"].filter((k) => ph[k] === "done").length;
     const fin = (s) => s === "done" || s === "error";
     const steps = [
-      { k: "names", label: "画像の一覧", verb: "を読んでいます", vs: "読込中", num: `CAB ${fmtN(st.done)} / ${fmtN(st.total)}`, frac: st.total ? st.done / st.total : 0, state: S.named || (st.total && st.done >= st.total) ? "done" : "run" },
-      { k: "info", label: "欠陥データ", verb: "を読んでいます", vs: "読込中", num: "", frac: null, state: ph.info === "done" ? "done" : ph.info === "error" ? "error" : "run" },
-      { k: "cards", label: "画像の枠", verb: "を並べています", vs: "並べ中", num: `${fmtN(S.drawn || 0)} / ${fmtN(S.total || 0)}`, frac: S.total ? (S.drawn || 0) / S.total : 0, state: S.named && !S.queue.length ? "done" : S.named ? "run" : "wait" },
-      { k: "link", label: "画像と欠陥の対応", verb: "を付けています", vs: "対応中", num: "", frac: null, state: ph.link === "run" ? "run" : fin(ph.link) ? ph.link : "wait" },
-      { k: "analysis", label: "MAP・転写・ピッチ", verb: "を計算しています", vs: "計算中", num: `${an} / 3`, frac: an / 3, state: an === 3 ? "done" : ph.link === "done" ? "run" : "wait" },
-      { k: "thumbs", label: "縮小画像", verb: "を作っています", vs: "作成中", num: `${fmtN(st.thumbs)} / ${fmtN(st.thumbs_total)}`, frac: st.thumbs_total ? st.thumbs / st.thumbs_total : 1, state: st.finished ? "done" : S.named ? "run" : "wait", eta },
+      { k: "names", label: "画像の一覧", verb: "を読んでいます", num: `CAB ${fmtN(st.done)} / ${fmtN(st.total)}`, frac: st.total ? st.done / st.total : 0, state: S.named || (st.total && st.done >= st.total) ? "done" : "run" },
+      { k: "info", label: "欠陥データ", verb: "を読んでいます", num: "", frac: null, state: ph.info === "done" ? "done" : ph.info === "error" ? "error" : "run" },
+      { k: "cards", label: "画像の枠", verb: "を並べています", num: `${fmtN(S.drawn || 0)} / ${fmtN(S.total || 0)}`, frac: S.total ? (S.drawn || 0) / S.total : 0, state: S.named && !S.queue.length ? "done" : S.named ? "run" : "wait" },
+      { k: "link", label: "画像と欠陥の対応", verb: "を付けています", num: "", frac: null, state: ph.link === "run" ? "run" : fin(ph.link) ? ph.link : "wait" },
+      { k: "analysis", label: "MAP・転写・ピッチ", verb: "を計算しています", num: `${an} / 3`, frac: an / 3, state: an === 3 ? "done" : ph.link === "done" ? "run" : "wait" },
+      { k: "thumbs", label: "縮小画像", verb: "を作っています", num: `${fmtN(st.thumbs)} / ${fmtN(st.thumbs_total)}`, frac: st.thumbs_total ? st.thumbs / st.thumbs_total : 1, state: st.finished ? "done" : S.named ? "run" : "wait", eta },
     ];
     // 使える: 一覧・欠陥データ・画像の枠がそろった（縮小画像は見ている所から先に作るので、待たなくてよい）
     const usable = ["names", "info", "cards"].every((k) => fin(steps.find((s) => s.k === k).state));
@@ -389,7 +389,7 @@
     const steps = m.steps.map((s) => `<span class="lpst ${s.state}${s.state === "done" ? " lpdn" : s.state === "wait" ? " lpwt" : ""}" title="${esc(s.label)}"><i>${ICON[s.state]}</i>${esc(s.label)}</span>`).join("");
     const nd = m.steps.filter((s) => s.state === "done").length, waits = m.steps.filter((s) => s.state === "wait");
     band.classList.toggle("big", !m.usable);
-    band.innerHTML = `<div class="r1"><span class="now">${esc(c.label)}<em class="vl">${esc(c.verb)}</em><em class="vs">（${esc(c.vs)}）</em></span><span class="num">${esc(c.num)}</span>
+    band.innerHTML = `<div class="r1"><span class="now">${esc(c.label)}<em>${esc(c.verb)}</em></span><span class="num">${esc(c.num)}</span>
       <div class="lpbar${c.frac == null ? " ind" : ""}"><i style="width:${c.frac == null ? 30 : Math.round(c.frac * 100)}%"></i></div><span class="sub">あと</span><span class="lpeta">${esc(eta)}</span>${m.usable ? '<span class="use">✓ 操作できます</span>' : ""}</div>
       <div class="r2">${nd ? `<span class="lpst done lpsum" title="済んだ段階"><i>✓</i>済み ${nd} / 6</span>` : ""}${steps}${waits.length ? `<span class="lpst wait lpwsum" title="${esc(waits.map((s) => s.label).join("・"))}"><i>○</i>残り ${waits.length} 段階</span>` : ""}</div>
       ${m.usable ? "" : '<div class="r3 sub" title="縮小画像は、見ている所から先に作ります">画像の一覧と欠陥データがそろうと、操作できるようになります</div>'}`;
@@ -579,8 +579,8 @@
   }
   function renderSources() {
     if ($("srcModal").hidden) return;
-    // ドラッグ中に描き直すと、つかんでいる行が消えてドラッグが切れる。離してから描く（dragend）
-    if (DRAG) { SRC.dirty = true; return; }
+    // 行を押している間・ドラッグ中に描き直すと、つかんでいる行が消えてドラッグが切れる。離してから描く（pointerup・dragend）
+    if (DRAG || SRC.hold) { SRC.dirty = true; return; }
     SRC.dirty = false;
     const f = $("srcFilter").value.trim().toLowerCase();
     const hit = (r) => !f || (r.label + " " + r.key + " " + r.val + " " + r.l).toLowerCase().includes(f);
@@ -610,7 +610,7 @@
         return row + `<tr class="mq"><td colspan="3"><span class="sub">置く先:</span>${btns}<button type="button" class="lnk" data-named="1">名前を付けて置く…</button></td></tr>`;
       }).join("") + "</table>";
     }).join("") || `<div class="hint">${f ? "見つかりません（項目名・キー・値で探します）" : "ロットを選ぶと出ます"}</div>`;
-    $("srcPlaces").innerHTML = Object.keys(PLACE).map((pl) => `<div class="dplace dz" data-drop="${pl}"><div class="dph">${ico(pl)}<b>${esc(PLACE[pl])}</b><span class="sub">${esc(PLACE_SUB[pl])}</span>${scopeTag(NEED[pl] === "any" ? "any" : NEED[pl])}</div>
+    $("srcPlaces").innerHTML = Object.keys(PLACE).map((pl) => `<div class="dplace dz" data-drop="${pl}"><div class="dph">${ico(pl)}<b>${esc(PLACE_SHORT[pl])}</b><span class="sub">${esc(PLACE_SUB[pl])}</span>${scopeTag(NEED[pl] === "any" ? "any" : NEED[pl])}</div>
       <div class="dchips"><span class="pins" data-place="${pl}">${S.pins.filter((p) => p.place === pl).map((p) => chip({ id: p.id, label: p.label || shortKey(p.key), value: "" }, pl, false)).join("") || '<span class="hint">ここへドラッグ</span>'}</span></div></div>`).join("");
   }
   function openSources() {
@@ -623,6 +623,10 @@
   $("srcModal").addEventListener("mousedown", (e) => { if (e.target === $("srcModal")) closeSources(); });
   $("srcFilter").addEventListener("input", () => { SRC.pick = null; renderSources(); });
   $("srcCats").addEventListener("click", (e) => { const b = e.target.closest("[data-cat]"); if (!b) return; SRC.cat = +b.dataset.cat; $("srcFilter").value = ""; SRC.pick = null; renderSources(); });
+  $("srcRows").addEventListener("pointerdown", (e) => { if (e.target.closest("tr.src")) SRC.hold = true; });
+  const release = () => { if (!SRC.hold) return; SRC.hold = false; if (SRC.dirty && !DRAG) renderSources(); };
+  document.addEventListener("pointerup", release);
+  document.addEventListener("pointercancel", release);
   $("srcRows").addEventListener("click", async (e) => {
     const tg = e.target.closest("[data-toggle]");
     if (tg) {
@@ -677,7 +681,7 @@
     document.querySelectorAll("#srcPlaces .dplace").forEach((z) => { z.classList.toggle("ok", ok(DRAG.scope, z.dataset.drop)); z.classList.toggle("ng", !ok(DRAG.scope, z.dataset.drop)); });
   });
   const clearIns = () => document.querySelectorAll(".ins-before,.ins-after,.ins-l,.ins-r").forEach((x) => x.classList.remove("ins-before", "ins-after", "ins-l", "ins-r"));
-  document.addEventListener("dragend", () => { DRAG = null; if (SRC.dirty) renderSources(); clearIns(); document.querySelectorAll("#srcPlaces .dplace").forEach((z) => z.classList.remove("ok", "ng")); document.body.classList.remove("dragging"); document.querySelectorAll(".dz.over").forEach((x) => x.classList.remove("over")); });
+  document.addEventListener("dragend", () => { DRAG = null; SRC.hold = false; if (SRC.dirty) renderSources(); clearIns(); document.querySelectorAll("#srcPlaces .dplace").forEach((z) => z.classList.remove("ok", "ng")); document.body.classList.remove("dragging"); document.querySelectorAll(".dz.over").forEach((x) => x.classList.remove("over")); });
   const ok = (scope, place) => NEED[place] === "any" || NEED[place] === scope;
   function insPos(el, e) {
     const r = el.getBoundingClientRect();
