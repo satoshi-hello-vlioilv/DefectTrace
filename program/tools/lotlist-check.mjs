@@ -1,8 +1,8 @@
-// ロット一覧（リスト表示）を本物の画面で操作して確かめる（作った後の確かめ。撮影は出力フォルダへ）。
+// ロット表（リスト表示）を本物の画面で操作して確かめる（作った後の確かめ。撮影は出力フォルダへ）。
 //
 //   node program/tools/lotlist-check.mjs <出力フォルダ>
 //
-// 試験のロットで: ロット一覧を開く → 木の設備（LS3。試験のロットは 2 つ）を押して範囲を広げる → 表示列の窓を開く → 式で作る列（[板厚] * 1000）を足す →
+// 試験のロットで: ロット表を開く → 木の設備（LS3。試験のロットは 2 つ）を押して範囲を広げる → 表示列の窓を開く → 式で作る列（[板厚] * 1000）を足す →
 // 見出しを押して並べ替え → 検索で絞る → CSV と Excel に書き出し、保存された中身（見出し・行の数・式の答え）を確かめる。
 // どれかが違えば、終了コード 1 で止まる。
 import fs from "node:fs";
@@ -21,9 +21,9 @@ try {
     page.on("pageerror", (e) => errs.push(e.message));
     await walk(page, async () => {}, ["lot"]);
     const shot = (n) => page.screenshot({ path: path.join(OUT, `${n}-${view.width}.png`) });
-    await page.click('#viewSeg button[data-v="list"]');
-    await page.waitForFunction(() => document.querySelectorAll("#lvBody tr").length > 0 && !document.querySelector("#lvBody td.lv-wait"), null, { timeout: 15000 });
-    const day = await page.$$eval("#lvBody tr", (t) => t.length);
+    await page.click('#modeBar [data-mode="list"]');
+    await page.waitForFunction(() => document.querySelectorAll("#lvBody tr[data-path]").length > 0 && !document.querySelector("#lvBody td.lv-wait"), null, { timeout: 15000 });
+    const day = await page.$$eval("#lvBody tr[data-path]", (t) => t.length);
     check(day === 2, `${view.width}: 開いているロットの日（10/25）の 2 ロットが並ぶ（${day}）`);
     // 範囲のパンくずで月へ広げる（木の側で範囲を決め直し、木の上でも範囲の節が光る）
     await page.click('#lvScope button[data-i="2"]');
@@ -33,11 +33,13 @@ try {
     // 範囲を設備全体へ（木の設備を押す。表の窓では押した節を開いたまま範囲にする＝木が畳まれない）
     await page.click("#tree > li > .row");
     await page.waitForFunction(() => !/2026/.test(document.querySelector("#lvScope").innerText) && document.querySelector("#lvLoad").hidden && !document.querySelector("#lvBody td.lv-wait"), null, { timeout: 15000 });
-    const all = await page.$$eval("#lvBody tr", (t) => t.length);
+    const all = await page.$$eval("#lvBody tr[data-path]", (t) => t.length);
     const scope = await page.$eval("#lvScope", (e) => e.innerText.replace(/\s+/g, " ").trim());
     check(all === 2 && /LS3/.test(scope), `${view.width}: 木の設備を押すと、範囲が設備の下の全ロットになる（${all} ロット・範囲「${scope}」）`);
     const open = await page.$eval("#tree > li > ul", (u) => !u.hidden);
     check(open, `${view.width}: 設備を押しても木が畳まれない`);
+    const lay = await page.evaluate(() => ({ n: document.getElementById("lotTableN").textContent, hid: ["summary", "infoPane"].every((id) => !document.getElementById(id).offsetParent) && !document.querySelector("#center>.toolbar").offsetParent, on: document.querySelector("#modeBar .on")?.dataset.mode }));
+    check(lay.n === String(all) && lay.hid && lay.on === "list", `${view.width}: 上の段の「ロット表」が選ばれ、札に範囲のロットの数（${lay.n}）・サマリと右の列と画像の見方の段は出ない`);
     await shot("list");
     // 表示列の窓（LotScope と同じ）
     await page.click("#lvCols");
@@ -54,18 +56,18 @@ try {
       LC.replaceLayout(t, l); window.DTLotList.render();
     });
     await page.waitForTimeout(300);
-    const calc = await page.$$eval("#lvBody tr", (trs) => { const i = [...document.querySelectorAll("#lvHead th")].findIndex((th) => th.dataset.col === "板厚×1000"); return trs.map((tr) => tr.children[i]?.textContent); });
+    const calc = await page.$$eval("#lvBody tr[data-path]", (trs) => { const i = [...document.querySelectorAll("#lvHead th")].findIndex((th) => th.dataset.col === "板厚×1000"); return trs.map((tr) => tr.children[i]?.textContent); });
     check(calc.length && calc.every((v) => v === "245"), `${view.width}: 式で作る列 [板厚] * 1000 の答え（${calc.join("・")}）`);
     // 並べ替え（作業時刻の見出しを 2 回押す＝大きい順）
     const timeCol = await page.$$eval("#lvHead th", (ths) => ths.findIndex((th) => /時刻/.test(th.innerText)));
     await page.click(`#lvHead th:nth-child(${timeCol + 1}) .th-in`);
     await page.click(`#lvHead th:nth-child(${timeCol + 1}) .th-in`);
-    const times = await page.$$eval("#lvBody tr", (trs, i) => trs.map((tr) => tr.children[i].textContent), timeCol);
+    const times = await page.$$eval("#lvBody tr[data-path]", (trs, i) => trs.map((tr) => tr.children[i].textContent), timeCol);
     check(JSON.stringify(times) === JSON.stringify([...times].sort().reverse()), `${view.width}: 見出しを押して大きい順に並ぶ（${times.join("・")}）`);
     // 検索
     await page.fill("#lvSearch", "08:15");
     await page.waitForTimeout(150);
-    const hit = await page.$$eval("#lvBody tr", (t) => t.length);
+    const hit = await page.$$eval("#lvBody tr[data-path]", (t) => t.length);
     check(hit >= 1 && hit < all, `${view.width}: 検索で絞る（${hit} / ${all}）`);
     await page.fill("#lvSearch", "");
     // 書き出し（全件・表示列の見え方のまま）
@@ -79,12 +81,16 @@ try {
       const buf = fs.readFileSync(file);
       if (ext === "csv") {
         const lines = buf.toString("utf8").replace(/^﻿/, "").trim().split(/\r\n/);
-        check(lines.length === all + 1 && lines[0].includes("板厚×1000") && lines.slice(1).every((l) => l.includes('"245"')) && /^ロット一覧_LS3_\d{8}-\d{4}\.csv$/.test(name),
+        check(lines.length === all + 1 && lines[0].includes("板厚×1000") && lines.slice(1).every((l) => l.includes('"245"')) && /^ロット表_LS3_\d{8}-\d{4}\.csv$/.test(name),
           `${view.width}: CSV に見出し＋全 ${all} 行・式の答えが入る（${lines.length - 1} 行・${name}）`);
       } else {
         check(buf.subarray(0, 2).toString() === "PK" && buf.length > 1000 && name.endsWith(".xlsx"), `${view.width}: Excel（.xlsx）を書き出す（${buf.length} バイト・${name}）`);
       }
     }
+    // 画像を見るに戻る（前の見方へ。画像の一覧が出る）
+    await page.click('#modeBar [data-mode="grid"]');
+    const back = await page.evaluate(() => !document.getElementById("grid").hidden && !!document.getElementById("summary").offsetParent && document.getElementById("listView").hidden);
+    check(back, `${view.width}: 「画像を見る」で画像の一覧・サマリ・右の列に戻る`);
     check(!errs.length, `${view.width}: 画面の誤りが出ない（${errs.join(" / ") || "なし"}）`);
     // 片付け（式の列を外す）
     await page.evaluate(() => { const LC = window.LotListColumns, t = "defecttrace:lots", l = LC.layoutOf(t); delete l.formulas["板厚×1000"]; l.order = l.order.filter((c) => c !== "板厚×1000"); LC.replaceLayout(t, l); });

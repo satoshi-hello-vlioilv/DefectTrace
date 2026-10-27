@@ -24,6 +24,11 @@
   <button type="button" id="scMake" class="btn2">作る</button><button type="button" id="scDecline" class="lnk">今後たずねない</button>
 </div>
 
+<!-- 画面全体の切り替え（主）。中央の画像の見方（画像一覧・転写候補・ピッチ候補＝塗りの切り替え・従）とは形を分ける -->
+<nav id="modeBar" class="mbar"><div class="mtabs" role="tablist">
+  <button type="button" data-mode="grid" class="on" title="開いたロットの画像・MAP・ロット情報を見る"><span class="ic" aria-hidden="true">▣</span>画像を見る</button>
+  <button type="button" data-mode="list" title="左の木で選んだ設備・年・月・日の下のロットを表にし、ロット単位の値を全件書き出す"><span class="ic" aria-hidden="true">▦</span>ロット表<span id="lotTableN" class="ltn"></span></button>
+</div></nav>
 <main id="main">
   <aside id="treePane">
     <div class="pane-head">
@@ -44,7 +49,6 @@
         <button type="button" data-v="grid" class="on">画像一覧</button>
         <button type="button" data-v="pairs" title="表と裏で幅方向位置が近い欠陥の組">転写候補 <span id="pairCnt" class="cnt0"></span></button>
         <button type="button" data-v="pitch" title="同一面・同一幅位置で等間隔に並ぶ欠陥">ピッチ候補 <span id="pitchCnt" class="cnt0"></span></button>
-        <button type="button" data-v="list" title="左の木で選んだ設備・年・月・日の下のロットを表にし、ロット単位の値を全件書き出す">ロット一覧</button>
       </div>
       <div id="groupTabs" class="seg"></div>
       <span class="sizer" id="sizerWrap">列 <span id="colSeg" class="seg"></span></span>

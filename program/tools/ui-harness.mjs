@@ -34,13 +34,13 @@ export const FAKE = {
     problems: [], me: { canRelease: true, login: "maint", current: "4.0.0" }, checkedAt: "2026-10-26T09:12:00" },
 };
 
-/** 試しの入口を試験のロットで起こす */
-export async function launch(fake = FAKE) {
+/** 試しの入口を試験のロットで起こす（more: 足す設備 [{name, path}]。測る道具が大きなロットの束を足す） */
+export async function launch(fake = FAKE, more = []) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "dt-ui-"));
   execFileSync("python3", [path.join(REPO, "program/tests/fixture_lot.py"), path.join(work, "fx")]);
   const fx = path.join(work, "fx");
   const cfg = path.join(work, "config.json");
-  fs.writeFileSync(cfg, JSON.stringify({ equipments: [{ name: "LS3", path: path.join(fx, "LS3") }, { name: "DL2", path: path.join(fx, "DL2") }] }));
+  fs.writeFileSync(cfg, JSON.stringify({ equipments: [{ name: "LS3", path: path.join(fx, "LS3") }, { name: "DL2", path: path.join(fx, "DL2") }, ...more] }));
   const exe = path.join(REPO, "desktop/target/release/examples/serve");
   if (!fs.existsSync(exe)) execFileSync("cargo", ["build", "--release", "--example", "serve"], { cwd: path.join(REPO, "desktop"), stdio: "inherit" });
   const port = 5600 + Math.floor(Math.random() * 300);

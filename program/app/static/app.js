@@ -84,7 +84,7 @@
     }
     ul.hidden = false; tw.textContent = "▼";
   }
-  // ロット一覧の範囲: 木で最後に押した節（設備・年・月・日）。押していなければ、開いているロットの日。
+  // ロット表の範囲: 木で最後に押した節（設備・年・月・日）。押していなければ、開いているロットの日。
   // 設備から押した節までの道（crumbs）も渡す（一覧の範囲の表示で、押すと広げられる）
   function listScope() {
     let li = S.folder && S.folder.isConnected ? S.folder : document.querySelector(".lot.sel")?.parentElement?.closest("li");
@@ -1002,8 +1002,13 @@
   const fmt2 = (v) => (v == null ? "—" : Number(v).toFixed(2));
   const sgn = (v, d = 2) => (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(d);
 
+  // v: 画像の見方（grid・pairs・pitch）か、ロット表（list）。ロット表は画面全体の切り替え（上の段のタブ）で、
+  // 表と関わらない物（サマリ・画像の見方の段・右の列）を出さずに表を木の右いっぱいに広げる。画像を見るに戻ると前の見方へ
   function setView(v) {
     S.view = v;
+    if (v !== "list") S.imgView = v;
+    document.body.classList.toggle("mode-list", v === "list");
+    document.querySelectorAll("#modeBar [data-mode]").forEach((b) => { const on = b.dataset.mode === (v === "list" ? "list" : "grid"); b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
     document.querySelectorAll("#viewSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
     $("grid").hidden = v !== "grid"; $("pairView").hidden = v !== "pairs"; $("pitchView").hidden = v !== "pitch"; $("listView").hidden = v !== "list";
     $("loadBand").classList.toggle("off", v === "list");   // 画像の読み込みの帯は画像の画面だけ
@@ -1015,6 +1020,7 @@
     drawMap();
   }
   $("viewSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setView(b.dataset.v); });
+  $("modeBar").addEventListener("click", (e) => { const b = e.target.closest("[data-mode]"); if (b) setView(b.dataset.mode === "list" ? "list" : S.imgView || "grid"); });
   $("baseSeg").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.b === PV.base));
   $("baseSeg").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -1356,6 +1362,7 @@
       return;
     }
     if (e.target.closest("input,select,#pinPop")) { if (e.key === "Escape") $("pinPop").hidden = true; return; }
+    if (S.view === "list") return;   // ロット表では、画像を送る・開くキーを使わない（表の中の操作に任せる）
     if (S.view === "pitch" && $("viewer").hidden && $("pv").hidden) {
       if (e.key === "ArrowRight") { stepPitch(0, 1); e.preventDefault(); return; }
       if (e.key === "ArrowLeft") { stepPitch(0, -1); e.preventDefault(); return; }
@@ -1392,6 +1399,7 @@
   (async () => {
     window.DTLotList.mount($("listView"), {
       onOpen: openLotPath,
+      onCount: (n) => { $("lotTableN").textContent = n == null ? "" : n.toLocaleString("ja-JP"); },
       onPick: (path) => { const li = document.querySelector(`#tree li[data-path="${CSS.escape(path)}"]`); if (li) { S.folder = li; setListScope(); } },
     });
     try { S.pins = await api("/api/pins"); renderPinZones(); renderMapSide(); await loadEquipments(); status("設備を選択してください"); }

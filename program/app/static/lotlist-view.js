@@ -26,8 +26,9 @@
 
   // ---------------------------------------------------------------- 器
   // onOpen(path): 行のロットを開く。onPick(path): 範囲のパンくずで節を選んだ（木の側が範囲を決め直して setScope を呼ぶ）
-  function mount(host, { onOpen, onPick } = {}) {
-    V.host = host; V.onOpen = onOpen || null; V.onPick = onPick || null;
+  // onCount(n): 範囲のロットの数（入口のタブの札。集め終えるまでは null）
+  function mount(host, { onOpen, onPick, onCount } = {}) {
+    V.host = host; V.onOpen = onOpen || null; V.onPick = onPick || null; V.onCount = onCount || null;
     host.innerHTML = `
       <div class="lv-bar">
         <nav class="lv-scope" id="lvScope" aria-label="一覧にするロットの範囲"></nav>
@@ -46,6 +47,7 @@
     $("lvCols").addEventListener("click", () => { if (!V.cols.length) return; setContext(); LC().toggle(); });
     $("lvCsv").addEventListener("click", () => exportAs("csv"));
     $("lvXlsx").addEventListener("click", () => exportAs("xlsx"));
+    $("lvWrap").addEventListener("scroll", () => { if (!V.raf) V.raf = requestAnimationFrame(() => { V.raf = 0; paintBody(); }); }, { passive: true });
     $("lvScope").addEventListener("click", (e) => { const b = e.target.closest("[data-path]"); if (!b) return; if (V.onPick) V.onPick(b.dataset.path); else setScope({ path: b.dataset.path, eq: V.scope.eq, crumbs: V.scope.crumbs.slice(0, +b.dataset.i + 1) }); });
     $("lvHead").addEventListener("click", (e) => {
       const th = e.target.closest("th[data-col]"); if (!th || e.target.closest(".col-resize")) return;
@@ -64,12 +66,13 @@
     V.scope = scope;
     const gen = ++V.gen;
     V.lots = []; V.sort = { col: "", dir: 1 };
-    paintScope(); progress({ phase: "ロットを集めています", n: 0, total: 0 });
+    paintScope(); progress({ phase: "ロットを集めています", n: 0, total: 0 }); V.onCount?.(null);
     let d;
     try { d = await (await fetch("/api/lots?" + new URLSearchParams({ path: scope.path }))).json(); } catch (e) { d = { error: e.message }; }
     if (gen !== V.gen) return;
     if (d.error) { progress(null); $("lvEmpty").textContent = d.error; $("lvEmpty").hidden = false; return; }
     V.lots = d.lots || [];
+    V.onCount?.(V.lots.length);
     await loadColumns(gen);
     if (gen !== V.gen) return;
     render();
@@ -138,8 +141,8 @@
     return [...out];
   }
   function setContext() {
-    LC().setContext({ target: TARGET, table: "lots", title: `ロット一覧：${V.scope ? V.scope.crumbs.map((c) => c.label).join(" › ") : ""}`, fileStem: "ロット一覧",
-      place: "ロット一覧", columns: LC().allColumns(TARGET, V.cols), sourceColumns: V.cols, rows: rowsAll(), lotColumn: V.lotCol, grid: $("lvGrid"),
+    LC().setContext({ target: TARGET, table: "lots", title: `ロット表：${V.scope ? V.scope.crumbs.map((c) => c.label).join(" › ") : ""}`, fileStem: "ロット表",
+      place: "ロット表", columns: LC().allColumns(TARGET, V.cols), sourceColumns: V.cols, rows: rowsAll(), lotColumn: V.lotCol, grid: $("lvGrid"),
       rerender: () => { render(); fill(V.gen); }, toast: (m) => (window.dtStatus ? window.dtStatus(m) : null) });
   }
 
@@ -170,7 +173,8 @@
         V.got += part.length;
         const el = (performance.now() - t0) / 1000, rate = V.got / Math.max(el, 0.001);
         progress({ phase: "ロットの値を読んでいます", n: V.got, total: V.need, eta: rate > 0 ? (V.need - V.got) / rate : null });
-        render();
+        // 描き直しは 0.5 秒に 1 度まで（並べ替え・列の幅の計算は全部の行にかかるため）。読み終えたら必ず描く
+        if (performance.now() - (V.drawnAt || 0) > 500 || V.got >= V.need) { render(); V.drawnAt = performance.now(); }
       }
     } finally { if (V.busy === gen) V.busy = 0; }
     if (gen !== V.gen) return;
@@ -217,7 +221,7 @@
     if (!V.host) return;
     const empty = $("lvEmpty");
     if (!V.scope || !V.cols.length) {
-      $("lvHead").innerHTML = ""; $("lvBody").innerHTML = ""; $("lvColgroup").innerHTML = "";
+      $("lvHead").innerHTML = ""; $("lvBody").innerHTML = ""; $("lvColgroup").innerHTML = ""; V.shown = null;
       $("lvCount").textContent = V.scope && !V.lots.length && !V.busy ? "ロットがありません" : "";
       empty.hidden = false;
       ["lvCols", "lvCsv", "lvXlsx"].forEach((id) => { $(id).disabled = true; });
@@ -246,17 +250,34 @@
         + `<i class="col-resize${L.locks.includes(c) ? " is-locked" : ""}" title="${L.locks.includes(c) ? "この列は幅を固定しています（表示列で解けます）" : "ドラッグで列幅を調整（ダブルクリックで自動）"}"></i></th>`;
     }).join("") + "</tr>";
     if (!V.bound) { LC().bindHeader($("lvHead")); V.bound = true; }
-    const aligns = cols.map((c) => LC().alignOf(t, c).data);
-    $("lvBody").innerHTML = rows.map((r, i) => {
-      const c0 = V.cache.get(r.__path) || {};
+    V.shown = { rows, cols, aligns: cols.map((c) => LC().alignOf(t, c).data) };
+    paintBody(true);
+    $("lvTint").textContent = LC().tintCss(t, cols, "#lvGrid") + LC().freezeCss("#lvGrid", widths);
+    $("lvCount").textContent = `${fmtN(rows.length)}${rows.length !== V.lots.length ? ` / ${fmtN(V.lots.length)}` : ""} ロット・${cols.length} 列`;
+  }
+
+  // 表の体は、見えている行（と前後 OVER 行）だけを描き、上下は高さだけの行で埋める（数千ロットでも、値が届くたびの描き直しと送りが軽い）。
+  // 書き出し・検索・並べ替えは全部の行（V.shown.rows）で行う
+  const OVER = 40;
+  function paintBody(force) {
+    const sh = V.shown; if (!sh) return;
+    const wrap = $("lvWrap"), body = $("lvBody"), t = TARGET, { rows, cols, aligns } = sh;
+    const rh = V.rowH || 30, top = wrap.scrollTop, head = $("lvHead").offsetHeight;
+    const a = Math.max(0, Math.floor((top - head) / rh) - OVER), b = Math.min(rows.length, Math.ceil((top + wrap.clientHeight) / rh) + OVER);
+    if (!force && V.win && V.win[0] === a && V.win[1] === b) return;
+    V.win = [a, b];
+    const pad = (n) => (n > 0 ? `<tr class="lv-pad" aria-hidden="true"><td colspan="${cols.length}" style="height:${n * rh}px"></td></tr>` : "");
+    body.innerHTML = pad(a) + rows.slice(a, b).map((r, k) => {
+      const i = a + k, c0 = V.cache.get(r.__path) || {};
       return `<tr data-path="${esc(r.__path)}"${i % 2 ? ' class="is-odd"' : ""} title="ダブルクリックでこのロットの画像を開く">` + cols.map((c, j) => {
         if (!(c in r) && V.byName.has(c) && c !== V.lotCol) return `<td class="lv-wait al-${aligns[j]}">…</td>`;
         const x = LC().cell(t, c, r);
         return `<td class="al-${aligns[j]}${x.color ? " c-" + x.color : ""}" title="${esc(x.raw)}">${c === V.lotCol ? `<b>${esc(x.text)}</b>` : esc(x.text)}${j === 0 && c0.__error ? ` <span class="err" title="${esc(c0.__error)}">（読めません）</span>` : ""}</td>`;
       }).join("") + "</tr>";
-    }).join("");
-    $("lvTint").textContent = LC().tintCss(t, cols, "#lvGrid") + LC().freezeCss("#lvGrid", widths);
-    $("lvCount").textContent = `${fmtN(rows.length)}${rows.length !== V.lots.length ? ` / ${fmtN(V.lots.length)}` : ""} ロット・${cols.length} 列`;
+    }).join("") + pad(rows.length - b);
+    // 行の高さは描いた行で測り直す（字の大きさ・行の余白の設定で変わる）。変わったら描き直す
+    const tr = body.querySelector("tr:not(.lv-pad)");
+    if (tr && Math.abs(tr.offsetHeight - rh) > 0.5) { V.rowH = tr.offsetHeight; paintBody(true); }
   }
 
   // ---------------------------------------------------------------- 書き出し（全件・表示列の見え方のまま）
@@ -268,7 +289,7 @@
     const head = cols.map((c) => LC().label(t, c));
     const body = rows.map((r) => cols.map((c) => (c === V.lotCol ? String(r[c] ?? "") : LC().cell(t, c, r).text)));
     const p2 = (n) => String(n).padStart(2, "0"), d = new Date();
-    const stem = `ロット一覧_${(V.scope ? V.scope.crumbs.map((c) => c.label).join("_") : "").replace(/[\\/:*?"<>|\s]+/g, "")}_${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}`;
+    const stem = `ロット表_${(V.scope ? V.scope.crumbs.map((c) => c.label).join("_") : "").replace(/[\\/:*?"<>|\s]+/g, "")}_${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}`;
     if (kind === "csv") {
       const csv = "﻿" + [head, ...body].map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
       TPA.download(new Blob([csv], { type: "text/csv" }), stem + ".csv");
@@ -277,7 +298,7 @@
     const cond = [["範囲", V.scope ? V.scope.crumbs.map((c) => c.label).join(" › ") : ""], ["検索", V.q || "（なし）"],
       ["並び", V.sort.col ? `${LC().label(t, V.sort.col)} ${V.sort.dir === 1 ? "小さい順" : "大きい順"}` : "（新しいロットから）"],
       ["出力した行", `${rows.length.toLocaleString()} 行`], ["出力した日時", `${d.getFullYear()}/${p2(d.getMonth() + 1)}/${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`]];
-    const bytes = await window.XlsxWriter.build([{ name: "ロット一覧", rows: [head, ...body] }, { name: "出力の条件", header: false, rows: cond }]);
+    const bytes = await window.XlsxWriter.build([{ name: "ロット表", rows: [head, ...body] }, { name: "出力の条件", header: false, rows: cond }]);
     TPA.download(new Blob([bytes], { type: window.XlsxWriter.MIME }), stem + ".xlsx");
   }
   const status = (m) => (window.dtStatus ? window.dtStatus(m, true) : null);

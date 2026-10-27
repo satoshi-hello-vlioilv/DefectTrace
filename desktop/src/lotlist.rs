@@ -110,7 +110,7 @@ fn columns_of(res: &LotRes) -> Vec<Value> {
         let g = xml::generalize(&rel);
         for (k, _) in xml::pairs(&fp).iter() {
             let l = xml::label_for(k, &labels);
-            let short = k.rsplit('/').next().unwrap_or(&k).to_string();
+            let short = k.rsplit('/').next().unwrap_or(k).to_string();
             out.push(col(&g, k, if l.is_empty() { &short } else { &l }, &rel));
         }
     }
