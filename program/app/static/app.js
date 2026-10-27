@@ -767,8 +767,6 @@
       try { await send("/api/pins/" + encodeURIComponent(p.id), { fmt: opts[(Math.max(0, i) + 1) % opts.length][0] }, "PATCH"); await afterPins(); } catch (er) { status(er.message, true); }
       return;
     }
-    const add = e.target.closest("button[data-add]");
-    if (add) { e.stopPropagation(); openPop(add.closest("tr"), add); return; }
     const un = e.target.closest("[data-unpin]");
     if (un) {
       e.stopPropagation();

@@ -230,7 +230,8 @@ fn names_are_read_behind_and_brief_status_and_cache_reuse() {
     assert_eq!(app.handle("POST", "/api/open", "", &body).unwrap().status, 200);
     let job = wait(&app);
     let full = job.status(false);
-    let brief: Value = serde_json::from_slice(&app.handle("GET", "/api/status", &format!("lot={}&brief=1", enc(&lot)), &[]).unwrap().body).unwrap();
+    let brief: Value =
+        serde_json::from_slice(&app.handle("GET", "/api/status", &format!("lot={}&brief=1", enc(&lot)), &[]).unwrap().body).unwrap();
     assert_eq!(full["named"], true);
     assert_eq!(brief["thumbs_total"], full["thumbs_total"]);
     for (f, b) in full["cabs"].as_array().unwrap().iter().zip(brief["cabs"].as_array().unwrap()) {
