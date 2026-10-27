@@ -280,7 +280,11 @@
     document.querySelectorAll("#grid .th").forEach((t) => { const k = t.dataset.key; t.classList.toggle("fo", !!S.fk && !S.fk.has(k.slice(k.indexOf("/") + 1))); });
     const per = new Map();
     for (const it of S.items) { const c = per.get(it.cab) || [0, 0]; c[1]++; if (shown(it)) c[0]++; per.set(it.cab, c); }
-    for (const [cab, [v, n]] of per) { const s = document.querySelector(`#cab_${CSS.escape(cab)} .st`); if (s && s.classList.contains("done")) s.textContent = S.fk ? `${v} / ${n}枚` : `${n}枚`; }
+    for (const [cab, [v, n]] of per) {
+      const sec = document.getElementById("cab_" + cab), s = sec && sec.querySelector(".st");
+      if (s && s.classList.contains("done")) s.textContent = S.fk ? `${v} / ${n}枚` : `${n}枚`;
+      if (sec) sec.hidden = !!S.fk && v === 0;   // 当てはまる画像の無い CAB の見出しは出さない
+    }
     if (S.cur >= 0 && S.items[S.cur] && !shown(S.items[S.cur])) { const i = S.items.findIndex(shown); if (i >= 0) select(i); else { S.cur = -1; $("imgTitle").textContent = "当てはまる画像がありません"; } }
     else if (S.cur >= 0) select(S.cur);
     drawMap();

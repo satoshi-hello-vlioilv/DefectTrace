@@ -1,6 +1,6 @@
 // 欠陥のフィルタ（ロットの画像一覧を DETECT_INFO の項目で絞る。条件の置き場・当て方は desktop/src/filters.rs）。
 // 形は 3 回の案出しと別のエージェントの採点で決めた（F4c: program/tools/proposals/2026-10-27-defect-filter*）:
-//   画像一覧の上の帯 = 使っている条件のチップ（中身つき・× で外す。入りきらないときだけ中身を畳み、それでも入らなければ「＋他 n: 名前」）・
+//   画像一覧の上の帯 = 使っている条件のチップ（中身つき・× で外す。1 段に入りきらなければ、チップを帯の 2 段目へ折り返す）・
 //   「条件 ▾」（登録した条件をチェックで重ねる小窓）・「⚲ 作る・管理…」（窓: 左に既定／共有／自分の条件と枚数、右に作る所・分布・当てはまる見本）・
 //   表示している枚数・外す。重ねた条件は、どれも満たす欠陥の画像だけを出す。使っている条件はこの PC に覚える
 (() => {
@@ -34,7 +34,8 @@
     const name = (x) => (field === "kindID" ? ctx.kinds?.[String(x)]?.name : field === "group" ? ctx.sides?.[String(x)]?.name : null) ?? x;
     return Array.isArray(v) ? v.map(name).join("・") : name(v);
   }
-  const condText = (c) => `${fieldLabel(c.field)} ${opText[c.op] || c.op} ${c.op === "between" ? `${c.v}〜${c.v2}` : valueText(c.field, c.v)}`;
+  const condText = (c) => (c.op === "in" ? `${fieldLabel(c.field)}が ${valueText(c.field, c.v)}${Array.isArray(c.v) && c.v.length > 1 ? " のどれか" : ""}`
+    : c.op === "between" ? `${fieldLabel(c.field)} ${c.v}〜${c.v2}` : `${fieldLabel(c.field)} ${opText[c.op] || c.op} ${valueText(c.field, c.v)}`);
   const filterText = (f) => (f.conds || []).map(condText).join(f.all === false ? " または " : " かつ ");
 
   // ---------------------------------------------------------------- 読み込み・当てる
@@ -83,18 +84,11 @@
     $("fCount").innerHTML = ctx && fs.length ? `<b>${window.dtFilter.shownCount()}</b> / ${ctx.total} 枚` : ctx ? `${ctx.total} 枚` : "";
     fitChips();
   }
-  // 入りきらないときだけ: まず中身の字を畳み、それでも入らなければ後ろのチップを「＋他 n: 名前」に畳む（帯は 1 段のまま）
+  // 1 段に入りきらなければ、チップを帯の 2 段目へ折り返す（名前・中身・× を切らない。作った後の採点 2026-10-27: 畳むと中身と × が消えた）
   function fitChips() {
-    const box = $("fChips"), more = $("fMore"), cs = [...box.querySelectorAll(".f-chip")];
-    cs.forEach((c) => { c.hidden = false; c.classList.remove("squeeze"); c.querySelector(".c").hidden = false; });
-    more.hidden = true;
-    const over = () => box.scrollWidth > box.clientWidth;
-    if (!cs.length || !over()) return;
-    cs.forEach((c) => { c.querySelector(".c").hidden = true; });
-    const hid = [];
-    while (over() && cs.length - hid.length > 1) { const c = cs[cs.length - 1 - hid.length]; c.hidden = true; hid.unshift(c.querySelector("b").textContent); }
-    if (hid.length) { more.hidden = false; more.textContent = `＋他 ${hid.length}: ${hid.join("・")}`; more.title = hid.join("・"); }
-    if (over()) cs[0].classList.add("squeeze");   // 1 つでも入らなければ、名前を「…」で詰める（枠と × は切らない）
+    const bar = $("fBar"), box = $("fChips");
+    bar.classList.remove("two");
+    if (box.querySelector(".f-chip") && box.scrollWidth > box.clientWidth) bar.classList.add("two");
   }
 
   // ---------------------------------------------------------------- 登録した条件の並び（小窓と窓で同じ形）
@@ -154,7 +148,7 @@
       <div class="f-rows">${f.conds.map((c, i) => `<div class="f-r"><select data-c="${i}" data-k="field">${fieldOptions(c.field)}</select>
         <select data-c="${i}" data-k="op">${OPS.map(([o, t]) => `<option value="${o}" ${o === c.op ? "selected" : ""}>${t}</option>`).join("")}</select>${valueInput(c, i)}
         <button type="button" class="f-mini del" data-rm="${i}" title="この条件を外す">×</button></div>`).join("")}
-        <div class="f-r"><button type="button" class="f-btn" data-add>＋ 条件</button><select id="fAll"><option value="1" ${f.all !== false ? "selected" : ""}>すべて満たす（かつ）</option><option value="0" ${f.all === false ? "selected" : ""}>どれか（または）</option></select></div></div>
+        <div class="f-r"><button type="button" class="f-btn" data-add>＋ 条件</button><select id="fAll" ${f.conds.length > 1 ? "" : "hidden"} title="条件のつなぎ方"><option value="1" ${f.all !== false ? "selected" : ""}>すべて満たす（かつ）</option><option value="0" ${f.all === false ? "selected" : ""}>どれか（または）</option></select></div></div>
       <div class="f-hint" id="fHistT"></div><div class="f-hist" id="fHist"></div>
       <div class="f-r"><span class="f-k">置き場</span><span class="f-scope">
         <label><input type="radio" name="fsc" value="mine" ${F.editScope === "mine" ? "checked" : ""}><span class="f-sc mine">自分</span>この PC</label>
@@ -218,7 +212,6 @@
     if (t.closest("#fPick")) { openPick(); return; }
     if (t.closest("#fOpen")) { $("fPop").hidden = true; openWin(); return; }
     if (t.closest("#fClear")) { F.active = []; F.temp = null; saveActive(); apply(); return; }
-    if (t.closest("#fMore")) { openPick(); return; }
     const off = t.closest("[data-off]");
     if (off) { if (off.dataset.off === "temp") { F.temp = null; apply(); } else toggle(off.dataset.off, false); return; }
     if (!$("fPop").hidden && !t.closest("#fPop")) $("fPop").hidden = true;

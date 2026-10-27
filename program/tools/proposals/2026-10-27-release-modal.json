@@ -1,7 +1,7 @@
 {
  "title": "配布の窓を大きく・分かりやすく（版 4.5.0）",
  "rule": "2026-10-17",
- "evaluator": "別のエージェント（採点者。案を作っていない者）が 2026-10-27 に採点。自分で node program/tools/ui-check.mjs <scratchpad>/score-rel/now（release-1728・1536・1280）と node program/tools/ui-variants.mjs <scratchpad>/score-rel/props program/tools/proposals/2026-10-27-release-modal.mjs（6 案 × 3 幅と一覧）で撮り、一覧と案ごとの画像を直接開いて見て付けた。R4 の 2〜4 枚目のタブは撮られていないため、1 枚目に出ない物は手が増える物として数えた。2 回目は、案を作っていない別のエージェント（1 回目の採点者とも別の採点者）が 2026-10-27 に採点。自分で node program/tools/ui-variants.mjs <scratchpad>/score-rel2 program/tools/proposals/2026-10-27-release-modal-2.mjs（5 案 × 1728・1536・1280 と一覧）で撮り、一覧と案ごとの画像を直接開いて見て付けた（1 回目の点は引きずらず、画像で見えた事だけで付けた）。3 回目は、案を作っていない別のエージェント（1・2 回目の採点者とも別の採点者）が 2026-10-27 に採点。自分で node program/tools/ui-variants.mjs <scratchpad>/score-rel3 program/tools/proposals/2026-10-27-release-modal-3.mjs（5 案 × 1728・1536・1280 と一覧）で撮り、一覧と案ごとの画像を直接開いて見て、1280 の窓の下端は PIL で切り出して余白（窓の中のスクロール）を確かめて付けた（1・2 回目の点は引きずらず、画像で見えた事だけで付けた）",
+ "evaluator": "別のエージェント（採点者。案を作っていない者）が 2026-10-27 に採点。自分で node program/tools/ui-check.mjs <scratchpad>/score-rel/now（release-1728・1536・1280）と node program/tools/ui-variants.mjs <scratchpad>/score-rel/props program/tools/proposals/2026-10-27-release-modal.mjs（6 案 × 3 幅と一覧）で撮り、一覧と案ごとの画像を直接開いて見て付けた。R4 の 2〜4 枚目のタブは撮られていないため、1 枚目に出ない物は手が増える物として数えた。2 回目は、案を作っていない別のエージェント（1 回目の採点者とも別の採点者）が 2026-10-27 に採点。自分で node program/tools/ui-variants.mjs <scratchpad>/score-rel2 program/tools/proposals/2026-10-27-release-modal-2.mjs（5 案 × 1728・1536・1280 と一覧）で撮り、一覧と案ごとの画像を直接開いて見て付けた（1 回目の点は引きずらず、画像で見えた事だけで付けた）。3 回目は、案を作っていない別のエージェント（1・2 回目の採点者とも別の採点者）が 2026-10-27 に採点。自分で node program/tools/ui-variants.mjs <scratchpad>/score-rel3 program/tools/proposals/2026-10-27-release-modal-3.mjs（5 案 × 1728・1536・1280 と一覧）で撮り、一覧と案ごとの画像を直接開いて見て、1280 の窓の下端は PIL で切り出して余白（窓の中のスクロール）を確かめて付けた（1・2 回目の点は引きずらず、画像で見えた事だけで付けた） 作った後: 案を作った者・作った者・各回の案の採点者のどれとも別の採点者（子エージェント。Claude Opus 5.5）が 2026-10-27 に自分で撮って採点した（node program/tools/ui-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/after〈start・lot・info・release × 1728・1536・1280〉、DT_UI_MORE・DT_UI_LOT 付きで /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/after-dense〈1728・1280〉、node program/tools/filter-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/filter〈全部 OK〉、node program/tools/scbar-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/sc〈全部 OK〉）。画像を Read で直接開き、作る前（score-rel/now・score-mk/now・score-mk/now-dense・score-flt/now）と案の再現（score-rel3・score-mk2・score-flt3）と並べ、細部は PIL で切り出して見比べた。",
  "rounds": [
   {
    "name": "1 回目",
@@ -429,5 +429,26 @@
     }
    }
   }
- ]
+ ],
+ "built": {
+  "name": "作った後: R12 表の状態を文に＋この PC を頭のすぐ下に",
+  "images": "node program/tools/ui-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/after の release-1728・1536・1280 と、node program/tools/scbar-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/sc の scbar-作れた-release・scbar-作れない-release（配布の窓からショートカットを作る。全部 OK）。作る前は score-rel/now/release-*、案は score-rel3/release-*-R12",
+  "result": {
+   "score": {
+    "order": 8,
+    "chunk": 9,
+    "hierarchy": 8,
+    "visual": 8,
+    "steps": 9,
+    "effortless": 9,
+    "intuitive": 8,
+    "form": 8,
+    "place": 9,
+    "layout": 8,
+    "tone": 8
+   },
+   "minus": [],
+   "seen": "良い: 案 R12 の形がそのまま出て、案の採点で悪いとされた所が直っている。配っている 4.0.1 の行は版の数字が大きな緑の太字で左に緑の線が付き、表の中でまず目に入る（案では 17px で他の行と同じ）。この PC は見出し『この PC』を 1 段目に置き、版の文（版 4.0.0 → 4.0.1 を取り込み済み…）・ショートカットの文と分けたので詰まりが消えた。表に『版・置いた日時｜状態』の見出しの行が付いた。4.0.0 の行は『この PC が使っている版』と札の言葉にそろった。塗りの主ボタンは『この版を配る』だけ。新しい PC のアドレスは等幅の枠と『アドレスをコピー』で写せる。作る前（窓が 1728 で約 1000×300px・入口のアドレスが灰の 12px・ショートカットの道が無い）より、窓が大きく手順（① ② ③）と節で読める。1280×720 でも窓の下に余白が残り、窓の中のスクロール・切れ・折れが無い（release-1280）。配布の窓のショートカットを作るは 2 回押しても作れ、作れないときは赤い字で理由が枠の中に出る（scbar-作れない-release）。悪い: 4.0.2・4.0.0 の行は状態の文と右の操作の間が大きく空いたまま（1728 で約 500px）。窓の頭の右の説明（版を置く・配る版を選ぶ…）は灰の字で長い。この PC の橙の『開き直して更新』は窓の中でいちばん強い色で、配る人が見たい表より先に目が行く"
+  }
+ }
 }

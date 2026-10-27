@@ -57,7 +57,7 @@
       <span class="spacer"></span>
     </div>
     <!-- 欠陥のフィルタ（filters-view.js。形は 3 回の案出しと採点で決めた: program/tools/proposals/2026-10-27-defect-filter*） -->
-    <div id="fBar" class="f-bar"><span class="lab">フィルタ</span><div id="fChips" class="f-chips"></div><button type="button" id="fMore" class="f-more" hidden></button>
+    <div id="fBar" class="f-bar"><span class="lab">フィルタ</span><div id="fChips" class="f-chips"></div>
       <button type="button" id="fPick" class="f-btn" title="登録した条件を選んで重ねる">条件 ▾</button><button type="button" id="fOpen" class="f-btn" title="条件を作る・直す・消す">⚲ 作る・管理…</button>
       <span id="fCount" class="f-n" title="表示している画像 / ロットの画像"></span><button type="button" id="fClear" class="f-btn" title="フィルタをすべて外す" hidden>外す</button>
       <div id="fPop" class="f-pop" hidden></div></div>
@@ -115,10 +115,11 @@
       <div class="mapbar"><div id="mapSide" class="seg"></div><span class="spacer"></span></div>
       <!-- 記号: 形は 2 回の案出しと別のエージェントの採点で決めた（M7: program/tools/proposals/2026-10-27-map-marks*） -->
       <div class="mkbar">
-        <div class="mk-row"><label class="mk-fld" title="記号の大きさ（1〜28px。極小 1〜2・小 3〜5・中 6〜10・大 11〜）">大きさ <input id="markSize" type="range" min="1" max="28" step="0.5"><b id="markSizeV"></b></label>
-          <label class="mk-fld" title="記号の濃さ（半透明にすると、重なるほど濃く見え、欠陥の集まりが分かります）">濃さ <input id="markAlpha" type="range" min="5" max="100" step="5"><b id="markAlphaV"></b></label>
+        <div class="mk-row"><div class="mk-sl">
+          <label class="mk-fld" title="記号の大きさ（1〜28px。極小 1〜2・小 3〜5・中 6〜10・大 11〜）"><span class="mk-l">大きさ</span><input id="markSize" type="range" min="1" max="28" step="0.5"><b id="markSizeV"></b></label>
+          <label class="mk-fld" title="記号の濃さ（半透明にすると、重なるほど濃く見え、欠陥の集まりが分かります）"><span class="mk-l">濃さ</span><input id="markAlpha" type="range" min="5" max="100" step="5"><b id="markAlphaV"></b></label></div>
           <button type="button" id="markAuto" class="mk-auto" aria-pressed="true" title="点の数に合わせて大きさと濃さを決めます（少ないと大きく濃く、多いと小さく薄く）。つまみを動かすと手で決め、押すと自動に戻ります">自動</button></div>
-        <div class="mk-row"><span class="mk-fld">描き方 <span id="markLook" class="seg mk-seg"><button type="button" data-v="fill">塗り</button><button type="button" data-v="line">輪郭</button><button type="button" data-v="both">塗り＋輪郭</button></span></span>
+        <div class="mk-row"><span class="mk-fld"><span class="mk-l">描き方</span><span id="markLook" class="seg mk-seg"><button type="button" data-v="fill">塗り</button><button type="button" data-v="line">輪郭</button><button type="button" data-v="both">塗り＋輪郭</button></span></span>
           <span class="mk-fld">形 <span id="markShape" class="seg mk-seg"><button type="button" data-v="kind" title="分類の形（● ▲ ■ ★ ◆）">分類</button><button type="button" data-v="dot" title="どの分類も丸（色で見分ける）">点</button></span></span></div>
       </div>
       <canvas id="map" height="300"></canvas>

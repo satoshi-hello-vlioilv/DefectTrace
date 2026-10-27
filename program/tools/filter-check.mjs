@@ -1,7 +1,7 @@
 // 欠陥のフィルタを本物の画面で通しで確かめる（評価関数）。試験のロット（24 枚・欠陥 58）で:
 //   帯が出る → 窓で条件を作る（分類 = 穴）→ 当てはまる数と見本・分布が出る → 自分に保存 → 一覧が絞られ、CAB の見出し・画像情報・MAP・左下の数がそろう
 //   → ← → で当てはまる画像だけを送る → 共有にもう 1 つ保存して重ねる（どちらも満たす）→ 「条件 ▾」で外す・重ねる → 開発者でない人は既定を選べない
-//   → 1280 で帯が 1 段のまま（入りきらなければ「＋他 n: 名前」）→ 消す → 外すと全部に戻る
+//   → 1280 でも 2 つのチップが名前・中身・× つきで出る（入りきらなければ帯の 2 段目へ折り返す）→ 消す → 外すと全部に戻る
 //   node program/tools/filter-check.mjs [出力のフォルダ]
 import fs from "node:fs";
 import path from "node:path";
@@ -23,9 +23,10 @@ try {
   const look = () => page.evaluate(() => ({
     shown: [...document.querySelectorAll("#grid .th")].filter((t) => t.offsetParent).length,
     count: document.getElementById("fCount").textContent, chips: [...document.querySelectorAll("#fChips .f-chip:not([hidden]) b")].map((b) => b.textContent),
-    more: document.getElementById("fMore").hidden ? "" : document.getElementById("fMore").textContent,
+    whole: [...document.querySelectorAll("#fChips .f-chip")].every((c) => { const r = c.getBoundingClientRect(), b = document.getElementById("fChips").getBoundingClientRect();
+      return c.querySelector(".c").offsetParent && c.querySelector(".x").offsetParent && r.right <= b.right + 1 && r.left >= b.left - 1; }),
     img: document.getElementById("imgTitle").textContent, map: document.getElementById("mapTitle").textContent, status: document.getElementById("status").textContent,
-    heads: [...document.querySelectorAll(".cabsep .st")].map((s) => s.textContent).join(" "), oneRow: document.getElementById("fBar").getBoundingClientRect().height < 40 }));
+    heads: [...document.querySelectorAll(".cabsep:not([hidden]) .st")].map((s) => s.textContent).join(" ") }));
   let s = await look();
   check(s.shown === 24 && /なし/.test(await page.textContent("#fChips")) && s.count === "24 枚", `帯が出る（絞り込みなし・${s.count}）`);
 
@@ -94,7 +95,7 @@ try {
   await page.click("#fPick"); await page.locator("#fPop [data-on]").first().check(); await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1280, height: 720 }); await page.waitForTimeout(500);
   s = await look();
-  check(s.oneRow, `1280 でも帯は 1 段（チップ ${s.chips.join("・")}${s.more ? `・${s.more}` : ""}）`);
+  check(s.chips.length === 2 && s.whole, `1280 でも 2 つのチップが名前・中身・× つきで切れずに出る（${s.chips.join("・")}）`);
   await page.screenshot({ path: path.join(out, "lot-1280.png") });
   await page.setViewportSize({ width: 1728, height: 1152 }); await page.waitForTimeout(300);
 

@@ -467,3 +467,7 @@ body.mode-list #summary,body.mode-list #center>.toolbar,body.mode-list #infoPane
 .f-prev{display:flex;gap:6px;flex-wrap:wrap;min-height:0}.f-prev img{width:64px;height:48px;object-fit:cover;border-radius:3px;border:1px solid var(--line)}
 .f-pop[hidden],.f-more[hidden]{display:none}.f-hist:empty{display:none}
 .f-chip.squeeze{flex:0 1 auto;min-width:0}.f-chip.squeeze b{overflow:hidden;text-overflow:ellipsis;min-width:0}.f-chip.squeeze>.f-sc,.f-chip.squeeze>.x{flex:none}
+.f-bar.two{flex-wrap:wrap;row-gap:4px}.f-bar.two .f-chips{order:10;flex-basis:100%;flex-wrap:wrap;overflow:visible}
+.mk-l{display:inline-block;min-width:3.3em}
+.cabsep[hidden]{display:none}
+.mk-sl{display:flex;flex-direction:column;gap:4px;padding-right:10px;border-right:2px solid var(--line2)}
