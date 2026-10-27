@@ -276,16 +276,33 @@ button.lnk{border:none;background:none;color:var(--sub);text-decoration:underlin
 .mbox{background:var(--pane);border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.35);padding:16px 18px;width:min(860px,92vw);max-height:calc(100vh - 120px);overflow:auto}
 .mhead{display:flex;align-items:center;gap:8px;margin:-4px 0 8px}.mhead b{font-size:16px;margin-right:auto}
 .mclose{border:none;background:none;font-size:20px;line-height:20px;padding:2px 8px;color:var(--sub);border-radius:6px}.mclose:hover{background:var(--line2);color:var(--txt)}
-.rl{display:flex;flex-direction:column;gap:8px;font-size:13px}
+/* ===== 配布の窓（版 4.5.0。3 回の案出しと採点で R12 に決めた: program/tools/proposals/2026-10-27-release-modal*） */
+#relModal{align-items:center;padding-top:0}
+#relModal .mbox{width:min(1180px,92vw);max-height:88vh;padding:20px 24px;display:flex;flex-direction:column;gap:14px;font-size:14px}
+#relModal .mhead{margin:0}#relModal .mhead b{font-size:18px}
+.rl{display:flex;flex-direction:column;gap:14px}
 .rl-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.rl-src{flex:1;color:var(--sub);font:12px Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:120px}
-.rl-t{width:100%;border-collapse:collapse}.rl-t th{text-align:left;font-size:12px;color:var(--sub);font-weight:400;border-bottom:1px solid var(--line);padding:4px 6px}
-.rl-t td{padding:6px;border-bottom:1px solid var(--line2);white-space:nowrap}.rl-t td:nth-child(4){white-space:normal}.rl-t td:last-child{text-align:right}.rl-t td button{margin-left:4px}
-.rl-t tr.on td{background:#eef6ee}.rl-t .del{color:var(--ng)}
-.tag{display:inline-block;border-radius:10px;padding:0 8px;font-size:12px;margin:1px 4px 1px 0;border:1px solid}
+.rl-path{flex:1;min-width:260px;font:13px Consolas,monospace;color:var(--txt);background:#f3f5f8;border:1px solid var(--line2);border-radius:4px;padding:4px 8px;overflow-wrap:anywhere}
+.rl-btn{border:1px solid #b7cbe6;background:var(--pane);color:var(--acc);border-radius:5px;padding:5px 12px;font-size:13.5px;white-space:nowrap}
+.rl-btn.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}.rl-btn.bold{font-weight:600}.rl-btn.del{color:var(--ng);border-color:#e6b4b4}
+.rl-btn.amber{background:#e6a52e;border-color:#e6a52e;color:#1b2733;font-weight:700}
+.rl-me{display:flex;flex-direction:column;gap:6px;border:1px solid #b7cbe6;background:#f5f8fd;border-radius:8px;padding:10px 14px}
+.rl-me h4,.rl-sec h4{margin:0;font-size:14px;color:var(--sub);font-weight:600}
+.rl-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}.rl-row>.grow{flex:1;min-width:240px}
+.rl-flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13.5px}
+.rl-flow .n{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;border:1.5px solid var(--sub);color:var(--sub);font-weight:700;font-size:11.5px;margin-right:4px}
+.rl-flow .ar{color:var(--sub)}
+.rl-t{width:100%;border-collapse:collapse}
+.rl-t th{text-align:left;font-size:12.5px;color:var(--sub);font-weight:600;border-bottom:1px solid var(--line);padding:5px 8px}
+.rl-t td{padding:10px 8px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.rl-t td.v{width:190px}.rl-t td.v b{font-size:17px;display:block}.rl-t td.v span{font-size:12px;color:var(--sub);white-space:nowrap}
+.rl-t td.s{font-size:14.5px}.rl-t td.acts{width:250px;text-align:right;white-space:nowrap}.rl-t td.acts .rl-btn{margin-left:6px}
+.rl-t tr.on td{background:#eef6ee}.rl-t tr.on td:first-child{box-shadow:inset 4px 0 0 #2e7d32}.rl-t tr.on td.v b{font-size:22px;color:#1b5e20}
+.rl-sec{border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.tag{display:inline-block;border-radius:10px;padding:0 8px;font-size:12.5px;margin:1px 4px 1px 0;border:1px solid}
 .tag.dist{color:#1b5e20;border-color:#9ccc9c;background:#e8f5e9}.tag.rec{color:#8a5a00;border-color:#ecd9a8;background:#fff6e0}
-.tag.me{color:var(--acc);border-color:#b7cbe6;background:var(--accbg)}.tag.new{color:var(--sub);border-color:var(--line)}
-.rl-note{font-size:12px;color:var(--sub)}.rl-err{color:var(--ng);font-size:13px}
+.tag.me{color:var(--acc);border-color:#b7cbe6;background:var(--accbg)}.tag.new{color:#5b6573;border-color:#c9d1db;background:#f6f8fa}
+.rl-note{font-size:12.5px;color:var(--sub)}.rl-err{color:var(--ng);font-size:13.5px}.rl-ok{color:#14753a;font-weight:600}
 .rl-prog{height:6px;border-radius:3px;background:var(--line2);overflow:hidden}.rl-prog>div{height:100%;background:var(--acc);width:0}
 
 /* ===== データ項目の窓（版 4.1.0。3 回の案出しと採点で M に決めた: program/tools/proposals/2026-10-26-data-items*.） */
@@ -406,3 +423,47 @@ table.ll-grid{border-collapse:separate;border-spacing:0;font-size:13px;table-lay
 body.mode-list #summary,body.mode-list #center>.toolbar,body.mode-list #infoPane,body.mode-list .split[data-split=infoPane]{display:none!important}
 /* ロット表の体の上下の埋め（見えていない行の高さだけ。色も線も付けない） */
 #lvGrid tr.lv-pad td{padding:0!important;border:0!important;background:transparent!important}
+
+.mk-ic{width:11px;height:11px;vertical-align:-1px}
+.mkbar{display:flex;flex-direction:column;gap:5px;margin:2px 0 6px}
+.mk-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.mk-fld{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);white-space:nowrap}
+.mk-fld input[type=range]{width:84px;margin:0;padding:0;height:16px}.mk-fld b{color:var(--txt);font-weight:600;min-width:40px}
+.mk-seg button{padding:1px 8px;font-size:12px}
+.mk-auto{padding:1px 10px;font-size:12px;border-radius:10px}
+.mk-auto[aria-pressed=true]{background:var(--accbg);color:var(--acc);border-color:var(--acc);font-weight:600}.mk-auto[aria-pressed=true]:before{content:"✓ "}
+#grid .th.fo{display:none}
+/* ===== 欠陥のフィルタ（版 4.5.0。3 回の案出しと採点で F4c に決めた: program/tools/proposals/2026-10-27-defect-filter*） */
+.f-bar{flex:none;display:flex;align-items:center;gap:6px;padding:5px 12px;border-bottom:1px solid var(--line);background:#f8fafc;min-width:0;position:relative}
+.f-bar[hidden]{display:none}.f-bar .lab{flex:none;font-size:12.5px;color:var(--sub);font-weight:600}
+.f-chips{display:flex;gap:6px;min-width:0;flex:1;overflow:hidden;padding:1px 2px 1px 1px;align-items:center}
+.f-none{font-size:12.5px;color:var(--sub);white-space:nowrap}
+.f-chip{flex:none;display:inline-flex;align-items:center;gap:4px;border:1px solid var(--acc);border-radius:14px;padding:1px 2px 1px 4px;font-size:12.5px;background:var(--accbg);color:var(--acc);white-space:nowrap}
+.f-chip[hidden],.f-chip .c[hidden]{display:none}.f-chip .c{color:#36506f}.f-chip b{font-weight:600}.f-chip .x{border:none;background:none;color:var(--acc);padding:0 5px;font-size:13px}
+.f-sc{display:inline-flex;align-items:center;border-radius:3px;padding:0 5px;font-size:11px;font-weight:700;border:1px solid;line-height:16px;white-space:nowrap}
+.f-sc.def{color:#3f4a5a;border-color:#9aa6b6;background:#eef1f5}.f-sc.share{color:#0b6b62;border-color:#8fd0c8;background:#e6f6f4}
+.f-sc.mine{color:#5a3fa0;border-color:#c3b3ea;background:#f3effc}.f-sc.tmp{color:#8a5a00;border-color:#ecd9a8;background:#fff6e0}
+.f-btn{flex:none;border:1px solid #b7cbe6;background:var(--pane);color:var(--acc);border-radius:5px;padding:3px 10px;font-size:12.5px;white-space:nowrap}
+.f-btn.f-pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+.f-more{flex:none;font-size:12.5px;color:var(--acc);border:1px dashed var(--acc);border-radius:14px;padding:1px 9px;white-space:nowrap;background:var(--pane)}
+.f-n{flex:none;font-size:13px;white-space:nowrap}.f-n b{font-size:15px;color:var(--acc)}
+.f-hint{color:var(--sub);font-size:12px}.f-err{color:var(--ng);font-size:12.5px}
+.f-pop{position:absolute;right:12px;top:calc(100% + 4px);width:520px;max-height:60vh;overflow:auto;background:var(--pane);border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.18);padding:12px 14px;z-index:30;font-size:13px;display:flex;flex-direction:column;gap:6px}
+.f-sec{display:flex;flex-direction:column;gap:2px;margin-top:4px}.f-sech{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);font-weight:600;margin-bottom:2px}
+.f-item{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:13px}.f-item .nm{flex:none}.f-item .ct{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.f-empty{padding-left:22px}
+.f-mini{border:1px solid var(--line);background:var(--pane);border-radius:4px;padding:0 6px;font-size:12px;color:var(--sub)}.f-mini.del{color:var(--ng)}
+#fModal{align-items:center;padding-top:0}
+.f-win{width:min(1080px,92vw)!important;max-height:86vh;display:flex;flex-direction:column;gap:10px}
+.f-body{display:grid;grid-template-columns:340px minmax(0,1fr);gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;min-height:0}
+.f-lib{border-right:1px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:4px;background:#f8fafc;overflow:auto;font-size:13px}
+.f-ed{padding:12px 16px;display:flex;flex-direction:column;gap:9px;font-size:13px;overflow:auto}
+.f-ed h4{margin:0;font-size:14px}.f-ed input[type=text],.f-ed input[type=number],.f-ed select{font-size:13px;padding:2px 6px;border:1px solid var(--line);border-radius:4px}
+.f-rows{display:flex;flex-direction:column;gap:6px}.f-r{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.f-k{flex:none;width:44px;color:var(--sub);font-size:12px}
+.f-ins{display:inline-flex;gap:10px;flex-wrap:wrap}.f-ins label{display:inline-flex;align-items:center;gap:3px}
+.f-scope{display:flex;gap:14px;flex-wrap:wrap}.f-scope label{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}.f-scope label.no{color:#9aa3ad}
+.f-hist{display:flex;align-items:flex-end;gap:2px;height:46px;border-bottom:1px solid var(--line);padding:0 2px;max-width:480px}.f-hist i{flex:1;background:#c3d3ea;min-width:3px}.f-hist i.in{background:var(--acc)}
+.f-prev{display:flex;gap:6px;flex-wrap:wrap;min-height:0}.f-prev img{width:64px;height:48px;object-fit:cover;border-radius:3px;border:1px solid var(--line)}
+.f-pop[hidden],.f-more[hidden]{display:none}.f-hist:empty{display:none}
+.f-chip.squeeze{flex:0 1 auto;min-width:0}.f-chip.squeeze b{overflow:hidden;text-overflow:ellipsis;min-width:0}.f-chip.squeeze>.f-sc,.f-chip.squeeze>.x{flex:none}

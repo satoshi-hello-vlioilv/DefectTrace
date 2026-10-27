@@ -8,6 +8,7 @@ pub mod cache;
 pub mod config;
 pub mod dat;
 pub mod distribute;
+pub mod filters;
 pub mod images;
 pub mod install;
 pub mod locate;

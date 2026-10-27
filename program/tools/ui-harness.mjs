@@ -36,12 +36,18 @@ export const FAKE = {
 
 /** 試しの入口を試験のロットで起こす（more: 足す設備 [{name, path}]。測る道具が大きなロットの束を足す。
     home: 作業場所（渡せば閉じても消さない。アプリを起こし直しても残る物〈覚えた値〉を測るため）） */
+// 共有のフィルタの置き場は、作業の場所の shared（閉じると消える）。
+// 環境変数 DT_UI_MORE（足す設備 [{name, path}] の JSON）・DT_UI_LOT（撮るときに開くロット。省くと試験のロット）で、本物のロットの束でも撮れる
+// （欠陥の多いロットでないと見えない物〈MAP の記号の重なり・フィルタで減る画像〉を撮るため）。
 export async function launch(fake = FAKE, more = [], { home } = {}) {
+  more = [...more, ...JSON.parse(process.env.DT_UI_MORE || "[]")];
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "dt-ui-"));
   execFileSync("python3", [path.join(REPO, "program/tests/fixture_lot.py"), path.join(work, "fx")]);
   const fx = path.join(work, "fx");
   const cfg = path.join(work, "config.json");
-  fs.writeFileSync(cfg, JSON.stringify({ equipments: [{ name: "LS3", path: path.join(fx, "LS3") }, { name: "DL2", path: path.join(fx, "DL2") }, ...more] }));
+  // DT_UI_CFG: 設定に足す物（JSON。例: 共有のフィルタの置き場 filters_shared_dir・開発者 release_users）
+  fs.writeFileSync(cfg, JSON.stringify({ equipments: [{ name: "LS3", path: path.join(fx, "LS3") }, { name: "DL2", path: path.join(fx, "DL2") }, ...more],
+    filters_shared_dir: path.join(work, "shared"), ...JSON.parse(process.env.DT_UI_CFG || "{}") }));
   const exe = path.join(REPO, "desktop/target/release/examples/serve");
   if (!fs.existsSync(exe)) execFileSync("cargo", ["build", "--release", "--example", "serve"], { cwd: path.join(REPO, "desktop"), stdio: "inherit" });
   const port = 5600 + Math.floor(Math.random() * 300);
@@ -55,7 +61,7 @@ export async function launch(fake = FAKE, more = [], { home } = {}) {
     async newPage(view) {
       const ctx = await browser.newContext({ viewport: view, deviceScaleFactor: 1.25, locale: "ja-JP" });
       const page = await ctx.newPage();
-      await page.addInitScript((lot) => { window.__dtFx = lot; }, path.join(fx, "LS3/2026/2026_10/2026_10_25/2026_10_25_22_03_53"));
+      await page.addInitScript((lot) => { window.__dtFx = lot; }, process.env.DT_UI_LOT || path.join(fx, "LS3/2026/2026_10/2026_10_25/2026_10_25_22_03_53"));
       // 開くのが 30 秒で終わらないことがまれにある（再現できていない）。待ったままの問い合わせを書き出し、1 度だけ開き直す
       const pend = new Set();
       page.on("request", (r) => pend.add(r)); page.on("requestfinished", (r) => pend.delete(r)); page.on("requestfailed", (r) => pend.delete(r));
@@ -79,7 +85,9 @@ export async function walk(page, each, states = STATE_NAMES) {
   await page.evaluate((p) => localStorage.setItem("lastLot", p), lot);
   await page.reload();
   await page.waitForFunction(() => window.__dtReady === true);
-  await page.waitForFunction(() => document.querySelectorAll("#grid .th img").length > 0 && [...document.querySelectorAll("#grid .th img")].every((i) => i.complete));
+  // 縮小画像が全部出るまで（画像の無いロット〈欠陥データだけ〉なら、そう出るまでと MAP が来るまで）
+  await page.waitForFunction(() => (document.querySelectorAll("#grid .th img").length > 0 && [...document.querySelectorAll("#grid .th img")].every((i) => i.complete))
+    || (!!document.querySelector("#grid .empty") && /件/.test(document.getElementById("mapTitle").textContent)));
   await page.waitForTimeout(400);
   if (states.includes("lot")) await each("lot");
   if (states.includes("info")) {

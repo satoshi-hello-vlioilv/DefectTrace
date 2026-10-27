@@ -8,9 +8,9 @@
   const PLACE = { list: "ロット一覧", summary: "サマリ", lot: "ロット情報", card: "画像表示（各画像の下）", image: "画像情報", mapx: "MAP 横軸", mapy: "MAP 縦軸" };
   const NEED = { list: "lot", summary: "lot", lot: "lot", card: "image", image: "any", mapx: "image", mapy: "image" };
 
-  const S = { lot: null, gen: 0, group: null, items: [], cur: -1, seen: new Set(), poll: null, zoom: "fit",
+  const S = { lot: null, gen: 0, group: null, items: [], cur: -1, seen: new Set(), poll: null, zoom: "fit", fk: null, fd: null, fn: 0,
     pins: [], LOT: null, img: null, mapSide: "all", sides: {}, kinds: {}, imap: {}, card: [], map: null,
-    view: "grid", ms: +(localStorage.getItem("mapMark") || 11), PT: null, ptsel: null, P: null, D: new Map(), psel: null, pselRef: null, pairN: {}, plist: [], plistPairs: [], pshow: 150 };
+    view: "grid", mk: (() => { const d = { auto: true, size: 4, alpha: 0.55, look: "fill", shape: "kind" }; try { return { ...d, ...JSON.parse(localStorage.getItem("mapMarkStyle") || "{}") }; } catch (_) { return d; } })(), PT: null, ptsel: null, P: null, D: new Map(), psel: null, pselRef: null, pairN: {}, plist: [], plistPairs: [], pshow: 150 };
 
   const status = (m, err) => { $("status").textContent = m; $("status").className = err ? "err" : ""; };
   async function api(url, opt) {
@@ -195,6 +195,7 @@
     Object.assign(S, { items: [], cur: -1, group: null, seen: new Set(), named: false, queue: [], LOT: null, img: null, imap: {}, map: null, sides: {}, kinds: {},
       P: null, D: new Map(), psel: null, pselRef: null, pairN: {}, plist: [], plistPairs: [], pshow: 150, PT: null, ptsel: null });
     S.gen++;
+    S.fk = S.fd = null; S.fn = 0;   // 前のロットのフィルタの答えは使わない（対応付けが済んだら、フィルタの係が当て直す）
     Object.assign(S, { t0: performance.now(), samples: [], drawn: 0, total: 0, st: null, cardVer: (S.cardVer || 0) + 1,
       phase: { info: "run", link: "wait", map: "wait", pairs: "wait", pitch: "wait" } });
     $("pitchList").innerHTML = '<div class="empty">読込中...</div>'; $("ptSum").textContent = ""; $("pitchCnt").textContent = "";
@@ -246,7 +247,7 @@
     S.finishedGen = S.gen;
     const ng = st.cabs.filter((c) => c.state === "error").length;
     const kd = st.kinds || {}, kl = [kd.cab ? `CAB ${kd.cab}` : "", kd.dir ? `フォルダ ${kd.dir}` : "", kd.loose ? "直下" : ""].filter(Boolean).join("・");
-    status(`${S.items.length} 枚 / ${kl || "画像なし"}${ng ? ` / 失敗 ${ng}` : ""} / ${((performance.now() - S.t0) / 1000).toFixed(1)}秒`, ng > 0);
+    status(`${S.fk ? `${S.items.filter(shown).length} / ${S.items.length} 枚を表示（フィルタ ${S.fn} つ）` : `${S.items.length} 枚`} / ${kl || "画像なし"}${ng ? ` / 失敗 ${ng}` : ""} / ${((performance.now() - S.t0) / 1000).toFixed(1)}秒`, ng > 0);
   }
 
   function renderTabs(groups) {
@@ -273,6 +274,33 @@
   // 対応付けなどが届いたら版（cardVer）を上げ、見えている枠だけ描き直す（ほかは見えたときに描く）
   const key = (it) => `${it.g}/${it.cab}/${it.name}`;
   const mkey = (it) => `${it.cab}/${it.name}`;
+  // ---------------------------------------------------------------- 欠陥のフィルタ（filters-view.js が条件を決め、ここは絞った答えを一覧・送り・MAP・数に当てる）
+  const shown = (it) => !S.fk || S.fk.has(mkey(it));
+  function applyShown() {
+    document.querySelectorAll("#grid .th").forEach((t) => { const k = t.dataset.key; t.classList.toggle("fo", !!S.fk && !S.fk.has(k.slice(k.indexOf("/") + 1))); });
+    const per = new Map();
+    for (const it of S.items) { const c = per.get(it.cab) || [0, 0]; c[1]++; if (shown(it)) c[0]++; per.set(it.cab, c); }
+    for (const [cab, [v, n]] of per) { const s = document.querySelector(`#cab_${CSS.escape(cab)} .st`); if (s && s.classList.contains("done")) s.textContent = S.fk ? `${v} / ${n}枚` : `${n}枚`; }
+    if (S.cur >= 0 && S.items[S.cur] && !shown(S.items[S.cur])) { const i = S.items.findIndex(shown); if (i >= 0) select(i); else { S.cur = -1; $("imgTitle").textContent = "当てはまる画像がありません"; } }
+    else if (S.cur >= 0) select(S.cur);
+    drawMap();
+    S.finishedGen = 0; finishIfDone();
+  }
+  // 送り（← →）: 絞っているときは、当てはまる画像だけを順に
+  function step(d) {
+    let i = S.cur;
+    do i += d; while (i >= 0 && i < S.items.length && !shown(S.items[i]));
+    if (i >= 0 && i < S.items.length) select(i);
+  }
+  const fready = [];
+  window.dtFilter = {
+    /** いま開いているロット（対応付けが済んでいれば） */
+    ctx: () => (S.lot && S.phase.link === "done" ? { lot: S.lot.path, g: S.group, gen: S.gen, total: S.items.length, kinds: S.kinds, sides: S.sides } : null),
+    /** 絞った答えを当てる（keys: 画像 cab/name・dets: DETECT_INFO の番号・n: 重ねたフィルタの数）。null で外す */
+    set(r, gen) { if (gen !== S.gen) return; S.fk = r ? new Set(r.keys) : null; S.fd = r ? new Set(r.detects) : null; S.fn = r ? r.n : 0; applyShown(); },
+    shownCount: () => S.items.filter(shown).length,
+    onReady: (cb) => fready.push(cb),
+  };
   const BUDGET = 12;
   function insertBlock(rank, its) {
     let lo = 0, hi = S.items.length;   // 後ろの塊（rank が大きい）の最初の位置
@@ -321,14 +349,14 @@
         const job = S.queue[0], ph = document.getElementById(job.id + "_ph");
         const anchor = job.last || ph || document.getElementById(job.id);
         const part = job.its.slice(job.at, job.at + 1000);
-        anchor.insertAdjacentHTML("afterend", part.map((it) => `<div class="th" data-key="${esc(key(it))}"></div>`).join(""));
+        anchor.insertAdjacentHTML("afterend", part.map((it) => `<div class="th${shown(it) ? "" : " fo"}" data-key="${esc(key(it))}"></div>`).join(""));
         job.last = anchor;
         for (let k = 0; k < part.length; k++) { job.last = job.last.nextElementSibling; cardIO.observe(job.last); }
         job.at += part.length;
         S.drawn = (S.drawn || 0) + part.length;
         if (job.at >= job.its.length) { if (ph) ph.remove(); S.queue.shift(); }
       }
-      if (S.cur < 0 && S.items.length && document.querySelector("#grid .th")) select(0);
+      if (S.cur < 0 && S.items.length && document.querySelector("#grid .th")) { const i = S.items.findIndex(shown); if (i >= 0) select(i); }
       loadProgress();
       if (S.queue.length) requestAnimationFrame(step);
       else { S.draining = false; fitThumbs(); finishIfDone(); }
@@ -482,6 +510,7 @@
     loadPitch(gen);
     if (S.cur >= 0) select(S.cur);
     if (!Object.keys(S.imap).length && d.info) status(`画像と欠陥データの対応付けができません（${JSON.stringify(d.info)}）`, true);
+    fready.forEach((cb) => cb());
   }
   const sideName = (v) => S.sides[v]?.name ?? (v == null ? "" : `G${v}`);
   const sideColor = (v) => S.sides[v]?.color || "#1e5aa8";
@@ -511,7 +540,7 @@
     document.querySelectorAll(".th.sel").forEach((x) => x.classList.remove("sel"));
     const t = document.querySelector(`.th[data-key="${CSS.escape(key(it))}"]`);
     if (t) { t.classList.add("sel"); if (S.view === "grid") t.scrollIntoView({ block: "nearest" }); }
-    $("imgTitle").textContent = `${it.cab}/${it.name}  (${i + 1}/${S.items.length})`;
+    $("imgTitle").textContent = S.fk ? `${it.cab}/${it.name}  (${S.items.slice(0, i + 1).filter(shown).length}/${S.items.filter(shown).length}・絞り込み中)` : `${it.cab}/${it.name}  (${i + 1}/${S.items.length})`;
     drawMap();
     if (!$("viewer").hidden) showViewer();
     clearTimeout(infoTimer);
@@ -910,7 +939,7 @@
       const y = g.top + 5 + ((g.H - g.top - 10) * k) / 4;
       c.fillText(v >= 100 ? Math.round(v) : v.toFixed(1), 0, y + 3);
     }
-    const want = (p) => g.sides.includes(p[2]);
+    const want = (p) => g.sides.includes(p[2]) && (!S.fd || S.fd.has(p[6]));
     const byI = new Map(S.map.points.map((p) => [p[6], p]));
     // transfer candidate lines (front <-> back)
     if (S.P && S.P.ok && g.sides.length > 1) {
@@ -935,15 +964,12 @@
         c.beginPath(); ps.forEach((p, k) => (k ? c.lineTo(g.sx(p), g.sy(p)) : c.moveTo(g.sx(p), g.sy(p)))); c.stroke();
       }
     }
-    c.textAlign = "center"; c.textBaseline = "middle"; c.font = `${S.ms}px 'Yu Gothic UI'`;
-    const hs = Math.max(7, S.ms * 0.65);
-    for (const p of S.map.points) {
-      if (!want(p)) continue;
-      const k = kindOf(p[3]);
-      c.fillStyle = p[4] ? k.color : "rgba(120,120,120,.5)";
-      c.fillText(k.mark || "●", g.sx(p), g.sy(p));
-    }
-    c.textAlign = "start"; c.textBaseline = "alphabetic";
+    const pts = S.map.points.filter(want);
+    const hs = Math.max(7, markLook(pts.length).size * 0.65);
+    drawMarks(c, g, pts);
+    renderMarkUi(pts.length);
+    if (S.fd) $("mapTitle").textContent = `${S.map.points.filter((p) => S.fd.has(p[6])).length}件（絞り込み中・全 ${S.map.points.length}）`;
+    else $("mapTitle").textContent = `${S.map.points.length}件（画像あり ${S.map.points.filter((p) => p[4]).length}）`;
     const it = S.items[S.cur];
     if (it && S.view === "grid") {
       const p = S.map.points.find((p) => p[4] === mkey(it));
@@ -966,15 +992,67 @@
     }
     const used = [...new Set(S.map.points.filter(want).map((p) => String(p[3])))].sort((a, b) => a - b);
     const lab = S.map.labels || {};
-    $("mapLegend").innerHTML = used.map((v) => { const k = kindOf(v); return `<span><b style="color:${k.color}">${esc(k.mark)}</b> ${esc(k.name)} ${S.map.points.filter((p) => want(p) && String(p[3]) === v).length}</span>`; }).join("") +
+    $("mapLegend").innerHTML = used.map((v) => { const k = kindOf(v); return `<span>${markIcon(k)} ${esc(k.name)} ${S.map.points.filter((p) => want(p) && String(p[3]) === v).length}</span>`; }).join("") +
+      (S.map.points.some((p) => want(p) && !p[4]) ? `<span title="画像の無い欠陥は、分類の形のまま灰色で描きます">${markIcon({ mark: "●", color: "rgb(95,95,95)" })} 灰＝画像なし</span>` : "") +
       (S.map.bands?.length ? `<span title="多量（処理落ち）の範囲"><i style="background:rgba(198,40,40,.5);border-radius:0;width:12px"></i>多量 ${S.map.bands.length}</span>` : "") + (S.view === "pairs" ? `<span style="color:#e07800">― 転写候補</span>` : "") + (S.view === "pitch" ? `<span style="color:#7b3fb5">― ピッチ</span>` : "") +
       `<span>縦:${esc(lab.mapy || "")} 横:${esc(lab.mapx || "")}</span>`;
   }
+  // 欠陥の記号: 大きさ（px）・濃さ（不透明度。重なるほど濃く見え、密集が分かる）・形（分類の形〈● ▲ ■ ★ ◆ を小さな図形で〉・点）・
+  // 塗り／輪郭だけ／両方・密度（重なりの数で地を塗る）。自動（auto）なら、見えている点の数で大きさと濃さを決める
+  // （少ないロットは大きく濃く、多いロットは小さく薄く。どちらでも点が見え、密集が分かる）。画像の無い欠陥は灰色
+  const autoMark = (n) => (n < 300 ? { size: 7, alpha: 0.85 } : n < 2000 ? { size: 4, alpha: 0.55 } : n < 8000 ? { size: 2.5, alpha: 0.25 } : { size: 1.5, alpha: 0.18 });
+  const SHAPE = { "●": "circle", "○": "circle", "▲": "tri", "△": "tri", "■": "square", "□": "square", "★": "star", "☆": "star", "◆": "diamond", "◇": "diamond", "▼": "tri-down" };
+  function shapePath(c, kind, x, y, r) {
+    c.beginPath();
+    if (kind === "tri" || kind === "tri-down") { const d = kind === "tri" ? 1 : -1; c.moveTo(x, y - r * 1.15 * d); c.lineTo(x + r, y + r * 0.85 * d); c.lineTo(x - r, y + r * 0.85 * d); c.closePath(); }
+    else if (kind === "square") c.rect(x - r * 0.9, y - r * 0.9, r * 1.8, r * 1.8);
+    else if (kind === "diamond") { c.moveTo(x, y - r * 1.2); c.lineTo(x + r, y); c.lineTo(x, y + r * 1.2); c.lineTo(x - r, y); c.closePath(); }
+    else if (kind === "star") { for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, q = i % 2 ? r * 0.5 : r * 1.25; i ? c.lineTo(x + q * Math.cos(a), y + q * Math.sin(a)) : c.moveTo(x + q * Math.cos(a), y + q * Math.sin(a)); } c.closePath(); }
+    else c.arc(x, y, r, 0, Math.PI * 2);
+  }
+  const markLook = (n) => ({ ...S.mk, ...(S.mk.auto ? autoMark(n) : {}) });
+  function drawMarks(c, g, pts) {
+    const m = markLook(pts.length), r = Math.max(0.5, m.size / 2);
+    c.save();
+    if (m.density) {   // 重なりの数で地を塗る（4px の升目ごとに数え、対数で濃さに）
+      const cell = 4, cnt = new Map();
+      let max = 1;
+      for (const p of pts) { const k = Math.floor(g.sx(p) / cell) + "," + Math.floor(g.sy(p) / cell); const v = (cnt.get(k) || 0) + 1; cnt.set(k, v); if (v > max) max = v; }
+      for (const [k, v] of cnt) { const [i, j] = k.split(",").map(Number); c.fillStyle = `rgba(30,70,140,${(0.12 + 0.78 * Math.log1p(v) / Math.log1p(max)).toFixed(3)})`; c.fillRect(i * cell, j * cell, cell, cell); }
+    }
+    c.lineWidth = m.size >= 8 ? 1.2 : 1;
+    for (const p of pts) {
+      const k = kindOf(p[3]), col = p[4] ? k.color : "rgb(95,95,95)", x = g.sx(p), y = g.sy(p);
+      c.globalAlpha = m.alpha * (p[4] ? 1 : 0.7);
+      c.fillStyle = col; c.strokeStyle = col;
+      if (r <= 1) { c.fillRect(x - r, y - r, r * 2, r * 2); continue; }   // 2px 以下は四角 1 つ（形も輪郭も描けない）
+      shapePath(c, m.shape === "dot" ? "circle" : SHAPE[k.mark] || "circle", x, y, r);
+      if (m.look !== "line") c.fill();
+      if (m.look !== "fill") { c.globalAlpha = Math.min(1, m.alpha * 2); c.stroke(); }
+    }
+    c.restore();
+  }
+  // 凡例の見本（図と同じ形・色の小さな図形）
+  function markIcon(k) {
+    const kind = S.mk.shape === "dot" ? "circle" : SHAPE[k.mark] || "circle";
+    const cv = document.createElement("canvas"); cv.width = cv.height = 28;
+    const c = cv.getContext("2d"); c.fillStyle = c.strokeStyle = k.color; shapePath(c, kind, 14, 14, 9); c.fill();
+    return `<img class="mk-ic" alt="${esc(k.mark || "●")}" src="${cv.toDataURL()}">`;
+  }
+  const MARK_KEY = "mapMarkStyle";
+  function setMark(o) {
+    S.mk = { ...S.mk, ...o };
+    S.mk.size = Math.max(1, Math.min(28, +S.mk.size || 4)); S.mk.alpha = Math.max(0.05, Math.min(1, +S.mk.alpha || 1));
+    if (o.size != null || o.alpha != null) S.mk.auto = o.auto ?? false;   // 手で大きさ・濃さを変えたら自動を外す
+    try { localStorage.setItem(MARK_KEY, JSON.stringify(S.mk)); } catch (_) { /* 覚えられなくても描く */ }
+    drawMap();
+  }
+  window.dtSetMark = setMark;   // 記号の設定（画面の部品と、案を撮る道具が使う）
   $("map").addEventListener("click", (e) => {
     if (!S.map?.ok) return;
     const r = $("map").getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, g = mapGeom();
     let best = null, bd = 1e9;
-    for (const p of S.map.points) { if (!g.sides.includes(p[2])) continue; if (S.view === "grid" && !p[4]) continue; const d = (g.sx(p) - mx) ** 2 + (g.sy(p) - my) ** 2; if (d < bd) { bd = d; best = p; } }
+    for (const p of S.map.points) { if (!g.sides.includes(p[2]) || (S.fd && !S.fd.has(p[6]))) continue; if (S.view === "grid" && !p[4]) continue; const d = (g.sx(p) - mx) ** 2 + (g.sy(p) - my) ** 2; if (d < bd) { bd = d; best = p; } }
     if (!best || bd >= 300) return;
     if (S.view === "pitch") {
       const ci = (S.PT?.chains || []).findIndex((ch) => ch.members.some((m) => m.i === best[6]));
@@ -992,8 +1070,21 @@
   $("map").closest("details").addEventListener("toggle", drawMap);   // 畳んで開き直したら描き直す
   $("map").addEventListener("dblclick", () => { if (S.view === "pairs") openPV(); else if (S.cur >= 0) openViewer(); });
   // mark size
-  $("markSize").value = S.ms;
-  $("markSize").addEventListener("input", () => { S.ms = Math.max(6, Math.min(28, +$("markSize").value || 11)); localStorage.setItem("mapMark", S.ms); drawMap(); });
+  // 記号の部品: 描いた大きさ・濃さ（自動なら点の数で決めた値）を、つまみと数に出す
+  function renderMarkUi(n) {
+    const m = markLook(n);
+    $("markSize").value = m.size; $("markSizeV").textContent = `${m.size}px`;
+    $("markAlpha").value = Math.round(m.alpha * 100); $("markAlphaV").textContent = `${Math.round(m.alpha * 100)}%`;
+    $("markAuto").setAttribute("aria-pressed", String(!!S.mk.auto));
+    document.querySelectorAll("#markLook button").forEach((b) => b.classList.toggle("on", b.dataset.v === S.mk.look));
+    document.querySelectorAll("#markShape button").forEach((b) => b.classList.toggle("on", b.dataset.v === S.mk.shape));
+  }
+  $("markSize").addEventListener("input", () => setMark({ size: +$("markSize").value, alpha: +$("markAlpha").value / 100 }));
+  $("markAlpha").addEventListener("input", () => setMark({ size: +$("markSize").value, alpha: +$("markAlpha").value / 100 }));
+  $("markAuto").addEventListener("click", () => setMark({ auto: true }));
+  $("markLook").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setMark({ look: b.dataset.v }); });
+  $("markShape").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setMark({ shape: b.dataset.v }); });
+  renderMarkUi(0);
 
   // ================================================================ transfer candidates
   const PV = { base: localStorage.getItem("pBase") || "front" };
@@ -1013,7 +1104,7 @@
     document.body.classList.toggle("mode-list", v === "list");
     document.querySelectorAll("#modeBar [data-mode]").forEach((b) => { const on = b.dataset.mode === (v === "list" ? "list" : "grid"); b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
     document.querySelectorAll("#viewSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
-    $("grid").hidden = v !== "grid"; $("pairView").hidden = v !== "pairs"; $("pitchView").hidden = v !== "pitch"; $("listView").hidden = v !== "list";
+    $("grid").hidden = v !== "grid"; $("fBar").hidden = v !== "grid"; $("pairView").hidden = v !== "pairs"; $("pitchView").hidden = v !== "pitch"; $("listView").hidden = v !== "list";
     $("loadBand").classList.toggle("off", v === "list");   // 画像の読み込みの帯は画像の画面だけ
     setListScope();
     document.querySelector(".cardzone").style.display = v === "grid" ? "" : "none";
@@ -1381,8 +1472,8 @@
       if (e.key === "Enter") { openPV(); e.preventDefault(); return; }
       return;
     }
-    if (e.key === "ArrowRight") { select(S.cur + 1); e.preventDefault(); }
-    else if (e.key === "ArrowLeft") { select(S.cur - 1); e.preventDefault(); }
+    if (e.key === "ArrowRight") { step(1); e.preventDefault(); }
+    else if (e.key === "ArrowLeft") { step(-1); e.preventDefault(); }
     else if (e.key === "Enter") { openViewer(); e.preventDefault(); }
     else if (e.key === "Escape" && !$("viewer").hidden) closeViewer();
   });

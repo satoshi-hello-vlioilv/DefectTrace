@@ -59,12 +59,8 @@ fn with_me(mut v: Value, me: Value, cached_at: Option<&str>) -> Value {
 /// 更新の置き場の設定と、だれか（Windows のログイン名・PC の名前・版を置いてよいか）。
 /// 置いてよいのは、設定の release_users が空ならだれでも（置き場へ書ける人）、あればそこに名前がある人だけ。
 pub fn settings_of(cfg: &dt_core::config::Config) -> Value {
-    let env = |k: &str| std::env::var(k).unwrap_or_default();
-    let login = if cfg!(windows) { env("USERNAME") } else { env("USER") };
-    let pc = if cfg!(windows) { env("COMPUTERNAME") } else { env("HOSTNAME") };
-    let users = cfg.strs("release_users");
-    let can = users.is_empty() || users.iter().any(|u| u.eq_ignore_ascii_case(&login));
-    json!({"source": cfg.update_source(), "who": {"login": login, "pc": pc, "canRelease": can, "users": users}})
+    let w = cfg.who();
+    json!({"source": cfg.update_source(), "who": {"login": w.login, "pc": w.pc, "canRelease": w.developer, "users": w.users}})
 }
 
 fn who_of(settings: &Value) -> Who {
