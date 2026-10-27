@@ -49,8 +49,9 @@ def tree_digest(root: Path) -> str:
     return h.hexdigest()
 
 
-def place(stage: Path, version: str, rel_root: Path, broken: bool = False) -> None:
-    """配る形 stage の版を書き換えて ZIP にし、置き場の <アプリ>/<版>/ に release.json と並べて置く。"""
+def place(stage: Path, version: str, rel_root: Path, broken: bool = False, old_layout: bool = False) -> None:
+    """配る形 stage の版を書き換えて ZIP にし、置き場の <アプリ>/versions/<版>/（old_layout なら版 4.3.0 までの <アプリ>/<版>/）に
+    release.json と並べて置く。"""
     b = bundle.brand()
     work = Path(tempfile.mkdtemp(prefix="da-variant-"))
     try:
@@ -62,7 +63,7 @@ def place(stage: Path, version: str, rel_root: Path, broken: bool = False) -> No
         vp.write_text(text.replace(f'APP_VERSION = "{old}"', f'APP_VERSION = "{version}"', 1), encoding="utf-8")
         if broken:   # 画面が開けない版（取り込みの確かめは通る。画面の JS が最初に止まり、開けた合図を送らない）
             (top / "program" / "app" / "static" / "app.js").write_text('throw new Error("試験のために壊した版");\n', encoding="utf-8")
-        dest = rel_root / b["name"] / version
+        dest = rel_root / b["name"] / ("" if old_layout else "versions") / version
         dest.mkdir(parents=True, exist_ok=True)
         zip_name = f"{b['name']}-{version}-windows.zip"
         bundle.zip_dir(top, b["name"], dest / zip_name)
@@ -165,7 +166,7 @@ def update(exe: Path, work: Path) -> bool:
         share_exe.chmod(0o755)
     share_digest = tree_digest(share_app)
     rel_root = work / "Releases"
-    place(Path(built["stage"]), v0, rel_root)     # 置き場には配った版も並ぶ（配る版を前の版に戻すときに選ぶ）
+    place(Path(built["stage"]), v0, rel_root, old_layout=True)   # 置き場には配った版も並ぶ（版 4.3.0 までの形のまま読めるか）
     place(Path(built["stage"]), v1, rel_root)
     fixture = work / "fx"
     subprocess.run([sys.executable, str(REPO / "program" / "tests" / "fixture_lot.py"), str(fixture)], check=True, capture_output=True)
@@ -189,6 +190,10 @@ def update(exe: Path, work: Path) -> bool:
     ok &= check(bundle.app_version(app / "program") == v0, "1. 取り込んでも動いている app はそのまま")
     sc = ((r.get("install") or {}).get("shortcut") or {})
     ok &= check(sc.get("ask") is True and not sc.get("links"), "1. ショートカットが無いので画面が尋ねる", sc)
+    made = [x for x in r.get("results") or [] if "ショートカットができる" in x.get("name", "")]
+    ok &= check(len(made) == 1 and made[0].get("ok") is True, "1. 帯の「作る」を押すと、デスクトップとスタートにショートカットができる",
+                made[0].get("info") if made else "自己診断が押していない")
+    ok &= check(all((d / f"{b['name']}.lnk").is_file() for d in links), "1. 置き場に .lnk ができた", [str(d) for d in links])
     # 人が作った、共有の exe を指し作業フォルダも共有のショートカット（次の起動で直る）
     lnk = links[0] / f"{b['name']}.lnk"
     make_link(lnk, share_exe, share_app)

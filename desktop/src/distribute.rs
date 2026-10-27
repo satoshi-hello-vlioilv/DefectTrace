@@ -8,8 +8,8 @@
 //!                            recommended: { note, setAt, setBy, setPc } = 推奨アップデートの札。各 PC は、配る版に札が付いていて
 //!                            まだその版でなければ、開き直しを促す知らせを出す。配る版を選び直すと外れる（版ごとの決め）
 //!   <exe>                    配る入口（配る版の ZIP の exe。新しい PC へはこのアドレスだけを渡す）
-//!   <版>\release.json        { schema:1, app_id, name, version, zip, sha256, exe, placedAt, placedBy, placedPc, source }
-//!   <版>\<name>-<版>-windows.zip
+//!   versions\<版>\release.json        { schema:1, app_id, name, version, zip, sha256, exe, placedAt, placedBy, placedPc, source }
+//!   versions\<版>\<name>-<版>-windows.zip
 //! ```
 //! 置くときは `.<版>.placing-<pid>` へ写して指紋を確かめ直し、release.json を書いてから名前を変える（各 PC が置きかけを読まない）。
 //! 消すときは逆に、先に `.<版>.removing-<pid>` へ名前を変えてから中身を消す（各 PC が消しかけを読まない）。
@@ -34,15 +34,17 @@ fn now_text() -> String {
     chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string()
 }
 
-/// アプリのフォルダ（配る版の覚えがあればそこ、無ければいちばん新しい版の隣、どちらも無ければ 置き場\<アプリ名>）。
+/// アプリのフォルダ（配る版の覚えがあればそこ、無ければいちばん新しい版のアプリのフォルダ、どちらも無ければ 置き場\<アプリ名>。
+/// 置き場にアプリのフォルダそのもの〈名前がアプリ名〉を書いたときは、置き場）。
 pub fn app_folder(found: &Path, scan: &Scan, name: &str) -> PathBuf {
     if let Some(d) = &scan.distribute {
         return d.dir.clone();
     }
-    if let Some(r) = scan.newest() {
-        if let Some(parent) = r.dir.parent() {
-            return parent.to_path_buf();
-        }
+    if let Some(dir) = scan.newest().and_then(Release::app_dir) {
+        return dir;
+    }
+    if found.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name)) {
+        return found.to_path_buf();
     }
     found.join(name)
 }
@@ -99,8 +101,8 @@ pub fn place(p: &Paths, found: &Path, zip: &Path, source_name: &str, app_id: &st
     if scan.find(&version).is_some() {
         return Err(format!("版 {version} はもう置いてあります（同じ版は置けません。取り込んだ PC と中身が食い違うため）"));
     }
-    let folder = app_folder(found, &scan, &name);
-    let (dest, placing) = (folder.join(&version), folder.join(format!(".{version}.placing-{}", std::process::id())));
+    let versions = app_folder(found, &scan, &name).join(release::VERSIONS);
+    let (dest, placing) = (versions.join(&version), versions.join(format!(".{version}.placing-{}", std::process::id())));
     if dest.exists() {
         return Err(format!("{} がもうあります", dest.display()));
     }
@@ -349,13 +351,13 @@ mod tests {
         make_zip(&d.join("a.zip"), "3.10.0", "exe-1", ID);
         let r = place(&p, &rels, &d.join("a.zip"), "a.zip", ID, &who, &none).unwrap();
         assert_eq!((r["version"].as_str(), r["placedBy"].as_str()), (Some("3.10.0"), Some("maint")));
-        assert!(rels.join("App").join("3.10.0").join(MARKER).is_file(), "置き場\\アプリ名\\版");
+        assert!(rels.join("App").join("versions").join("3.10.0").join(MARKER).is_file(), "置き場\\アプリ名\\versions\\版");
         assert!(place(&p, &rels, &d.join("a.zip"), "a.zip", ID, &who, &none).unwrap_err().contains("もう置いて"), "同じ版は置かない");
         make_zip(&d.join("other.zip"), "1.0.0", "x", "other.app");
         assert!(place(&p, &rels, &d.join("other.zip"), "o.zip", ID, &who, &none).unwrap_err().contains("このアプリ"), "ほかのアプリは断る");
         std::fs::write(d.join("junk.zip"), "not a zip").unwrap();
         assert!(place(&p, &rels, &d.join("junk.zip"), "j.zip", ID, &who, &none).is_err(), "ZIP でない物は断る");
-        let left: Vec<_> = std::fs::read_dir(rels.join("App")).unwrap().flatten().map(|e| e.file_name()).collect();
+        let left: Vec<_> = std::fs::read_dir(rels.join("App").join("versions")).unwrap().flatten().map(|e| e.file_name()).collect();
         assert_eq!(left.len(), 1, "途中の物を残さない: {left:?}");
         // 各 PC の取り込みにそのまま通る（release.rs の読み方）
         assert_eq!(release::scan(&rels, ID).newest().unwrap().version, "3.10.0");
@@ -404,8 +406,8 @@ mod tests {
         assert!(remove_version(&rels, "3.10.0", ID).unwrap_err().contains("配っている版"), "配っている版は消さない");
         let r = remove_version(&rels, "3.10.1", ID).unwrap();
         assert_eq!((r["removed"].as_u64(), r["notes"].as_array().unwrap().len()), (Some(1), 0), "{r}");
-        assert!(!rels.join("App").join("3.10.1").exists(), "版のフォルダが消える");
-        let left: Vec<_> = std::fs::read_dir(rels.join("App")).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert!(!rels.join("App").join("versions").join("3.10.1").exists(), "版のフォルダが消える");
+        let left: Vec<_> = std::fs::read_dir(rels.join("App").join("versions")).unwrap().flatten().map(|e| e.file_name()).collect();
         assert!(left.iter().all(|n| !n.to_string_lossy().contains("removing")), "消しかけを残さない: {left:?}");
         assert_eq!(release::scan(&rels, ID).by_version().len(), 1);
         assert!(remove_version(&rels, "3.10.1", ID).unwrap_err().contains("ありません"), "無い版は断る");
@@ -438,6 +440,38 @@ mod tests {
         set_distributed(&rels, "3.20.0", ID, &who).unwrap();
         assert!(!app.join("App.exe").exists() && read_json(&app.join(DISTRIBUTE)).unwrap()["aliases"] == json!([]));
         assert_eq!(entry_folder(&app.join("App.exe"), ID), None);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn versions_go_under_versions_and_the_old_layout_is_still_read() {
+        let d = tmp("layout");
+        let (p, who, none) = (Paths::new(&d.join("local")), Who::default(), |_: &str, _: u64, _: u64| {});
+        // 版 4.3.0 までの形（<アプリ>\<版>）の置き場に、新しい版を置く → 同じアプリのフォルダの versions へ
+        let rels = d.join("Releases");
+        let old = rels.join("App").join("3.10.0");
+        std::fs::create_dir_all(&old).unwrap();
+        make_zip(&old.join("App-3.10.0-windows.zip"), "3.10.0", "exe-1", ID);
+        let sha = sha256_file(&old.join("App-3.10.0-windows.zip")).unwrap();
+        let rel = json!({"schema": 1, "app_id": ID, "name": "App", "version": "3.10.0", "zip": "App-3.10.0-windows.zip", "sha256": sha, "exe": "App.exe"});
+        write_json(&old.join(MARKER), &rel).unwrap();
+        make_zip(&d.join("b.zip"), "3.11.0", "exe-2", ID);
+        place(&p, &rels, &d.join("b.zip"), "b.zip", ID, &who, &none).unwrap();
+        assert!(rels.join("App").join("versions").join("3.11.0").join(MARKER).is_file(), "新しい版は versions の下");
+        let scan = release::scan(&rels, ID);
+        assert_eq!(scan.by_version().iter().map(|r| r.version.as_str()).collect::<Vec<_>>(), ["3.11.0", "3.10.0"], "前の形の版も読む");
+        assert_eq!(app_folder(&rels, &scan, "App"), rels.join("App"), "versions の下の版のアプリのフォルダは versions の上");
+        set_distributed(&rels, "3.10.0", ID, &who).unwrap();
+        assert_eq!(std::fs::read_to_string(rels.join("App").join("App.exe")).unwrap(), "exe-1", "前の形の版も配れる");
+        // 置き場にアプリのフォルダそのもの（空）を書いたとき: その下に versions を作る（アプリ名のフォルダを重ねない）
+        let own = d.join("Box").join("App");
+        std::fs::create_dir_all(&own).unwrap();
+        make_zip(&d.join("c.zip"), "3.12.0", "exe-3", ID);
+        place(&p, &own, &d.join("c.zip"), "c.zip", ID, &who, &none).unwrap();
+        assert!(own.join("versions").join("3.12.0").join(MARKER).is_file(), "置き場\\versions\\版");
+        set_distributed(&own, "3.12.0", ID, &who).unwrap();
+        assert!(own.join(DISTRIBUTE).is_file() && own.join("App.exe").is_file(), "配る版・配る入口はアプリのフォルダの直下");
+        assert_eq!(install_from_entry(&p, &own, ID, &|_| {}).unwrap(), "3.12.0", "配る入口から versions の下の版を取り込む");
         let _ = std::fs::remove_dir_all(&d);
     }
 

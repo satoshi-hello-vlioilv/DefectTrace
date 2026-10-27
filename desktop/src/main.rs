@@ -257,7 +257,12 @@ fn native(app: AppHandle, info: serde_json::Value, upd: Arc<Updater>, ready: Arc
                 json_reply(&install::status(&upd.paths, &lnk::places(), &lnk::OsLinks, &names(), upd.installed))
             }
             ("POST", "/__desktop/shortcut") => {
-                reply_of(install::make(&upd.paths, &lnk::places(), &lnk::OsLinks, &names()).map_err(|e| (400, e)))
+                let r = install::make(&upd.paths, &lnk::places(), &lnk::OsLinks, &names());
+                match &r {
+                    Ok(v) => log(&format!("SHORTCUT 作る: 作った {} / 作れない {}", v["made"], v["problems"])),
+                    Err(e) => log(&format!("SHORTCUT 作れない: {e}")),
+                }
+                reply_of(r.map_err(|e| (400, e)))
             }
             ("POST", "/__desktop/shortcut/decline") => reply_of(install::decline(&upd.paths).map_err(|e| (500, e))),
             ("GET", "/__desktop/release") => json_reply(&upd.release_view(&settings(), query_of(query, "cached") == "1")),
@@ -515,6 +520,7 @@ fn start(app: AppHandle, slot: Arc<OnceLock<Router>>, splash: Arc<Splash>) {
         "shell": "tauri", "app_id": brand().app_id, "name": brand().name, "shell_version": env!("CARGO_PKG_VERSION"), "commit": env!("DT_BUILD_COMMIT"),
         "version": version, "program": program, "local_root": locate::local_root(), "exe": std::env::current_exe().unwrap_or_default(),
         "installed": installed, "app": paths.app(), "url": app_url("/").as_str(), "workers": dt.cfg.workers(),
+        "testLinks": std::env::var_os("DT_LINK_DIRS").is_some(),
     });
     let _ = slot.set(Router {
         app: dt.clone(),

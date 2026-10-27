@@ -1,7 +1,8 @@
 /* 自己診断（環境変数 DT_SELFTEST=結果のファイル で起動したときだけ、窓が画面に流し込む）。
    本物の WebView の中から、窓（Rust）と画面が正しく動くかを確かめて /__desktop/selftest へ送る。窓は結果を書いて終わる。
    調べること: 画面が起動し終える・設備の木・表示項目・静的ファイルの決まり・日本語の問い合わせ・同時の問い合わせ・
-   （DT_SELFTEST_LOT の設定があれば）ロットを開いて画像の一覧・縮小画像・原寸・欠陥の対応・MAP・転写・ピッチ・画面のエラーが無い。 */
+   （DT_SELFTEST_LOT の設定があれば）ロットを開いて画像の一覧・縮小画像・原寸・欠陥の対応・MAP・転写・ピッチ・
+   （試しの置き場 DT_LINK_DIRS のとき）ショートカットの帯の「作る」・画面のエラーが無い。 */
 (async () => {
   const res = [];
   const ok = (name, cond, info = "") => res.push({ name, ok: !!cond, info: String(info).slice(0, 300) });
@@ -91,6 +92,17 @@
         // 画面でも開く（ツリーのロット行を押したのと同じ道）
         localStorage.setItem("lastLot", l.path);
       }
+    }
+    // 5) ショートカットの帯の「作る」（試しの置き場 DT_LINK_DIRS のときだけ。本物のデスクトップには作らない）
+    if (info && info.testLinks && install && install.shortcut && install.shortcut.ask) {
+      const bar = document.getElementById("scBar");
+      ok("ショートカットが無いと、帯が尋ねる", bar && !bar.hidden);
+      document.getElementById("scMake").click();
+      for (let i = 0; i < 100 && !bar.hidden; i++) await sleep(100);
+      const after = (await json("/__desktop/install")).j || {};
+      const sc = after.shortcut || {};
+      ok("「作る」を押すと、デスクトップとスタートにショートカットができる", bar.hidden && sc.links && sc.links.length === (sc.places || []).length && !sc.ask,
+        `${document.getElementById("status").textContent} / ${JSON.stringify(sc).slice(0, 200)}`);
     }
     ok("画面のエラーが無い", !(window.__dtErrors || []).length, (window.__dtErrors || []).join(" / "));
   } catch (e) {

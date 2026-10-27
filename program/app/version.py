@@ -7,10 +7,17 @@
   tests/test_version.py が、いまの中身と RELEASE を比べる（版を上げずにプログラムを変えると失敗する）。
   手順: プログラムを直す → APP_VERSION を上げ、CHANGELOG の先頭に1件足す → python app_build.py --release → テスト
 """
-APP_VERSION = "4.3.0"
-RELEASE = {"version": "4.3.0", "digest": "01f3685a10dee318"}
+APP_VERSION = "4.4.0"
+RELEASE = {"version": "4.4.0", "digest": "fc6a7892163ffdab"}
 
 CHANGELOG = [
+    {"version": "4.4.0", "date": "2026-10-27", "notes": [
+        "更新の置き場を LotScope と同じ BOX の 90_Releases にしました（各 PC で設定しなくて構いません）。"
+        "「配布」→「ZIP から版を置く」で、版は 90_Releases\\DefectTrace\\versions\\<版> に置きます"
+        "（配る版の覚え distribute.json と配る入口 DefectTrace.exe は DefectTrace の直下）。前の形（DefectTrace\\<版>）に置いた版も読みます。",
+        "ショートカットの帯の「作る」で作れなかったとき、帯が消えて何も起きないように見えていたのを直しました。"
+        "作れなかった理由（どこへ・なぜ）を帯の中に出し、「もう一度作る」で押し直せます。理由は作業場所の logs\\desktop.log にも残します。",
+    ]},
     {"version": "4.3.0", "date": "2026-10-27", "notes": [
         "ロット表は、1 度読んだロットの値を作業場所に覚えます。範囲を変えても・画面を開き直しても・アプリを起こし直しても、同じロットは読み直しません。"
         "日から月へ範囲を広げると、増えたロットだけを読みます。元のデータから読み直すときは「↻ 読み直す」を押します"

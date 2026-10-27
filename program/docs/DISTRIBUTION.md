@@ -25,16 +25,24 @@ DefectTrace/
 
 ## 更新の置き場
 
-共有フォルダ（や同期フォルダ）に置き場を作り、各 PC の設定（`%LOCALAPPDATA%\DefectTrace\config.json` の `update_source`）に書く。
-候補は「;」で複数書ける・`%環境変数%` も使える・同期フォルダの見え方が PC で違っても、下の名前を付け直して探す。
+置き場は LotScope と同じ BOX の `C:\boxdrive\Box\(D)_仕上課\90_アプリ開発\90_Releases`（組み込みの既定。`desktop/src/config.rs` の
+`DEFAULT_UPDATE_SOURCE`）。各 PC で設定しなくてよい。別の場所にするときだけ、各 PC の設定（`%LOCALAPPDATA%\DefectTrace\config.json` の
+`update_source`）に書く（空なら既定）。候補は「;」で複数書ける・`%環境変数%` も使える・BOX の見え方が PC で違っても（上の階層が見えないなど）、
+下の名前を付け直して探す。
 
 ```text
-<置き場>\DefectTrace\
-  distribute.json          配る版（schema・app_id・version・entry・setAt・setBy・previous・recommended）
-  DefectTrace.exe          配る入口（配る版の exe。新しい PC へはこのアドレスだけを渡す）
-  <版>\release.json        版の目印（app_id・version・zip・sha256・exe・置いた人と日時）
-  <版>\DefectTrace-<版>-windows.zip
+90_Releases\
+  DefectTrace\               アプリのフォルダ（「ZIP から版を置く」で作る。名前は brand.json の name）
+    distribute.json          配る版（schema・app_id・version・entry・setAt・setBy・previous・recommended）
+    DefectTrace.exe          配る入口（配る版の exe。新しい PC へはこのアドレスだけを渡す）
+    versions\
+      <版>\release.json      版の目印（app_id・version・zip・sha256・exe・置いた人と日時）
+      <版>\DefectTrace-<版>-windows.zip
 ```
+
+アプリは置き場の下を 3 段までたどり、目印（`release.json`・`distribute.json` の `app_id`）で自分の版を探す。ほかのアプリ（LotScope など）の
+フォルダが並んでいても混ざらない。版 4.3.0 までの形（`DefectTrace\<版>`）も読む。置き場にアプリのフォルダ（`…\90_Releases\DefectTrace`）を
+書いてもよい（そのときは、その下に `versions` を作る）。
 
 画面の「配布」（`release_users` に名前がある人。空ならだれでも）で:
 - **ZIP から版を置く**: 中身（app_id・版・画面）と指紋を確かめてから、`.<版>.placing-<pid>` へ写し、確かめ直してから名前を変える（各 PC が置きかけを読まない）

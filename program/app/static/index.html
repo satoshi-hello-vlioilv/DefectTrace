@@ -20,7 +20,8 @@
   <button type="button" id="btnReset" class="ghost" title="表示項目の設定を初期状態に戻す">表示設定を初期化</button>
 </header>
 <div id="scBar" class="scbar" hidden>
-  <b aria-hidden="true">⌂</b><span>デスクトップとスタートにショートカットを作りますか（次から共有の exe を探さずに開けます）</span>
+  <b aria-hidden="true">⌂</b><span id="scAsk">デスクトップとスタートにショートカットを作りますか（次から共有の exe を探さずに開けます）</span>
+  <span id="scWhy" class="scwhy" role="alert" hidden></span>
   <button type="button" id="scMake" class="btn2">作る</button><button type="button" id="scDecline" class="lnk">今後たずねない</button>
 </div>
 
