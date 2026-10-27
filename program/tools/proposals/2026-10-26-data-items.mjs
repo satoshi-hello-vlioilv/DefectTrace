@@ -10,7 +10,7 @@
 // どの案も項目はページの本物（#srcList の行）から集める。入口は見出しの「データ項目」ボタン（右列の枠はやめる）。
 // 状態: browse（開いた直後）・search（「幅」で探した）・drag（「幅」の行をドラッグしている）
 
-const COMMON = String.raw`
+export const COMMON = String.raw`
 const PLACE = { list: "ロット一覧", summary: "サマリ", lot: "ロット情報", card: "画像表示", image: "画像情報", mapx: "MAP 横軸", mapy: "MAP 縦軸" };
 const NEED = { list: "lot", summary: "lot", lot: "lot", card: "image", image: "any", mapx: "image", mapy: "image" };
 const PLACE_SUB = { list: "左のロット一覧の各行", summary: "中央上の帯", lot: "右列", card: "各画像の下", image: "右列の上", mapx: "MAP の横", mapy: "MAP の縦" };
@@ -40,7 +40,7 @@ function table(opt = {}) {
   return gs.map((g) => '<div class="dgh">' + esc(g.src) + "：<b>" + esc(g.name) + '</b><span class="sub"> ' + g.rows.filter(hit).length + " 件</span></div><table class=\"dtab\">" + rowsHtml(g, opt) + "</table>").join("") || '<div class="hint">見つかりません</div>';
 }
 function cats(active = 0) {
-  return groups.map((g, i) => '<button type="button" class="dcat' + (i === active && !Q ? " on" : "") + '"><span>' + esc(g.src) + "：" + esc(g.name) + '</span><span class="n">' + (Q ? g.rows.filter(hit).length : g.rows.length) + "</span></button>").join("");
+  return groups.map((g, i) => '<button type="button" class="dcat' + (i === active && !Q ? " on" : "") + (Q && !g.rows.some(hit) ? " zero" : "") + '"><span>' + esc(g.src) + "：" + esc(g.name) + '</span><span class="n">' + (Q ? g.rows.filter(hit).length : g.rows.length) + "</span></button>").join("");
 }
 const dragScope = dragKey ? groups.flatMap((g) => g.rows).find((r) => r.key === dragKey).scope : null;
 const okPlace = (pl) => !dragScope || NEED[pl] === "any" || NEED[pl] === dragScope;
@@ -62,7 +62,7 @@ function lightZones() {
 }
 `;
 
-const CSS = `
+export const CSS = `
 #dui mark{background:#ffe58a;color:inherit;border-radius:2px;padding:0 1px}
 button.ghost.dopen{color:#fff;border-color:#7d8da3}
 .dmodal{position:fixed;inset:0;background:rgba(15,25,40,.45);z-index:40;display:flex;align-items:center;justify-content:center}
@@ -72,7 +72,7 @@ button.ghost.dopen{color:#fff;border-color:#7d8da3}
 .dcol{display:flex;flex-direction:column;min-height:0;overflow:auto}
 .dcats{width:270px;flex:0 0 auto;border-right:1px solid var(--line);padding:6px;gap:2px;background:#f7f8fa}
 .dcat{white-space:nowrap;display:flex;justify-content:space-between;gap:6px;text-align:left;border:none;background:none;padding:5px 8px;border-radius:5px;font-size:12.5px;color:var(--txt)}
-.dcat span:first-child{overflow:hidden;text-overflow:ellipsis}.dcat .n{color:var(--sub);font-size:12px}.dcat.on{background:var(--accbg);color:var(--acc);font-weight:700}.dcat:hover{background:#eef2f7}
+.dcat span:first-child{overflow:hidden;text-overflow:ellipsis}.dcat.zero{opacity:.4}.dcat .n{color:var(--sub);font-size:12px}.dcat.on{background:var(--accbg);color:var(--acc);font-weight:700}.dcat:hover{background:#eef2f7}
 .dmain{flex:1;padding:8px 12px;gap:6px}
 .dsearch{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:6px;padding:4px 10px;background:var(--pane);position:sticky;top:0;z-index:1}
 .dsearch input{flex:1;border:none;font-size:14px;padding:4px 0;outline:none}.dsearch .ic{color:var(--sub);font-size:16px}
@@ -100,7 +100,7 @@ button.ghost.dopen{color:#fff;border-color:#7d8da3}
 `;
 
 // 状態ごとに作り直す（STATES が data-state を変えてから、案の「描く」を呼ぶ）
-const render = (body) => ["script", `window.__drender = () => { document.getElementById('dui')?.remove(); document.querySelectorAll('.dopen,.dpill').forEach((e) => e.remove());
+export const render = (body) => ["script", `window.__drender = () => { document.getElementById('dui')?.remove(); document.querySelectorAll('.dopen,.dpill').forEach((e) => e.remove());
   document.querySelectorAll('.dzok,.dzng').forEach((z) => z.classList.remove('dzok','dzng')); ${COMMON}
   ${body} }; window.__drender();`];
 export const STATES = {
