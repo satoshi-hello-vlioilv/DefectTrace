@@ -15,7 +15,7 @@
   <nav id="crumb" class="crumb"></nav>
   <span class="spacer"></span>
   <span id="verBox" class="vgrp" hidden></span>
-  <button type="button" id="btnRelease" class="ghost" hidden title="版を置く・配る版を選ぶ・推奨の札">配布</button>
+  <button type="button" id="btnRelease" class="ghost" hidden title="版を置く・配る版を選ぶ・推奨の札・この PC の版とショートカット">配布</button>
   <button type="button" id="btnSources" class="ghost dopen" title="表示する項目を探して、表示先へ置く">☰ データ項目</button>
   <button type="button" id="btnReset" class="ghost" title="表示項目の設定を初期状態に戻す">表示設定を初期化</button>
 </header>
@@ -56,6 +56,11 @@
       <div class="dz chips cardzone" data-drop="card" title="各画像の下に表示する項目（画像単位の項目をここへドラッグ）"><span class="dzl">画像表示</span><span class="pins" data-place="card"></span></div>
       <span class="spacer"></span>
     </div>
+    <!-- 欠陥のフィルタ（filters-view.js。形は 3 回の案出しと採点で決めた: program/tools/proposals/2026-10-27-defect-filter*） -->
+    <div id="fBar" class="f-bar"><span class="lab">フィルタ</span><div id="fChips" class="f-chips"></div>
+      <button type="button" id="fPick" class="f-btn" title="登録した条件を選んで重ねる">条件 ▾</button><button type="button" id="fOpen" class="f-btn" title="条件を作る・直す・消す">⚲ 作る・管理…</button>
+      <span id="fCount" class="f-n" title="表示している画像 / ロットの画像"></span><button type="button" id="fClear" class="f-btn" title="フィルタをすべて外す" hidden>外す</button>
+      <div id="fPop" class="f-pop" hidden></div></div>
     <div id="loadBand" class="lpband3" data-progress hidden aria-live="polite"></div>
     <div id="grid" tabindex="0"><div class="empty">左のツリーからロットを選択</div></div>
     <div id="pairView" hidden>
@@ -107,8 +112,16 @@
     </details>
     <details class="box" open>
       <summary>MAP <span id="mapTitle" class="sub"></span></summary>
-      <div class="mapbar"><div id="mapSide" class="seg"></div><span class="spacer"></span>
-        <label class="fld" title="MAPの記号の大きさ">記号 <input id="markSize" type="range" min="6" max="28" step="1" value="11"></label></div>
+      <div class="mapbar"><div id="mapSide" class="seg"></div><span class="spacer"></span></div>
+      <!-- 記号: 形は 2 回の案出しと別のエージェントの採点で決めた（M7: program/tools/proposals/2026-10-27-map-marks*） -->
+      <div class="mkbar">
+        <div class="mk-row"><div class="mk-sl">
+          <label class="mk-fld" title="記号の大きさ（1〜28px。極小 1〜2・小 3〜5・中 6〜10・大 11〜）"><span class="mk-l">大きさ</span><input id="markSize" type="range" min="1" max="28" step="0.5"><b id="markSizeV"></b></label>
+          <label class="mk-fld" title="記号の濃さ（半透明にすると、重なるほど濃く見え、欠陥の集まりが分かります）"><span class="mk-l">濃さ</span><input id="markAlpha" type="range" min="5" max="100" step="5"><b id="markAlphaV"></b></label></div>
+          <button type="button" id="markAuto" class="mk-auto" aria-pressed="true" title="点の数に合わせて大きさと濃さを決めます（少ないと大きく濃く、多いと小さく薄く）。つまみを動かすと手で決め、押すと自動に戻ります">自動</button></div>
+        <div class="mk-row"><span class="mk-fld"><span class="mk-l">描き方</span><span id="markLook" class="seg mk-seg"><button type="button" data-v="fill">塗り</button><button type="button" data-v="line">輪郭</button><button type="button" data-v="both">塗り＋輪郭</button></span></span>
+          <span class="mk-fld">形 <span id="markShape" class="seg mk-seg"><button type="button" data-v="kind" title="分類の形（● ▲ ■ ★ ◆）">分類</button><button type="button" data-v="dot" title="どの分類も丸（色で見分ける）">点</button></span></span></div>
+      </div>
       <canvas id="map" height="300"></canvas>
       <div id="mapLegend" class="legend"></div>
       <div class="slots">
@@ -165,9 +178,16 @@
   <label id="pinAllWrap" class="chk"><input id="pinAll" type="checkbox"> 繰り返し項目をまとめて表示</label>
   <div class="pbtn"><button type="button" id="pinCancel">取消</button><button type="submit" class="primary">追加</button></div>
 </form>
+<div id="fModal" class="modal" hidden>
+  <div class="mbox f-win" role="dialog" aria-modal="true" aria-labelledby="fTitle">
+    <div class="mhead"><b id="fTitle">欠陥のフィルタ</b><span class="sub">画像一覧を欠陥の項目で絞る・条件に名前を付けて登録する</span>
+      <button type="button" id="fClose" class="mclose" title="閉じる（Esc）" aria-label="閉じる">×</button></div>
+    <div class="f-body"><div id="fLib" class="f-lib"></div><div id="fEd" class="f-ed"></div></div>
+  </div>
+</div>
 <div id="relModal" class="modal" hidden>
   <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="relTitle">
-    <div class="mhead"><b id="relTitle">配布</b><span class="sub">版を置く・配る版を選ぶ・推奨の札</span>
+    <div class="mhead"><b id="relTitle">配布</b><span class="sub">版を置く・配る版を選ぶ・推奨の札・この PC のショートカット</span>
       <button type="button" id="relClose" class="mclose" title="閉じる（Esc）" aria-label="閉じる">×</button></div>
     <div id="relBody"></div>
   </div>
@@ -197,6 +217,7 @@
 <script src="/static/lotscope/xlsx-writer.js?v={{v}}"></script>
 <script src="/static/lotlist-view.js?v={{v}}"></script>
 <script src="/static/app.js?v={{v}}"></script>
+<script src="/static/filters-view.js?v={{v}}"></script>
 <script src="/static/desktop.js?v={{v}}"></script>
 </body>
 </html>

@@ -61,6 +61,8 @@ pub struct App {
     lotsum: Lru<String, Value>,
     imgmap: Lru<(String, String), Arc<ImgMap>>,
     lot_re: Regex,
+    /// 共有のフィルタの置き場（たどるのは遅い〈BOX〉ので 1 分覚える）
+    shared_dir: std::sync::Mutex<Option<(std::time::Instant, Option<PathBuf>)>>,
 }
 
 /// 画像 → 欠陥の対応（"cab/name" → DETECT_INFO の番号）。
@@ -186,7 +188,79 @@ impl App {
             lotsum: Lru::new(LOTSUM_BYTES),
             imgmap: Lru::new(IMGMAP_BYTES),
             lot_re,
+            shared_dir: Default::default(),
         })
+    }
+
+    /// 共有の置き場（既定・共有のフィルタ）: 設定の filters_shared_dir、無ければ 更新の置き場のアプリのフォルダ\shared。届かなければ None。
+    fn shared_dir(&self) -> Option<PathBuf> {
+        let mut m = self.shared_dir.lock().unwrap();
+        if let Some((at, d)) = m.as_ref() {
+            if at.elapsed() < Duration::from_secs(60) {
+                return d.clone();
+            }
+        }
+        let d = match self.cfg.str("filters_shared_dir") {
+            s if !s.trim().is_empty() => Some(PathBuf::from(s.trim())),
+            _ => crate::release::locate_source(&self.cfg.update_source()).ok().map(|(found, _)| {
+                let name = &crate::brand::brand().name;
+                let app = if found.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name)) {
+                    found
+                } else {
+                    found.join(name)
+                };
+                app.join("shared")
+            }),
+        };
+        *m = Some((std::time::Instant::now(), d.clone()));
+        d
+    }
+
+    fn filter_store(&self) -> crate::filters::Store {
+        crate::filters::Store { home: self.cfg.home.clone(), shared: self.shared_dir() }
+    }
+
+    /// 欠陥のフィルタ: 一覧（GET）・保存（POST {scope, filter}）・消す（DELETE ?scope&id）・使える項目（GET fields?lot）・
+    /// 当てる（POST apply {lot, g, filters: [...]} → 満たす欠陥の画像の名前と欠陥の番号）
+    fn filters_api(&self, method: &str, path: &str, a: &Args, b: &Value) -> R {
+        let who = self.cfg.who();
+        let fail = |e: String| Reply::error(400, &e);
+        match (method, path) {
+            ("GET", "/api/filters") => {
+                let mut v = self.filter_store().list();
+                v["me"] = json!({"login": who.login, "developer": who.developer});
+                Ok(Reply::json(&v))
+            }
+            ("POST", "/api/filters") => {
+                let scope = b["scope"].as_str().unwrap_or("mine");
+                self.filter_store().save(scope, &b["filter"], &who.login, who.developer).map(|v| Reply::json(&v)).map_err(fail)
+            }
+            ("DELETE", "/api/filters") => {
+                self.filter_store().delete(a.req("scope")?, a.req("id")?, who.developer).map(|v| Reply::json(&v)).map_err(fail)
+            }
+            ("GET", "/api/filters/hist") => {
+                let res = self.lotres(a.req("lot")?)?;
+                Ok(Reply::json(&crate::filters::hist(&res.dat("DETECT_INFO"), a.req("field")?, 24)))
+            }
+            ("GET", "/api/filters/fields") => {
+                let res = self.lotres(a.req("lot")?)?;
+                Ok(Reply::json(&json!({"fields": crate::filters::fields(&res.dat("DETECT_INFO"))})))
+            }
+            ("POST", "/api/filters/apply") => {
+                let (lot, g) = (b["lot"].as_str().unwrap_or(""), b["g"].as_str().unwrap_or(""));
+                let fs: Vec<Value> = b["filters"].as_array().cloned().unwrap_or_default();
+                let fs: Vec<Value> = fs.iter().map(crate::filters::check).collect::<Result<_, _>>().map_err(fail)?;
+                let res = self.lotres(lot)?;
+                let det = res.dat("DETECT_INFO");
+                let pick = crate::filters::select(&det, &fs);
+                let set: std::collections::HashSet<usize> = pick.iter().copied().collect();
+                let m = self.image_map(lot, safe_part(g)?)?;
+                let keys: Vec<&String> = m.map.iter().filter(|(_, d)| set.contains(d)).map(|(k, _)| k).collect();
+                Ok(Reply::json(&json!({"keys": keys, "detects": pick, "nimg": keys.len(), "totalimg": m.map.len(),
+                                       "ndet": pick.len(), "totaldet": det.records.len()})))
+            }
+            _ => Err(Reply::error(404, "知らない問い合わせです")),
+        }
     }
 
     fn lotres(&self, path: &str) -> Result<Arc<LotRes>, Reply> {
@@ -221,6 +295,7 @@ impl App {
             ("GET", "/api/imgmap") => self.api_imgmap(&a),
             ("GET", "/api/imginfo") => self.imginfo(&a),
             ("GET", "/api/map") => self.map(&a),
+            (m, p) if p == "/api/filters" || p.starts_with("/api/filters/") => self.filters_api(m, p, &a, &b),
             ("GET", "/api/pairs") => self.pairs(&a),
             ("GET", "/api/pitch") => self.pitch(&a),
             ("GET", "/img") => self.image(&a, false),

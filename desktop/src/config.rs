@@ -37,6 +37,16 @@ pub fn defaults() -> Value {
     })
 }
 
+/// だれか（Config::who）。
+#[derive(Debug, Clone, Default)]
+pub struct Who {
+    pub login: String,
+    pub pc: String,
+    /// 開発者か（release_users に名前がある・release_users が空）
+    pub developer: bool,
+    pub users: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub v: Value,
@@ -111,6 +121,17 @@ impl Config {
             0 => std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 16),
             n => n.clamp(1, 64),
         }
+    }
+
+    /// だれか（Windows のログイン名・PC の名前）と、開発者か（版を置く・配る・既定のフィルタを決める）。
+    /// 開発者は設定の release_users に名前がある人。release_users が空なら、だれでも（置き場へ書ける人）。
+    pub fn who(&self) -> Who {
+        let env = |k: &str| std::env::var(k).unwrap_or_default();
+        let login = if cfg!(windows) { env("USERNAME") } else { env("USER") };
+        let pc = if cfg!(windows) { env("COMPUTERNAME") } else { env("HOSTNAME") };
+        let users = self.strs("release_users");
+        let developer = users.is_empty() || users.iter().any(|u| u.eq_ignore_ascii_case(&login));
+        Who { login, pc, developer, users }
     }
 
     /// 更新の置き場（設定が空なら既定の置き場）。

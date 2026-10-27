@@ -38,6 +38,9 @@ DefectTrace/
     versions\
       <版>\release.json      版の目印（app_id・version・zip・sha256・exe・置いた人と日時）
       <版>\DefectTrace-<版>-windows.zip
+    shared\
+      filters-default.json   欠陥のフィルタの既定の条件（開発者〈release_users〉だけが保存。desktop/src/filters.rs）
+      filters-shared.json    欠陥のフィルタの共有の条件（だれでも保存）
 ```
 
 アプリは置き場の下を 3 段までたどり、目印（`release.json`・`distribute.json` の `app_id`）で自分の版を探す。ほかのアプリ（LotScope など）の

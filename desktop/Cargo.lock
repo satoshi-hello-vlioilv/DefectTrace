@@ -708,7 +708,7 @@ dependencies = [
 
 [[package]]
 name = "defecttrace-desktop"
-version = "4.4.1"
+version = "4.5.0"
 dependencies = [
  "cab",
  "chrono",
