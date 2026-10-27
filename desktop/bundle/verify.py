@@ -189,6 +189,10 @@ def update(exe: Path, work: Path) -> bool:
     ok &= check(bundle.app_version(app / "program") == v0, "1. 取り込んでも動いている app はそのまま")
     sc = ((r.get("install") or {}).get("shortcut") or {})
     ok &= check(sc.get("ask") is True and not sc.get("links"), "1. ショートカットが無いので画面が尋ねる", sc)
+    made = [x for x in r.get("results") or [] if "ショートカットができる" in x.get("name", "")]
+    ok &= check(len(made) == 1 and made[0].get("ok") is True, "1. 帯の「作る」を押すと、デスクトップとスタートにショートカットができる",
+                made[0].get("info") if made else "自己診断が押していない")
+    ok &= check(all((d / f"{b['name']}.lnk").is_file() for d in links), "1. 置き場に .lnk ができた", [str(d) for d in links])
     # 人が作った、共有の exe を指し作業フォルダも共有のショートカット（次の起動で直る）
     lnk = links[0] / f"{b['name']}.lnk"
     make_link(lnk, share_exe, share_app)

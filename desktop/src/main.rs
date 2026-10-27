@@ -515,6 +515,7 @@ fn start(app: AppHandle, slot: Arc<OnceLock<Router>>, splash: Arc<Splash>) {
         "shell": "tauri", "app_id": brand().app_id, "name": brand().name, "shell_version": env!("CARGO_PKG_VERSION"), "commit": env!("DT_BUILD_COMMIT"),
         "version": version, "program": program, "local_root": locate::local_root(), "exe": std::env::current_exe().unwrap_or_default(),
         "installed": installed, "app": paths.app(), "url": app_url("/").as_str(), "workers": dt.cfg.workers(),
+        "testLinks": std::env::var_os("DT_LINK_DIRS").is_some(),
     });
     let _ = slot.set(Router {
         app: dt.clone(),
