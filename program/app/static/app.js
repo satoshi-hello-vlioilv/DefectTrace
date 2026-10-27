@@ -3,7 +3,8 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const q = (o) => new URLSearchParams(o).toString();
-  const natcmp = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+  // 名前の数の順（localeCompare に毎回 options を渡すと、比べるたびに照合器を作り直して 100 倍遅い。1 つを使い回す）
+  const natcmp = new Intl.Collator(undefined, { numeric: true }).compare;
   const PLACE = { list: "ロット一覧", summary: "サマリ", lot: "ロット情報", card: "画像表示（各画像の下）", image: "画像情報", mapx: "MAP 横軸", mapy: "MAP 縦軸" };
   const NEED = { list: "lot", summary: "lot", lot: "lot", card: "image", image: "any", mapx: "image", mapy: "image" };
 
@@ -156,9 +157,11 @@
   async function openLot(li) {
     clearInterval(S.poll);
     S.lot = { path: li.dataset.path, name: li.dataset.name, eq: li.dataset.eq };
-    Object.assign(S, { items: [], cur: -1, group: null, seen: new Set(), LOT: null, img: null, imap: {}, map: null, sides: {}, kinds: {},
+    Object.assign(S, { items: [], cur: -1, group: null, seen: new Set(), named: false, queue: [], LOT: null, img: null, imap: {}, map: null, sides: {}, kinds: {},
       P: null, D: new Map(), psel: null, pselRef: null, pairN: {}, plist: [], plistPairs: [], pshow: 150, PT: null, ptsel: null });
     S.gen++;
+    Object.assign(S, { t0: performance.now(), samples: [], drawn: 0, total: 0, st: null, cardVer: (S.cardVer || 0) + 1,
+      phase: { info: "run", link: "wait", map: "wait", pairs: "wait", pitch: "wait" } });
     $("pitchList").innerHTML = '<div class="empty">読込中...</div>'; $("ptSum").textContent = ""; $("pitchCnt").textContent = "";
     const gen = S.gen;
     localStorage.setItem("lastLot", S.lot.path);
@@ -166,11 +169,12 @@
     li.classList.add("sel");
     const n = S.lot.name;
     $("crumb").innerHTML = `${esc(S.lot.eq)} › ${esc(n.slice(0, 10).replace(/_/g, "/"))} › <b>${esc(n.slice(11).replace(/_/g, ":"))}</b>`;
-    $("grid").innerHTML = '<div class="empty">展開中...</div>';
+    cardIO.disconnect(); seenCards.clear();   // 前のロットの枠を見張らない
+    $("grid").innerHTML = "";   // 読み込みの進みは帯（#loadBand）が出す
     $("groupTabs").innerHTML = ""; $("groupTabs").dataset.g = "";
     $("imgInfo").innerHTML = '<div class="hint">画像をクリックで表示</div>'; $("imgTitle").textContent = "";
     $("lotInfo").innerHTML = '<div class="hint">読込中...</div>';
-    $("srcList").innerHTML = '<div class="hint">読込中...</div>';
+    SRC.pick = null; renderSources();
     $("pairList").innerHTML = '<div class="empty">読込中...</div>'; $("pSum").textContent = ""; $("pairCnt").textContent = "";
     drawMap();
     status("ロットを開いています...");
@@ -183,25 +187,31 @@
   async function poll(gen) {
     if (gen !== S.gen) return;
     let st;
-    try { st = await api("/api/status?" + q({ lot: S.lot.path })); } catch (e) { status(e.message, true); clearInterval(S.poll); return; }
+    // 名前を全部受け取ったら、後は数だけを問う（2 万枚で 1 回 250KB → 数 KB）
+    try { st = await api("/api/status?" + q({ lot: S.lot.path, ...(S.named ? { brief: 1 } : {}) })); } catch (e) { status(e.message, true); clearInterval(S.poll); return; }
     if (gen !== S.gen) return;
     const groups = [...new Set(st.cabs.map((c) => c.group))];
     if (!S.group) S.group = groups.length ? groups[0] : "img";   // no image folder : defect data only
     renderTabs(groups);
     renderGrid(st);
-    // 名前は開いた瞬間に分かる（CAB の頭だけを読む）。縮小画像は裏で画面の頭から作るので、その進みを出す
-    const tt = st.thumbs_total || 0;
-    $("prog").hidden = st.finished || !tt;
-    $("progBar").style.width = (tt ? Math.round((st.thumbs / tt) * 100) : 100) + "%";
-    $("progTxt").textContent = `縮小画像 ${st.thumbs}/${tt}`;
+    if (st.named) S.named = true;   // この答え（名前つき）で全部の名前を受け取った
+    S.st = st;
+    S.samples.push([performance.now(), st.thumbs]);
+    loadProgress();
     if (!st.total) $("grid").innerHTML = '<div class="empty">このロットには画像がありません（img フォルダに CAB・画像フォルダ・画像ファイルなし）</div>';
     if (st.named && S.mapGen !== gen) { S.mapGen = gen; loadImgMap(gen); }
-    if (st.finished) {
-      clearInterval(S.poll);
-      const ng = st.cabs.filter((c) => c.state === "error").length;
-      const kd = st.kinds || {}, kl = [kd.cab ? `CAB ${kd.cab}` : "", kd.dir ? `フォルダ ${kd.dir}` : "", kd.loose ? "直下" : ""].filter(Boolean).join("・");
-      status(`${S.items.length} 枚 / ${kl || "画像なし"}${ng ? ` / 失敗 ${ng}` : ""} / ${st.elapsed}秒`, ng > 0);
-    }
+    if (st.finished) clearInterval(S.poll);
+    finishIfDone();
+  }
+  // 済んだら下の帯に結果を出す（縮小画像・カード・対応付けの全部が済んでから）
+  function finishIfDone() {
+    const st = S.st;
+    if (!st || !st.finished || S.queue.length || S.phase.link !== "done" || S.finishedGen === S.gen) return;
+    if (!loadModel().all) return;
+    S.finishedGen = S.gen;
+    const ng = st.cabs.filter((c) => c.state === "error").length;
+    const kd = st.kinds || {}, kl = [kd.cab ? `CAB ${kd.cab}` : "", kd.dir ? `フォルダ ${kd.dir}` : "", kd.loose ? "直下" : ""].filter(Boolean).join("・");
+    status(`${S.items.length} 枚 / ${kl || "画像なし"}${ng ? ` / 失敗 ${ng}` : ""} / ${((performance.now() - S.t0) / 1000).toFixed(1)}秒`, ng > 0);
   }
 
   function renderTabs(groups) {
@@ -214,7 +224,8 @@
       b.type = "button"; b.textContent = g; b.dataset.g = g; b.classList.toggle("on", g === S.group);
       b.title = "画像フォルダ切替";
       b.addEventListener("click", async () => {
-        Object.assign(S, { group: g, seen: new Set(), items: [], cur: -1, imap: {}, map: null });
+        Object.assign(S, { group: g, seen: new Set(), items: [], cur: -1, imap: {}, map: null, queue: [], named: false, drawn: 0 });
+        cardIO.disconnect(); seenCards.clear();
         $("grid").innerHTML = ""; await poll(S.gen); loadImgMap(S.gen);
       });
       box.appendChild(b);
@@ -222,19 +233,23 @@
   }
 
   // ================================================================ thumbnails as cards
+  // 数万枚でも画面を止めない: 塊（CAB）の順を覚えて 1 塊ずつまとめて差し込み（2 乗にしない）、カードは 1 回 12ms までに分けて並べる
+  // （並べる間も進みが動き、操作できる）。並べるのは空の枠だけで、中身（見出し・画像・欠陥）は画面に近づいた枠にだけ描く。
+  // 対応付けなどが届いたら版（cardVer）を上げ、見えている枠だけ描き直す（ほかは見えたときに描く）
   const key = (it) => `${it.g}/${it.cab}/${it.name}`;
   const mkey = (it) => `${it.cab}/${it.name}`;
-  function insertItem(it) {
-    let i = S.items.findIndex((x) => { const c = natcmp(x.cab, it.cab); return c > 0 || (c === 0 && natcmp(x.name, it.name) > 0); });
-    if (i < 0) i = S.items.length;
-    S.items.splice(i, 0, it);
-    if (S.cur >= i) S.cur++;
+  const BUDGET = 12;
+  function insertBlock(rank, its) {
+    let lo = 0, hi = S.items.length;   // 後ろの塊（rank が大きい）の最初の位置
+    while (lo < hi) { const m = (lo + hi) >> 1; if (S.items[m].rank > rank) hi = m; else lo = m + 1; }
+    S.items.splice(lo, 0, ...its);
+    if (S.cur >= lo) S.cur += its.length;
   }
   function renderGrid(st) {
     const box = $("grid");
     const empty = box.querySelector(".empty"); if (empty && st.total) empty.remove();
-    for (const c of st.cabs) {
-      if (c.group !== S.group) continue;
+    st.cabs.forEach((c, rank) => {
+      if (c.group !== S.group) return;
       const id = "cab_" + c.cab;
       let sec = document.getElementById(id);
       if (!sec) {
@@ -244,64 +259,151 @@
         const ph = document.createElement("div"); ph.className = "ph"; ph.id = id + "_ph"; ph.textContent = "読込中";
         box.appendChild(ph);
       }
+      const n = c.images ? c.images.length : c.n;
       const s = sec.querySelector(".st");
       s.className = "st " + c.state;
-      s.textContent = { pending: "読込中", running: "読込中", done: `${c.images.length}枚`, error: "失敗" }[c.state];
+      s.textContent = { pending: "読込中", running: "読込中", done: `${n}枚`, error: "失敗" }[c.state];
       if (c.error) s.title = c.error;
-      const ph = document.getElementById(id + "_ph");
-      if (c.state === "done" && !S.seen.has(c.cab)) {
-        S.seen.add(c.cab);
-        let anchor = ph || sec;
-        for (const name of c.images) {
-          const it = { g: c.group, cab: c.cab, name };
-          insertItem(it);
-          const d = document.createElement("div");
-          d.className = "th"; d.dataset.key = key(it);
-          d.innerHTML = cardHtml(it);
-          d.querySelector("img").src = "/thumb?" + q({ lot: S.lot.path, g: it.g, cab: it.cab, name });
-          d.addEventListener("click", () => select(idxOf(it)));
-          d.addEventListener("dblclick", () => { select(idxOf(it)); openViewer(); });
-          anchor.after(d); anchor = d;
-        }
-        if (ph) ph.remove();
-        if (S.cur < 0 && S.items.length) select(0);
-      } else if (ph) ph.textContent = s.textContent;
-    }
+      const sk = c.group + "/" + c.cab;
+      if (c.state === "done" && c.images && !S.seen.has(sk)) {
+        S.seen.add(sk);
+        const its = c.images.map((name) => ({ g: c.group, cab: c.cab, name, rank }));
+        insertBlock(rank, its);
+        S.queue.push({ id, its, at: 0 });
+      } else if (c.state !== "done") { const ph = document.getElementById(id + "_ph"); if (ph) ph.textContent = s.textContent; }
+    });
+    S.total = st.cabs.filter((c) => c.group === S.group).reduce((a, c) => a + (c.images ? c.images.length : c.n || 0), 0);
+    drainCards(S.gen);
+  }
+  // 並べ待ちのカードを、1 回 BUDGET ms まで描いて次の画面の描き替えに譲る
+  function drainCards(gen) {
+    if (S.draining) return;
+    S.draining = true;
+    const step = () => {
+      if (gen !== S.gen) { S.draining = false; return; }
+      const t = performance.now();
+      while (S.queue.length && performance.now() - t < BUDGET) {
+        const job = S.queue[0], ph = document.getElementById(job.id + "_ph");
+        const anchor = job.last || ph || document.getElementById(job.id);
+        const part = job.its.slice(job.at, job.at + 1000);
+        anchor.insertAdjacentHTML("afterend", part.map((it) => `<div class="th" data-key="${esc(key(it))}"></div>`).join(""));
+        job.last = anchor;
+        for (let k = 0; k < part.length; k++) { job.last = job.last.nextElementSibling; cardIO.observe(job.last); }
+        job.at += part.length;
+        S.drawn = (S.drawn || 0) + part.length;
+        if (job.at >= job.its.length) { if (ph) ph.remove(); S.queue.shift(); }
+      }
+      if (S.cur < 0 && S.items.length && document.querySelector("#grid .th")) select(0);
+      loadProgress();
+      if (S.queue.length) requestAnimationFrame(step);
+      else { S.draining = false; finishIfDone(); }
+    };
+    requestAnimationFrame(step);
   }
   const unitLabel = (c) => (c.kind === "dir" ? `${c.cab}/` : c.kind === "loose" ? "(直下の画像)" : `${c.cab}.cab`);
-  const idxOf = (it) => S.items.findIndex((x) => key(x) === key(it));
+  const idxOf = (it) => S.items.findIndex((x) => x.cab === it.cab && x.name === it.name && x.g === it.g);
+  const thumbSrc = (it) => "/thumb?" + q({ lot: S.lot.path, g: it.g, cab: it.cab, name: it.name });
 
   const markHtml = (m) => `<span class="mk" style="color:${m.kcolor}" title="${esc(m.kname)}">${esc(m.kmark || "●")}</span>`;
-  function cardHtml(it) {
-    const m = S.imap[mkey(it)];
-    const head = m && m.no != null ? `欠陥No:${m.no}` : esc(`${it.cab}/${it.name}`);
+  // カード = 枠（見出し・画像）＋欠陥の中身（cm）。対応付けが届いたら見出しと cm だけを書き替える（画像は読み直さない）
+  const seenCards = new Set();
+  const cardIO = new IntersectionObserver((es) => {
+    for (const e of es) { if (e.isIntersecting) { seenCards.add(e.target); fillCard(e.target); } else seenCards.delete(e.target); }
+  }, { root: $("grid"), rootMargin: "800px 0px" });
+  function fillCard(th) {
+    if (th.dataset.v === String(S.cardVer)) return;
+    const it = itemOf(th), m = S.imap[mkey(it)];
+    if (!th.firstChild) th.innerHTML = `<fieldset><legend></legend><div class="ph-img"><img loading="lazy" decoding="async" alt="" draggable="false" src="${esc(thumbSrc(it))}"></div></fieldset><div class="cm"></div>`;
+    th.querySelector(":scope>fieldset>legend").innerHTML = cardHead(it, m);
+    th.querySelector(":scope>.cm").innerHTML = cardMeta(it, m);
+    th.style.setProperty("--sc", m ? m.scolor : "#9aa3ad");
+    th.title = m ? `${m.sname} / ${m.kname}` : "";
+    th.dataset.v = S.cardVer;
+  }
+  const cardHead = (it, m) => (m && m.no != null ? `欠陥No:${m.no}` : esc(`${it.cab}/${it.name}`));
+  function cardMeta(it, m) {
     const meta = m
       ? `<fieldset class="meta"><legend>${esc(m.kname)}${markHtml(m)}</legend>` +
         S.card.map((c, i) => `<div class="rw"><span>${esc(c.label)}</span><b>${esc(m.vals[i] ?? "")}</b></div>`).join("") + `</fieldset>`
       : `<fieldset class="meta"><legend class="sub">${Object.keys(S.imap).length ? "欠陥データなし" : "…"}</legend></fieldset>`;
     const pn = m ? S.pairN[m.d] || 0 : 0;
     const face = m ? `<span style="color:${m.scolor}">■ ${esc(m.sname)}${pn ? ` <span class="tbadge" data-pairs="${m.d}" title="転写候補を表示">転写候補 ${pn}</span>` : ""}</span>` : "<span></span>";
-    return `<fieldset><legend>${head}</legend><div class="ph-img"><img loading="lazy" decoding="async" alt="" draggable="false"></div></fieldset>${meta}<div class="nm2">${face}<span>${esc(it.cab)}/${esc(it.name)}</span></div>`;
+    return `${meta}<div class="nm2">${face}<span>${esc(it.cab)}/${esc(it.name)}</span></div>`;
   }
+  // 描いたカードの中身を書き替える（対応付け・転写候補が届いたとき）。いま見えている枠だけ。ほかは見えたときに描く
   function updateCards() {
-    for (const th of document.querySelectorAll(".th")) {
-      const [g, cab, name] = th.dataset.key.split("/");
-      const it = { g, cab, name };
-      const img = th.querySelector("img").src;
-      const m = S.imap[mkey(it)];
-      th.innerHTML = cardHtml(it);
-      th.querySelector("img").src = img;
-      th.style.setProperty("--sc", m ? m.scolor : "#9aa3ad");
-      th.title = m ? `${m.sname} / ${m.kname}` : "";
-    }
+    S.cardVer = (S.cardVer || 0) + 1;
+    $("grid").style.setProperty("--rows", S.card.length);
+    for (const th of seenCards) if (th.isConnected) fillCard(th); else seenCards.delete(th);
+  }
+  $("grid").addEventListener("click", (e) => { const th = e.target.closest(".th"); if (th && !e.target.closest(".tbadge")) select(idxOf(itemOf(th))); });
+  $("grid").addEventListener("dblclick", (e) => { const th = e.target.closest(".th"); if (th) { select(idxOf(itemOf(th))); openViewer(); } });
+  const itemOf = (th) => { const [g, cab, name] = th.dataset.key.split("/"); return { g, cab, name }; };
+
+  // ================================================================ loading progress
+  // 読み込みの段階（何を・どこまで・あとどれくらい・もう使えるか）。数は /api/status と、画面で並べた数から。
+  // 見せ方は 3 回の案出しと採点で R4 に決めた（program/tools/proposals/2026-10-26-load-progress*.）: ツールバーの下の 1 つの帯
+  // （いまの段階・数・棒・残り時間・操作できます／段階の並び）。使えるようになるまでは大きく、使えると小さく（場所は変えない）。
+  // 左下の状態も同じ言葉
+  function loadModel() {
+    const st = S.st || { total: 0, done: 0, thumbs: 0, thumbs_total: 0 }, ph = S.phase || {};
+    const now = performance.now();
+    // 縮小画像の速さ: 直近 3 秒の進み（始めは全体の平均）
+    const sm = S.samples || [], last = sm[sm.length - 1];
+    const old = sm.find((x) => x[0] >= now - 3000) || sm[0];
+    const rate = last && old && last[0] > old[0] ? ((last[1] - old[1]) * 1000) / (last[0] - old[0]) : 0;
+    const eta = st.finished ? 0 : rate > 0 ? (st.thumbs_total - st.thumbs) / rate : null;
+    const an = ["map", "pairs", "pitch"].filter((k) => ph[k] === "done").length;
+    const fin = (s) => s === "done" || s === "error";
+    const steps = [
+      { k: "names", label: "画像の一覧", verb: "を読んでいます", num: `CAB ${fmtN(st.done)} / ${fmtN(st.total)}`, frac: st.total ? st.done / st.total : 0, state: S.named || (st.total && st.done >= st.total) ? "done" : "run" },
+      { k: "info", label: "欠陥データ", verb: "を読んでいます", num: "", frac: null, state: ph.info === "done" ? "done" : ph.info === "error" ? "error" : "run" },
+      { k: "cards", label: "画像の枠", verb: "を並べています", num: `${fmtN(S.drawn || 0)} / ${fmtN(S.total || 0)}`, frac: S.total ? (S.drawn || 0) / S.total : 0, state: S.named && !S.queue.length ? "done" : S.named ? "run" : "wait" },
+      { k: "link", label: "画像と欠陥の対応", verb: "を付けています", num: "", frac: null, state: ph.link === "run" ? "run" : fin(ph.link) ? ph.link : "wait" },
+      { k: "analysis", label: "MAP・転写・ピッチ", verb: "を計算しています", num: `${an} / 3`, frac: an / 3, state: an === 3 ? "done" : ph.link === "done" ? "run" : "wait" },
+      { k: "thumbs", label: "縮小画像", verb: "を作っています", num: `${fmtN(st.thumbs)} / ${fmtN(st.thumbs_total)}`, frac: st.thumbs_total ? st.thumbs / st.thumbs_total : 1, state: st.finished ? "done" : S.named ? "run" : "wait", eta },
+    ];
+    // 使える: 一覧・欠陥データ・画像の枠がそろった（縮小画像は見ている所から先に作るので、待たなくてよい）
+    const usable = ["names", "info", "cards"].every((k) => fin(steps.find((s) => s.k === k).state));
+    const all = steps.every((s) => fin(s.state));
+    // いま見せる段階: 走っている物のうち、まだ使えないなら前の方、使えるなら縮小画像（いちばん長い）を先に
+    const runs = steps.filter((s) => s.state === "run");
+    const cur = (usable && runs.find((s) => s.k === "thumbs")) || runs[0] || null;
+    return { steps, rate, eta, usable, all, cur, st };
+  }
+  let progFrame = 0;
+  function loadProgress() {
+    if (progFrame) return;
+    progFrame = requestAnimationFrame(() => { progFrame = 0; renderLoad(loadModel()); });
+  }
+  const fmtN = (n) => Number(n || 0).toLocaleString("ja-JP");
+  const fmtSec = (s) => (s == null ? "計算中" : s < 1 ? "1 秒未満" : s < 60 ? `約 ${Math.ceil(s)} 秒` : `約 ${Math.floor(s / 60)} 分 ${Math.round(s % 60)} 秒`);
+  const ICON = { done: "✓", run: "●", wait: "○", error: "!" };
+  function renderLoad(m) {
+    if (m.all) finishIfDone();
+    const band = $("loadBand"), show = !!S.lot && !m.all && S.phase;
+    band.hidden = !show;
+    if (!show) return;
+    const c = m.cur || m.steps.find((s) => s.state !== "done") || m.steps[5];
+    const eta = c.k === "thumbs" ? fmtSec(m.eta) : "計算中";
+    const steps = m.steps.map((s) => `<span class="lpst ${s.state}${s.state === "done" ? " lpdn" : s.state === "wait" ? " lpwt" : ""}" title="${esc(s.label)}"><i>${ICON[s.state]}</i>${esc(s.label)}</span>`).join("");
+    const nd = m.steps.filter((s) => s.state === "done").length, waits = m.steps.filter((s) => s.state === "wait");
+    band.classList.toggle("big", !m.usable);
+    band.innerHTML = `<div class="r1"><span class="now">${esc(c.label)}<em>${esc(c.verb)}</em></span><span class="num">${esc(c.num)}</span>
+      <div class="lpbar${c.frac == null ? " ind" : ""}"><i style="width:${c.frac == null ? 30 : Math.round(c.frac * 100)}%"></i></div><span class="sub">あと</span><span class="lpeta">${esc(eta)}</span>${m.usable ? '<span class="use">✓ 操作できます</span>' : ""}</div>
+      <div class="r2">${nd ? `<span class="lpst done lpsum" title="済んだ段階"><i>✓</i>済み ${nd} / 6</span>` : ""}${steps}${waits.length ? `<span class="lpst wait lpwsum" title="${esc(waits.map((s) => s.label).join("・"))}"><i>○</i>残り ${waits.length} 段階</span>` : ""}</div>
+      ${m.usable ? "" : '<div class="r3 sub" title="縮小画像は、見ている所から先に作ります">画像の一覧と欠陥データがそろうと、操作できるようになります</div>'}`;
+    if (!S.finishedGen || S.finishedGen !== S.gen) status(`${c.label}${c.verb}${c.num ? " " + c.num : ""} ・ あと ${eta}`);
   }
 
   // ================================================================ detect data
   async function loadImgMap(gen) {
     if (!S.lot || !S.group) return;
     let d;
-    try { d = await api("/api/imgmap?" + q({ lot: S.lot.path, g: S.group })); } catch (e) { return; }
+    if (S.phase.link !== "done") { S.phase.link = "run"; loadProgress(); }
+    try { d = await api("/api/imgmap?" + q({ lot: S.lot.path, g: S.group })); } catch (e) { if (gen === S.gen) { S.phase.link = "error"; loadProgress(); } return; }
     if (gen !== S.gen) return;
+    S.phase.link = "done";
     S.imap = d.map; S.sides = d.sides || {}; S.kinds = d.kinds || {}; S.card = d.card || [];
     updateCards();
     renderMapSide();
@@ -375,11 +477,11 @@
     try {
       const d = await api("/api/info?" + q({ lot: S.lot.path }));
       if (gen !== S.gen) return;
-      S.LOT = d;
+      S.LOT = d; S.phase.info = "done"; loadProgress();
       if (!Object.keys(S.sides).length) S.sides = d.sides || {};
       if (!Object.keys(S.kinds).length) S.kinds = d.kinds || {};
       renderLot(); renderSources(); renderImgInfo(); renderMapSide();
-    } catch (e) { if (gen === S.gen) $("lotInfo").innerHTML = `<div class="hint err">${esc(e.message)}</div>`; }
+    } catch (e) { if (gen === S.gen) { $("lotInfo").innerHTML = `<div class="hint err">${esc(e.message)}</div>`; S.phase.info = "error"; loadProgress(); } }
   }
   const lotPins = (place) => (S.LOT ? S.LOT.pinned.filter((p) => p.place === place) : []);
   function renderLot() {
@@ -442,50 +544,112 @@
     const pos = new Map(ord.map((k, i) => [k, i]));
     return rows.map((r, i) => [r, pos.has(r[0]) ? pos.get(r[0]) : 1e6 + i]).sort((a, b) => a[1] - b[1]).map((x) => x[0]);
   }
-  function renderSources() {
-    const f = $("srcFilter").value.trim().toLowerCase();
-    const match = (k, v, l) => !f || (k + " " + v + " " + l).toLowerCase().includes(f);
-    const opened = new Set([...document.querySelectorAll("#srcList details[open]")].map((x) => x.dataset.k));
-    const isOpen = (k, def) => (opened.size ? opened.has(k) : def) || !!f;
-    let h = "";
-    if (S.img && S.img.detect.length) {
-      const rows = applySrcOrder("dat:DETECT_INFO", S.img.detect).filter(([k, v, l]) => match(k, v, l)).map(([k, v, l]) => srcRow("image", "dat:DETECT_INFO", k, v, l)).join("");
-      h += `<details class="xf" data-k="det"${isOpen("det", true) ? " open" : ""}><summary>画像：DETECT_INFO（選択画像）</summary><table class="kv">${rows}</table></details>`;
-    }
-    if (S.img) for (const x of S.img.xml) {
-      h += `<details class="xf" data-k="ix:${esc(x.name)}"${isOpen("ix:" + x.name, false) ? " open" : ""}><summary>画像：${esc(x.name)}</summary><table class="kv">${x.items.filter(([k, v]) => match(k, v, "")).map(([k, v]) => srcRow("image", "@image", k, v, "")).join("")}</table></details>`;
-    }
+  // ---------------------------------------------------------------- データ項目の窓（3 回の案出しと採点で M に決めた:
+  // program/tools/proposals/2026-10-26-data-items*.）左に分類・中に探せる項目・右に表示先（いつも右の 1 か所）。
+  // 項目はドラッグで表示先へ（窓の中の表示先にも、窓の外の本物の枠にも置ける）。行を選ぶと、その行に置ける先がボタンで出て、
+  // 押して出し入れできる（置き済みは ✓）。名前は置いた表示項目の名前でも探せる
+  const SRC = { cat: 0, pick: null };
+  // 行の札は短い名前（列の幅に収める。長い名前は表示先の列にある）
+  const PLACE_SHORT = { list: "一覧", summary: "サマリ", lot: "ロット情報", card: "画像表示", image: "画像情報", mapx: "MAP 横軸", mapy: "MAP 縦軸" };
+  const PLACE_SUB = { list: "左の一覧の各行", summary: "中央上の帯", lot: "右列", card: "各画像の下", image: "右列の上", mapx: "MAP の横", mapy: "MAP の縦" };
+  // 表示先の位置の小さな図（画面のどこに出るか）
+  const POS = { list: [0, 0, 22, 100], summary: [25, 0, 47, 20], card: [25, 24, 47, 14], image: [75, 0, 25, 30], mapx: [75, 34, 25, 12], mapy: [75, 48, 25, 12], lot: [75, 64, 25, 36] };
+  const ico = (pl) => `<span class="pico" aria-hidden="true">${Object.entries(POS).map(([k, [x, y, w, h]]) => `<i style="left:${x}%;top:${y}%;width:${w}%;height:${h}%"${k === pl ? ' class="on"' : ""}></i>`).join("")}</span>`;
+  const scopeTag = (s) => `<span class="dsc ${s}">${s === "image" ? "画像ごと" : s === "lot" ? "ロット" : "どちらも"}</span>`;
+  const wildKey = (k) => k.replace(/\[\d+\]/g, "[*]");
+  // その行（file・key）を出している表示項目（[*] でまとめた物も）
+  const pinsOf = (file, key) => S.pins.filter((p) => p.file === file && (p.key === key || p.key === wildKey(key)));
+  function srcGroups() {
+    const gs = [];
+    const add = (src, name, scope, file, items, info = "", order = file) =>
+      gs.push({ src, name, scope, file, info, rows: applySrcOrder(order, items).map(([k, v, l]) => {
+        const pin = pinsOf(file, k)[0];
+        return { key: k, val: v, l: l || "", label: pin?.label || l || shortKey(k) };
+      }) });
+    if (S.img && S.img.detect.length) add("画像", "DETECT_INFO（選んだ画像）", "image", "dat:DETECT_INFO", S.img.detect);
+    if (S.img) for (const x of S.img.xml) add("画像", x.name, "image", "@image", x.items);
     const d = S.LOT;
     if (d) {
-      if (d.meta) {
-        const rows = d.meta.filter(([k, v, l]) => match(k, v, l)).map(([k, v, l]) => srcRow("lot", "@lot", k, v, l)).join("");
-        if (rows) h += `<details class="xf" data-k="meta"${isOpen("meta", false) ? " open" : ""}><summary>ロット：フォルダ名（作業日時）</summary><table class="kv">${rows}</table></details>`;
-      }
-      for (const x of d.dat) {
-        const info = x.error ? `<span class="err">${esc(x.error)}</span>` : `${x.count}件`;
-        const rows = applySrcOrder("dat:" + x.name, x.fields).filter(([k, v, l]) => match(k, v, l)).map(([k, v, l]) => srcRow("lot", "dat:" + x.name, k, v, l)).join("");
-        if (f && !rows) continue;
-        h += `<details class="xf" data-k="d:${esc(x.name)}"${isOpen("d:" + x.name, false) ? " open" : ""}><summary>ロット：${esc(x.name)}.dat <span class="sub">${info}</span></summary>${rows ? `<table class="kv">${rows}</table>` : `<div class="hint">${x.count > 3 ? "レコード多数（画像・MAPで使用）" : ""}</div>`}</details>`;
-      }
-      for (const x of d.xml) {
-        const rows = applySrcOrder(x.glob, x.items).filter(([k, v, l]) => match(k, v, l)).map(([k, v, l]) => srcRow("lot", x.glob, k, v, l)).join("");
-        if (f && !rows) continue;
-        h += `<details class="xf" data-k="x:${esc(x.name)}"${isOpen("x:" + x.name, false) ? " open" : ""}><summary>ロット：${esc(x.name)} (${x.items.length})</summary><table class="kv">${rows}</table></details>`;
-      }
-      h += `<details class="xf" data-k="files"${isOpen("files", false) ? " open" : ""}><summary>付帯ファイル (${d.files.length})</summary><table class="kv">${d.files.map((x) => kv(x.name, (x.size / 1024).toFixed(1) + " KB")).join("")}</table></details>`;
+      if (d.meta) add("ロット", "フォルダ名（作業日時）", "lot", "@lot", d.meta);
+      for (const x of d.dat) add("ロット", x.name + ".dat", "lot", "dat:" + x.name, x.fields, x.error ? x.error : `${x.count}件${x.count > 3 ? "（レコード多数: 画像・MAP で使う）" : ""}`);
+      for (const x of d.xml) add("ロット", x.name, "lot", x.glob, x.items);
+      gs.push({ src: "ロット", name: "付帯ファイル", scope: null, file: "", info: `${d.files.length} 件`, rows: d.files.map((x) => ({ key: x.name, val: (x.size / 1024).toFixed(1) + " KB", l: "", label: x.name })) });
     }
-    $("srcList").innerHTML = h || '<div class="hint">データなし</div>';
+    return gs;
   }
-  $("srcFilter").addEventListener("input", renderSources);
+  function renderSources() {
+    if ($("srcModal").hidden) return;
+    // 行を押している間・ドラッグ中に描き直すと、つかんでいる行が消えてドラッグが切れる。離してから描く（pointerup・dragend）
+    if (DRAG || SRC.hold) { SRC.dirty = true; return; }
+    SRC.dirty = false;
+    const f = $("srcFilter").value.trim().toLowerCase();
+    const hit = (r) => !f || (r.label + " " + r.key + " " + r.val + " " + r.l).toLowerCase().includes(f);
+    const gs = srcGroups();
+    SRC.cat = Math.min(SRC.cat, Math.max(0, gs.length - 1));
+    const total = gs.reduce((a, g) => a + g.rows.length, 0), hits = gs.reduce((a, g) => a + g.rows.filter(hit).length, 0);
+    $("srcCount").textContent = f ? `${hits} 件` : `${total} 項目`;
+    $("srcCats").innerHTML = gs.map((g, i) => { const n = f ? g.rows.filter(hit).length : g.rows.length;
+      return `<button type="button" class="dcat${i === SRC.cat && !f ? " on" : ""}${!n ? " zero" : ""}" data-cat="${i}" title="${esc(g.src + "：" + g.name)}"><span>${esc(g.src)}：${esc(g.name)}</span><span class="n">${n}</span></button>`; }).join("") || '<div class="hint">ロットを選ぶと出ます</div>';
+    const hl = (s) => { const t = esc(s); if (!f) return t; const i = t.toLowerCase().indexOf(esc(f).toLowerCase()); return i < 0 ? t : t.slice(0, i) + "<mark>" + t.slice(i, i + esc(f).length) + "</mark>" + t.slice(i + esc(f).length); };
+    const show = f ? gs.filter((g) => g.rows.some(hit)) : gs.slice(SRC.cat, SRC.cat + 1);
+    $("srcRows").innerHTML = show.map((g) => {
+      const rs = g.rows.filter(hit);
+      const head = `<div class="dgh">${esc(g.src)}：<b>${esc(g.name)}</b><span class="sub"> ${rs.length} 件${g.info ? " ・ " + esc(g.info) : ""}</span></div>`;
+      if (!g.scope) return head + `<table class="dtab">${rs.map((r) => `<tr><td class="dl1">${hl(r.label)}</td><td class="dv">${hl(r.val)}</td><td></td></tr>`).join("")}</table>`;
+      if (!rs.length) return head + '<div class="hint">（値の項目なし）</div>';
+      return head + `<table class="dtab"><colgroup><col><col style="width:180px"><col style="width:220px"></colgroup>` + rs.map((r) => {
+        const placed = [...new Set(pinsOf(g.file, r.key).map((p) => p.place))];
+        const tags = placed.slice(0, 2).map((p) => `<span class="dpl" title="${esc(PLACE[p])}">${esc(PLACE_SHORT[p])}</span>`).join("") + (placed.length > 2 ? `<span class="dpl more">+${placed.length - 2}</span>` : "");
+        const picked = SRC.pick && SRC.pick.file === g.file && SRC.pick.key === r.key;
+        const row = `<tr class="src drow${picked ? " picked" : ""}" draggable="true" data-scope="${g.scope}" data-file="${esc(g.file)}" data-key="${esc(r.key)}" data-val="${esc(r.val)}" data-label="${esc(r.l)}" title="ドラッグで表示先へ／押すと置く先のボタン">
+          <td class="dl1"><span class="grip" aria-hidden="true">⠿</span><b>${hl(r.label)}</b><small>${hl(r.key)} ${scopeTag(g.scope)}</small></td>
+          <td class="dv" title="${esc(r.val)}">${hl(r.val || "—")}</td><td class="dps">${tags}<span class="dgo">${picked ? "▴" : "置く先 ▾"}</span></td></tr>`;
+        if (!picked) return row;
+        const btns = Object.keys(PLACE).filter((pl) => ok(g.scope, pl)).map((pl) => { const on = placed.includes(pl);
+          return `<button type="button" class="mb${on ? " on" : ""}" data-toggle="${pl}" aria-pressed="${on}" title="${on ? "押すと外す" : "押すと置く"}">${ico(pl)}${esc(PLACE[pl])}${on ? " ✓" : ""}</button>`; }).join("");
+        return row + `<tr class="mq"><td colspan="3"><span class="sub">置く先:</span>${btns}<button type="button" class="lnk" data-named="1">名前を付けて置く…</button></td></tr>`;
+      }).join("") + "</table>";
+    }).join("") || `<div class="hint">${f ? "見つかりません（項目名・キー・値で探します）" : "ロットを選ぶと出ます"}</div>`;
+    $("srcPlaces").innerHTML = Object.keys(PLACE).map((pl) => `<div class="dplace dz" data-drop="${pl}"><div class="dph">${ico(pl)}<b>${esc(PLACE_SHORT[pl])}</b><span class="sub">${esc(PLACE_SUB[pl])}</span>${scopeTag(NEED[pl] === "any" ? "any" : NEED[pl])}</div>
+      <div class="dchips"><span class="pins" data-place="${pl}">${S.pins.filter((p) => p.place === pl).map((p) => chip({ id: p.id, label: p.label || shortKey(p.key), value: "" }, pl, false)).join("") || '<span class="hint">ここへドラッグ</span>'}</span></div></div>`).join("");
+  }
+  function openSources() {
+    $("srcModal").hidden = false; renderSources();
+    $("srcFilter").focus(); $("srcFilter").select();
+  }
+  const closeSources = () => { $("srcModal").hidden = true; $("pinPop").hidden = true; };
+  $("btnSources").addEventListener("click", openSources);
+  $("srcClose").addEventListener("click", closeSources);
+  $("srcModal").addEventListener("mousedown", (e) => { if (e.target === $("srcModal")) closeSources(); });
+  $("srcFilter").addEventListener("input", () => { SRC.pick = null; renderSources(); });
+  $("srcCats").addEventListener("click", (e) => { const b = e.target.closest("[data-cat]"); if (!b) return; SRC.cat = +b.dataset.cat; $("srcFilter").value = ""; SRC.pick = null; renderSources(); });
+  $("srcRows").addEventListener("pointerdown", (e) => { if (e.target.closest("tr.src")) SRC.hold = true; });
+  const release = () => { if (!SRC.hold) return; SRC.hold = false; if (SRC.dirty && !DRAG) renderSources(); };
+  document.addEventListener("pointerup", release);
+  document.addEventListener("pointercancel", release);
+  $("srcRows").addEventListener("click", async (e) => {
+    const tg = e.target.closest("[data-toggle]");
+    if (tg) {
+      e.stopPropagation();
+      const tr = tg.closest("tr").previousElementSibling, pl = tg.dataset.toggle;
+      const have = pinsOf(tr.dataset.file, tr.dataset.key).filter((p) => p.place === pl);
+      try {
+        if (have.length) for (const p of have) await api("/api/pins/" + encodeURIComponent(p.id), { method: "DELETE" });
+        else await send("/api/pins", { scope: tr.dataset.scope, file: tr.dataset.file, key: tr.dataset.key, label: tr.dataset.label || autoLabel(tr.dataset.key), place: pl });
+        await afterPins(); status(have.length ? `「${PLACE[pl]}」から外しました` : `「${PLACE[pl]}」に置きました`);
+      } catch (er) { status(er.message, true); }
+      return;
+    }
+    const nm = e.target.closest("[data-named]");
+    if (nm) { e.stopPropagation(); openPop(nm.closest("tr").previousElementSibling, nm); return; }
+    const tr = e.target.closest("tr.src"); if (!tr) return;
+    const same = SRC.pick && SRC.pick.file === tr.dataset.file && SRC.pick.key === tr.dataset.key;
+    SRC.pick = same ? null : { file: tr.dataset.file, key: tr.dataset.key };
+    renderSources();
+  });
 
   function kv(k, v) { return `<tr><td class="k">${esc(k)}</td><td>${esc(v)}</td><td class="b"></td></tr>`; }
   const shortKey = (k) => k.split("/").slice(-2).join("/");
-  function srcRow(scope, file, k, v, l) {
-    const lab = l || shortKey(k);
-    return `<tr class="src" draggable="true" data-scope="${scope}" data-file="${esc(file)}" data-key="${esc(k)}" data-val="${esc(v)}" data-label="${esc(l || "")}">
-      <td class="k" title="${esc(k)}">${esc(lab)}${l ? `<small>${esc(shortKey(k))}</small>` : ""}</td><td>${esc(v)}</td>
-      <td class="b"><button type="button" class="pb" data-add="1" title="表示先を選んで追加">＋</button></td></tr>`;
-  }
   function pinRow(p, place, num) {
     const movable = place !== "x";
     return `<tr class="pinned"${movable ? ` draggable="true" data-pid="${esc(p.id)}" data-place="${place}"` : ""}><td class="k" title="ドラッグで並べ替え・移動／ダブルクリックで名前変更">${esc(p.label || "（無題）")}</td><td${num ? ' class="num"' : ""}>${esc(p.value || "—")}</td><td class="b">${movable ? `<button type="button" class="pb" data-unpin="${esc(p.id)}" title="表示から外す">×</button>` : ""}</td></tr>`;
@@ -513,9 +677,11 @@
     e.dataTransfer.effectAllowed = "copyMove";
     e.dataTransfer.setData("text/plain", DRAG.key || DRAG.id);
     if (ok(DRAG.scope, "list")) requestAnimationFrame(() => document.body.classList.add("dragging"));
+    // データ項目の窓の表示先: 置ける所を緑に、置けない所を薄く
+    document.querySelectorAll("#srcPlaces .dplace").forEach((z) => { z.classList.toggle("ok", ok(DRAG.scope, z.dataset.drop)); z.classList.toggle("ng", !ok(DRAG.scope, z.dataset.drop)); });
   });
   const clearIns = () => document.querySelectorAll(".ins-before,.ins-after,.ins-l,.ins-r").forEach((x) => x.classList.remove("ins-before", "ins-after", "ins-l", "ins-r"));
-  document.addEventListener("dragend", () => { DRAG = null; clearIns(); document.body.classList.remove("dragging"); document.querySelectorAll(".dz.over").forEach((x) => x.classList.remove("over")); });
+  document.addEventListener("dragend", () => { DRAG = null; SRC.hold = false; if (SRC.dirty) renderSources(); clearIns(); document.querySelectorAll("#srcPlaces .dplace").forEach((z) => z.classList.remove("ok", "ng")); document.body.classList.remove("dragging"); document.querySelectorAll(".dz.over").forEach((x) => x.classList.remove("over")); });
   const ok = (scope, place) => NEED[place] === "any" || NEED[place] === scope;
   function insPos(el, e) {
     const r = el.getBoundingClientRect();
@@ -531,7 +697,7 @@
     while (n && !(n.dataset && n.dataset.pid && n.dataset.place === place)) n = n.nextElementSibling;
     return n ? n.dataset.pid : null;
   }
-  const sameBlock = (sr) => DRAG && DRAG.kind === "src" && DRAG.el && sr.closest("#srcList") && sr.parentElement === DRAG.el.parentElement;
+  const sameBlock = (sr) => DRAG && DRAG.kind === "src" && DRAG.el && sr.closest("#srcRows") && sr.parentElement === DRAG.el.parentElement;
   document.addEventListener("dragover", (e) => {
     if (!DRAG) return;
     const sr = e.target.closest?.("tr.src");
@@ -601,8 +767,6 @@
       try { await send("/api/pins/" + encodeURIComponent(p.id), { fmt: opts[(Math.max(0, i) + 1) % opts.length][0] }, "PATCH"); await afterPins(); } catch (er) { status(er.message, true); }
       return;
     }
-    const add = e.target.closest("button[data-add]");
-    if (add) { e.stopPropagation(); openPop(add.closest("tr"), add); return; }
     const un = e.target.closest("[data-unpin]");
     if (un) {
       e.stopPropagation();
@@ -623,7 +787,7 @@
   });
   async function afterPins() {
     S.pins = await api("/api/pins");
-    renderPinZones();
+    renderPinZones(); renderSources();
     if (S.lot) { const gen = S.gen; await loadLotInfo(gen); await loadImgMap(gen); }
     refreshSummaries();
   }
@@ -634,7 +798,7 @@
     let d;
     try { d = await api("/api/map?" + q({ lot: S.lot.path, g: S.group })); } catch (e) { return; }
     if (gen !== S.gen) return;
-    S.map = d;
+    S.map = d; S.phase.map = "done"; loadProgress();
     $("mapMsg").textContent = d.ok ? "" : d.msg;
     $("mapTitle").textContent = d.ok ? `${d.points.length}件（画像あり ${d.points.filter((p) => p[4]).length}）` : "";
     renderMapSide();
@@ -803,7 +967,7 @@
     try { d = await api("/api/pairs?" + q({ lot: S.lot.path, g: S.group || "img", tol, maxdy: md, mirror: $("pMirror").checked ? 1 : 0 })); }
     catch (e) { $("pSum").textContent = e.message; return; }
     if (gen !== S.gen) return;
-    S.P = d;
+    S.P = d; S.phase.pairs = "done"; loadProgress();
     S.D = new Map((d.defects || []).map((x) => [x.i, x]));
     S.pairN = {};
     for (const [f, b] of d.pairs || []) { S.pairN[f] = (S.pairN[f] || 0) + 1; S.pairN[b] = (S.pairN[b] || 0) + 1; }
@@ -811,7 +975,8 @@
     S.pselRef = null; S.psel = null;
     updateCards();
     const t = S.items[S.cur]; if (t) { const el = document.querySelector(`.th[data-key="${CSS.escape(key(t))}"]`); if (el) el.classList.add("sel"); }
-    renderPairs();
+    // 一覧は見ているときだけ描く（候補が数万組あると描くのに 0.5 秒かかる。切り替えたとき setView が描く）
+    if (S.view === "pairs") renderPairs();
   }
 
   function groupsOf() {
@@ -996,9 +1161,9 @@
         n: $("ptN").value, pmin: $("ptPmin").value, pmax: $("ptPmax").value, skip: $("ptSkip").value }));
     } catch (e) { $("ptSum").textContent = e.message; return; }
     if (gen !== S.gen) return;
-    S.PT = d; S.ptsel = null;
+    S.PT = d; S.ptsel = null; S.phase.pitch = "done"; loadProgress();
     $("pitchCnt").textContent = d.ok ? `${d.chains.length}` : "";
-    renderPitch();
+    if (S.view === "pitch") renderPitch();
   }
   function pitchRows() {
     const d = S.PT; if (!d || !d.ok) return [];
@@ -1118,6 +1283,12 @@
   $("vNext").addEventListener("click", () => select(S.cur + 1));
 
   document.addEventListener("keydown", (e) => {
+    // データ項目の窓が開いている間は、窓の中だけ（Esc で閉じる・Ctrl+F で探す欄へ）
+    if (!$("srcModal").hidden) {
+      if (e.key === "Escape") { if (!$("pinPop").hidden) $("pinPop").hidden = true; else closeSources(); e.preventDefault(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") { $("srcFilter").focus(); $("srcFilter").select(); e.preventDefault(); }
+      return;
+    }
     if (e.target.closest("input,select,#pinPop")) { if (e.key === "Escape") $("pinPop").hidden = true; return; }
     if (S.view === "pitch" && $("viewer").hidden && $("pv").hidden) {
       if (e.key === "ArrowRight") { stepPitch(0, 1); e.preventDefault(); return; }

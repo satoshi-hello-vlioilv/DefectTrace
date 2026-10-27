@@ -4,6 +4,7 @@
 //!
 //! 画面を真似る: 開いて（/api/open）、画面 1 枚分（45 枚）の縮小画像を 6 本ずつ並べて頼み（ブラウザが 1 つの相手に並べる数）、
 //! 0.3 秒後に後ろの方（75% の所）の画像を原寸で開き、続けて同じ CAB の次の画像を開く。作業場所は毎回まっさら。
+//!   open    /api/open が返る（画面が読み込みの進みを出し始められる）
 //!   names   /api/status が全部の名前を返す（カードの枠と数を出せる）
 //!   screen  画面 1 枚分の縮小画像が届く
 //!   all     全部の縮小画像ができる（/api/status の finished）
@@ -47,7 +48,15 @@ fn once(lot: &str, home: &Path) -> Value {
     let t0 = Instant::now();
     let body = serde_json::to_vec(&json!({"lot": lot})).unwrap();
     app.handle("POST", "/api/open", "", &body).unwrap();
-    let st: Value = serde_json::from_slice(&app.handle("GET", "/api/status", &q(&[("lot", lot)]), &[]).unwrap().body).unwrap();
+    let opened = t0.elapsed().as_secs_f64();
+    // 名前は裏で読む（開くは待たせない）。全部の名前が分かるまで問い続ける（画面の問い合わせと同じ）
+    let st: Value = loop {
+        let st: Value = serde_json::from_slice(&app.handle("GET", "/api/status", &q(&[("lot", lot)]), &[]).unwrap().body).unwrap();
+        if st["named"] == true {
+            break st;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    };
     let names = t0.elapsed().as_secs_f64();
     let all_imgs: Vec<(String, String, String)> = st["cabs"]
         .as_array()
@@ -111,7 +120,7 @@ fn once(lot: &str, home: &Path) -> Value {
         })
         .map(|k| k / 1024.0);
     let r3 = |x: f64| (x * 1000.0).round() / 1000.0;
-    json!({"names": r3(names), "screen": r3(screen_t), "all": r3(all), "view": r3(view_t), "next": r3(next_t), "cold": r3(cold), "done_ok": done_ok, "rss_mb": rss.map(|x| x.round()),
+    json!({"open": r3(opened), "names": r3(names), "screen": r3(screen_t), "all": r3(all), "view": r3(view_t), "next": r3(next_t), "cold": r3(cold), "done_ok": done_ok, "rss_mb": rss.map(|x| x.round()),
            "cache_mb": r3(size_of(&home.join("cache")) as f64 / 1e6), "images": all_imgs.len(), "workers": app.cfg.workers()})
 }
 

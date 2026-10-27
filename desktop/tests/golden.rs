@@ -3,6 +3,7 @@
 //!
 //! 同じとみなすこと: 数は 1e-9 の差まで・無い鍵と null。違ってよいと決めたこと（版 4.0.0）:
 //! - /api/status: 縮小画像の進み（thumbs など）を足した。elapsed は比べない
+//!   （版 4.0.1: 開くは名前を待たずに返る。golden の流れは finished まで待ってから問うので、答えは変わらない。brief=1 は別の試験）
 //! - 画像の読み込み方を変えた（作業場所に原寸を書かない）ので、/img は中身の指紋で比べる
 
 use dt_core::app::App;
@@ -122,7 +123,7 @@ fn answers_match_the_python_version() {
             let lot = g["req"]["lot"].as_str().unwrap().replace("<ROOT>", &rs);
             let job = app.images.job(Path::new(&lot), false).unwrap();
             for _ in 0..600 {
-                if job.status()["finished"] == true {
+                if job.status(false)["finished"] == true {
                     break;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(20));
@@ -195,14 +196,54 @@ fn image_xml_is_kept_when_the_original_is_opened_first() {
     app.handle("POST", "/api/open", "", &body).unwrap();
     let job = app.images.job(Path::new(&lot), false).unwrap();
     for _ in 0..600 {
-        if job.status()["finished"] == true {
+        if job.status(false)["finished"] == true {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    assert_eq!(job.status()["thumbs"], job.status()["thumbs_total"], "済んだと言うときは全部そろっている");
+    assert_eq!(job.status(false)["thumbs"], job.status(false)["thumbs_total"], "済んだと言うときは全部そろっている");
     let info: Value = serde_json::from_slice(&app.handle("GET", "/api/imginfo", &q("16.bmp"), &[]).unwrap().body).unwrap();
     let names: Vec<&str> = info["xml"].as_array().unwrap().iter().map(|x| x["name"].as_str().unwrap()).collect();
     assert_eq!(names, ["0002.cab/16_info.xml"], "{info}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// 開くは名前を待たずに返り、名前は裏で読む。読み込み中の問い合わせ（brief）は名前を省いて数だけを返す。
+/// 開き直すと、作業場所に残った縮小画像を拾い、作り直さずに済む（版 4.0.1: 数万枚のロットの読み込みの進みと速さ）。
+#[test]
+fn names_are_read_behind_and_brief_status_and_cache_reuse() {
+    let root = fixture("brief");
+    let rs = root.display().to_string();
+    let lot = format!("{rs}/LS3/2026/2026_10/2026_10_25/2026_10_25_22_03_53");
+    let body = serde_json::to_vec(&json!({"lot": lot})).unwrap();
+    let wait = |app: &App| {
+        let job = app.images.job(Path::new(&lot), false).unwrap();
+        for _ in 0..600 {
+            if job.status(false)["finished"] == true {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        job
+    };
+    let app = App::new(Config::from_value(json!({"workers": 2}), &root.join("_home")), None);
+    assert_eq!(app.handle("POST", "/api/open", "", &body).unwrap().status, 200);
+    let job = wait(&app);
+    let full = job.status(false);
+    let brief: Value =
+        serde_json::from_slice(&app.handle("GET", "/api/status", &format!("lot={}&brief=1", enc(&lot)), &[]).unwrap().body).unwrap();
+    assert_eq!(full["named"], true);
+    assert_eq!(brief["thumbs_total"], full["thumbs_total"]);
+    for (f, b) in full["cabs"].as_array().unwrap().iter().zip(brief["cabs"].as_array().unwrap()) {
+        assert!(b.get("images").is_none(), "brief は名前を省く: {b}");
+        assert_eq!(b["n"].as_u64().unwrap() as usize, f["images"].as_array().unwrap().len(), "数は名前の数");
+    }
+    // 開き直し（窓を開き直したのと同じ。作業場所は同じ）: 縮小画像は前の物を使う
+    let again = App::new(Config::from_value(json!({"workers": 2}), &root.join("_home")), None);
+    let job = again.images.job(Path::new(&lot), false).unwrap();
+    job.wait_named(std::time::Duration::from_secs(30));
+    let st = job.status(false);
+    assert_eq!(st["thumbs"], st["thumbs_total"], "前の縮小画像を拾う: {st}");
+    assert_eq!(st["finished"], true, "作る物が残っていない");
     let _ = std::fs::remove_dir_all(&root);
 }

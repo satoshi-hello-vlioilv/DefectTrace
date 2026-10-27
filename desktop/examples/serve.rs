@@ -1,6 +1,9 @@
 //! 窓を使わずに画面を出す試しの入口（開発・画面の撮影 program/tools/ui-check.mjs・ブラウザでの確かめ）。
 //!
-//!     cargo run --release --example serve -- [--port 5050] [--config <config.json>] [--home <作業場所>]
+//!     cargo run --release --example serve -- [--port 5050] [--config <config.json>] [--home <作業場所>] [--slow-ms 0]
+//!
+//! --slow-ms: 共有フォルダの遅さを真似る（欠陥データ・対応付けなど、ロットの .dat を読む問い合わせを、その分だけ遅らせて答える）。
+//! 手元のディスクでは一瞬で済む「使えるようになるまで」の画面を撮るため（program/tools/open-check.mjs --slow-ms）。
 //!
 //! 画面の問い合わせは窓と同じ係（dt_core::app）が答える。窓だけが答えること（/__desktop/…）は、撮影に要る分だけ作り物で答える
 //! （DT_FAKE_DESKTOP に JSON を渡すと、その中身で答える: {"update": {...}, "install": {...}, "release": {...}, "info": {...}}）。
@@ -14,6 +17,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let arg = |n: &str| args.iter().position(|a| a == n).and_then(|i| args.get(i + 1)).cloned();
     let port: u16 = arg("--port").and_then(|p| p.parse().ok()).unwrap_or(5050);
+    let slow = std::time::Duration::from_millis(arg("--slow-ms").and_then(|p| p.parse().ok()).unwrap_or(0));
     let program = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("program");
     let home = arg("--home").map(PathBuf::from).unwrap_or_else(|| std::env::temp_dir().join("dt-serve-home"));
     let cfg = match arg("--config") {
@@ -37,6 +41,9 @@ fn main() {
             let mut body = vec![];
             let _ = req.as_reader().read_to_end(&mut body);
             let method = req.method().as_str().to_string();
+            if matches!(path, "/api/info" | "/api/imgmap") {
+                std::thread::sleep(slow);
+            }
             let reply = match (method.as_str(), path) {
                 ("GET", "/__desktop/info") => Reply::json(
                     &json!({"version": version, "shell_version": version, "installed": false})

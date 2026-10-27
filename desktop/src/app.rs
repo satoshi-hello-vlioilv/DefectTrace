@@ -14,6 +14,7 @@ use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 /// 答え。
 #[derive(Debug)]
@@ -280,7 +281,7 @@ impl App {
     fn status(&self, a: &Args) -> R {
         let lot = a.req("lot")?;
         let job = self.images.job(Path::new(lot), false).map_err(|e| Reply::error(404, &e))?;
-        Ok(Reply::json(&job.status()))
+        Ok(Reply::json(&job.status(a.get("brief") == Some("1"))))
     }
 
     fn dat(&self, a: &Args) -> R {
@@ -353,6 +354,8 @@ impl App {
     /// 画像 N.bmp → IMAGE_LINK（image_fileno=N）→ DETECT_INFO[detect_recno]。名前が数でなければ並びの順。
     pub fn image_map(&self, lot: &str, g: &str) -> Result<Arc<ImgMap>, Reply> {
         let job = self.images.job(Path::new(lot), true).map_err(|e| Reply::error(404, &e))?;
+        // 対応付けは全部の名前で作る（名前は開いてすぐ裏で読み終わる。共有が止まっていても 1 分で諦めて、分かった分で作る）
+        job.wait_named(Duration::from_secs(60));
         let (units, complete) = job.names(g);
         let nimg: usize = units.iter().map(|(_, n)| n.len()).sum();
         let ck = (lot.to_string(), g.to_string());
