@@ -52,7 +52,14 @@
     const li = document.createElement("li");
     li.dataset.path = d.path; li.dataset.eq = eq;
     li.innerHTML = `<div class="row${isEq ? " eq" : ""}" title="${esc(d.path)}"><span class="tw">▶</span><span class="nm">${esc(isEq ? d.name : dirLabel(d.name))}</span><span class="cnt"></span></div><ul hidden></ul>`;
-    li.firstChild.addEventListener("click", () => toggle(li));
+    // 表の窓では、押した節を開いて表の範囲にする（今の範囲の節を押したときだけ畳む）。画像の窓では開く・畳むだけ
+    li.firstChild.addEventListener("click", () => {
+      const again = S.folder === li;
+      S.folder = li;
+      if (S.view !== "list") { toggle(li); return; }
+      toggle(li, again ? undefined : true);
+      setListScope();
+    });
     return li;
   }
   async function toggle(li, open) {
@@ -77,6 +84,34 @@
     }
     ul.hidden = false; tw.textContent = "▼";
   }
+  // ロット表の範囲: 木で最後に押した節（設備・年・月・日）。押していなければ、開いているロットの日。
+  // 設備から押した節までの道（crumbs）も渡す（一覧の範囲の表示で、押すと広げられる）
+  function listScope() {
+    let li = S.folder && S.folder.isConnected ? S.folder : document.querySelector(".lot.sel")?.parentElement?.closest("li");
+    if (!li) li = $("tree").querySelector(":scope>li");
+    if (!li) return null;
+    const crumbs = [];
+    for (let x = li; x && x.dataset && x.dataset.path; x = x.parentElement.closest("li")) {
+      const isEq = x.parentElement === $("tree");
+      crumbs.unshift({ path: x.dataset.path, label: isEq ? x.dataset.eq : x.querySelector(":scope>.row .nm").textContent });
+    }
+    return { path: li.dataset.path, eq: li.dataset.eq, crumbs };
+  }
+  // 表の範囲を表に渡し、木の上でも範囲の節を示す（表の窓の間だけ）
+  function setListScope() {
+    const sc = listScope();
+    document.querySelectorAll("#tree li.scope").forEach((x) => x.classList.remove("scope"));
+    if (S.view === "list" && sc) document.querySelector(`#tree li[data-path="${CSS.escape(sc.path)}"]`)?.classList.add("scope");
+    if (S.view === "list") window.DTLotList.setScope(sc);
+  }
+  // 一覧の行（ロット）を開く: 木にまだ無いロットも開けるよう、木と同じ形の節を作って渡す
+  function openLotPath(path) {
+    const name = path.split(/[\\/]/).pop();
+    const li = document.querySelector(`.lot[data-path="${CSS.escape(path)}"]`) || lotNode({ name, path }, S.folder?.dataset.eq || "");
+    setView("grid"); openLot(li);
+  }
+  window.dtStatus = (m, err) => status(m, err);
+
   function lotNode(c, eq) {
     const li = document.createElement("li");
     li.className = "lot"; li.dataset.path = c.path; li.dataset.name = c.name; li.dataset.eq = eq;
@@ -296,7 +331,7 @@
       if (S.cur < 0 && S.items.length && document.querySelector("#grid .th")) select(0);
       loadProgress();
       if (S.queue.length) requestAnimationFrame(step);
-      else { S.draining = false; finishIfDone(); }
+      else { S.draining = false; fitThumbs(); finishIfDone(); }
     };
     requestAnimationFrame(step);
   }
@@ -330,10 +365,45 @@
     const face = m ? `<span style="color:${m.scolor}">■ ${esc(m.sname)}${pn ? ` <span class="tbadge" data-pairs="${m.d}" title="転写候補を表示">転写候補 ${pn}</span>` : ""}</span>` : "<span></span>";
     return `${meta}<div class="nm2">${face}<span>${esc(it.cab)}/${esc(it.name)}</span></div>`;
   }
+  // ---------------------------------------------------------------- サムネイルの大きさ（列の数で決め、一覧の幅に合わせる）
+  // 1 枚の幅＝(一覧の幅 − すき間) ÷ 列の数。ただし、カードの中身（項目名と値・面と転写候補の札・ファイル名）が切れずに入る幅より狭くしない。
+  // その幅から、入る列の数の最大が決まる（選べるボタンは 1〜最大だけ）。決め方は 2 回の案出しと採点で I に決めた
+  // （program/tools/proposals/2026-10-27-thumb-cols*）。中身の幅はロットのデータから測る（描いたカードによらず、送っても変わらない）
+  const GAP = 8, PAD = 16, CARD_EXTRA = 40, MAX_COLS = 12;
+  let measureCtx = null;
+  const textW = (t, font) => { measureCtx ??= document.createElement("canvas").getContext("2d"); measureCtx.font = font; return measureCtx.measureText(t).width; };
+  const longest = (xs) => xs.reduce((a, x) => (String(x ?? "").length > a.length ? String(x ?? "") : a), "");
+  function cardNeed() {
+    const k = `${S.lot?.path}|${S.cardVer}|${S.card.length}|${S.items.length}`;
+    if (S.need && S.need.k === k) return S.need.w;
+    const ui = getComputedStyle(document.body).fontFamily, mono = "Consolas,monospace", ms = Object.values(S.imap);
+    // 項目の行: 項目名（11px）＋値（11px 等幅）＋すき間 6px
+    const rows = S.card.map((c, i) => textW(c.label, `11px ${ui}`) + textW(longest(ms.map((m) => m.vals?.[i])), `11px ${mono}`) + 6);
+    // 下の札（枠の外）: 「■ 面」＋（あれば）空白と転写候補の札（10px 太字・左右 4px）＋すき間 4px＋ファイル名（10px 等幅）
+    const side = textW("■ " + longest(Object.values(S.sides).map((x) => x.name ?? x)), `10px ${mono}`);
+    const badge = Object.keys(S.pairN).length ? textW(" ", `10px ${mono}`) + textW(`転写候補 ${Math.max(...Object.values(S.pairN))}`, `700 10px ${ui}`) + 8 : 0;
+    const file = textW(longest(S.items.map((it) => `${it.cab}/${it.name}`)), `10px ${mono}`);
+    // 項目の行は枠の中（枠の内側の余白 6px×2・枠線 2px×2）、どちらもカードの余白（2px×2）の内側。画像は 90px より小さくしない
+    const w = Math.ceil(Math.max(90 + CARD_EXTRA, Math.max(0, ...rows) + 12 + 4 + 4, side + badge + 4 + file + 4));
+    S.need = { k, w };
+    return w;
+  }
+  function fitThumbs() {
+    const g = $("grid"), w = g.clientWidth - PAD;
+    if (w <= 0) return;   // 一覧が隠れている（ほかの窓）。出たときに ResizeObserver がまた呼ぶ
+    S.cols ??= +(localStorage.getItem("thumbCols") || 5);
+    const max = Math.max(1, Math.min(MAX_COLS, Math.floor((w + GAP) / (cardNeed() + GAP)))), k = Math.min(S.cols, max);
+    g.style.setProperty("--ts", Math.floor((w - GAP * (k - 1)) / k) - CARD_EXTRA + "px");
+    const seg = $("colSeg");
+    if (seg.childElementCount !== max) seg.innerHTML = Array.from({ length: max }, (_, i) => `<button type="button" data-cols="${i + 1}">${i + 1}</button>`).join("");
+    seg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", +b.dataset.cols === k));
+    $("sizerWrap").title = `一覧の幅に合わせて、この列の数で並べる（今の幅とカードの項目では最大 ${max} 列。項目を減らすか窓を広げると増える）`;
+  }
   // 描いたカードの中身を書き替える（対応付け・転写候補が届いたとき）。いま見えている枠だけ。ほかは見えたときに描く
   function updateCards() {
     S.cardVer = (S.cardVer || 0) + 1;
     $("grid").style.setProperty("--rows", S.card.length);
+    fitThumbs();
     for (const th of seenCards) if (th.isConnected) fillCard(th); else seenCards.delete(th);
   }
   $("grid").addEventListener("click", (e) => { const th = e.target.closest(".th"); if (th && !e.target.closest(".tbadge")) select(idxOf(itemOf(th))); });
@@ -932,10 +1002,17 @@
   const fmt2 = (v) => (v == null ? "—" : Number(v).toFixed(2));
   const sgn = (v, d = 2) => (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(d);
 
+  // v: 画像の見方（grid・pairs・pitch）か、ロット表（list）。ロット表は画面全体の切り替え（上の段のタブ）で、
+  // 表と関わらない物（サマリ・画像の見方の段・右の列）を出さずに表を木の右いっぱいに広げる。画像を見るに戻ると前の見方へ
   function setView(v) {
     S.view = v;
+    if (v !== "list") S.imgView = v;
+    document.body.classList.toggle("mode-list", v === "list");
+    document.querySelectorAll("#modeBar [data-mode]").forEach((b) => { const on = b.dataset.mode === (v === "list" ? "list" : "grid"); b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
     document.querySelectorAll("#viewSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
-    $("grid").hidden = v !== "grid"; $("pairView").hidden = v !== "pairs"; $("pitchView").hidden = v !== "pitch";
+    $("grid").hidden = v !== "grid"; $("pairView").hidden = v !== "pairs"; $("pitchView").hidden = v !== "pitch"; $("listView").hidden = v !== "list";
+    $("loadBand").classList.toggle("off", v === "list");   // 画像の読み込みの帯は画像の画面だけ
+    setListScope();
     document.querySelector(".cardzone").style.display = v === "grid" ? "" : "none";
     $("sizerWrap").style.display = v === "grid" ? "" : "none";
     if (v === "pairs") { if (S.mapSide !== "all") { S.mapSide = "all"; renderMapSide(); } renderPairs(); }
@@ -943,6 +1020,7 @@
     drawMap();
   }
   $("viewSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setView(b.dataset.v); });
+  $("modeBar").addEventListener("click", (e) => { const b = e.target.closest("[data-mode]"); if (b) setView(b.dataset.mode === "list" ? "list" : S.imgView || "grid"); });
   $("baseSeg").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.b === PV.base));
   $("baseSeg").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -1134,10 +1212,7 @@
       rows.push([sideName(b.side), b.no, b.kname, b.x, b.y, b.a, b.img || "", sideName(d.side), d.no, d.kname, d.x, d.y, d.a, d.img || "", c.dx, c.dy, g.cands.length, c.dup]);
     }
     const csv = "\ufeff" + rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `転写候補_${S.lot?.eq || ""}_${S.lot?.name || ""}.csv`;
-    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    TPA.download(new Blob([csv], { type: "text/csv" }), `転写候補_${S.lot?.eq || ""}_${S.lot?.name || ""}.csv`);
   });
 
 
@@ -1244,10 +1319,7 @@
     const out = [["候補No", "面", "ピッチ(m)", "個数", "ばらつき最大(m)", "平均幅方向OS(mm)", "推定ロール径(mm)", "順", "欠陥No", "分類", "幅方向OS(mm)", "長さ方向(m)", "面積(mm2)", "前との間隔(m)", "画像"]];
     rows.forEach(({ c }, ri) => c.members.forEach((m, k) => out.push([ri + 1, sideName(c.side), c.pitch, c.n, c.dev, c.x, c.dia, k + 1, m.no, m.kname, m.x, m.y, m.a, k ? c.intervals[k - 1] : "", m.img || ""])));
     const csv = "\ufeff" + out.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `ピッチ候補_${S.lot?.eq || ""}_${S.lot?.name || ""}.csv`;
-    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    TPA.download(new Blob([csv], { type: "text/csv" }), `ピッチ候補_${S.lot?.eq || ""}_${S.lot?.name || ""}.csv`);
   });
 
   // ================================================================ viewer
@@ -1290,6 +1362,7 @@
       return;
     }
     if (e.target.closest("input,select,#pinPop")) { if (e.key === "Escape") $("pinPop").hidden = true; return; }
+    if (S.view === "list") return;   // ロット表では、画像を送る・開くキーを使わない（表の中の操作に任せる）
     if (S.view === "pitch" && $("viewer").hidden && $("pv").hidden) {
       if (e.key === "ArrowRight") { stepPitch(0, 1); e.preventDefault(); return; }
       if (e.key === "ArrowLeft") { stepPitch(0, -1); e.preventDefault(); return; }
@@ -1314,24 +1387,21 @@
   const setListCfg = (open) => { document.querySelector(".listzone").classList.toggle("open", open); $("listCfg").setAttribute("aria-expanded", open); $("listCfg").textContent = open ? "項目▴" : "項目▾"; localStorage.setItem("listCfg", open ? "1" : "0"); };
   $("listCfg").addEventListener("click", () => setListCfg($("listCfg").getAttribute("aria-expanded") !== "true"));
   setListCfg(localStorage.getItem("listCfg") === "1");
-  const ts = $("thumbSize");
-  ts.value = localStorage.getItem("thumbSize") || 150;
-  const setTs = () => { $("grid").style.setProperty("--ts", ts.value + "px"); localStorage.setItem("thumbSize", ts.value); };
-  ts.addEventListener("input", setTs); setTs();
+  $("colSeg").addEventListener("click", (e) => { const b = e.target.closest("button[data-cols]"); if (b) { S.cols = +b.dataset.cols; localStorage.setItem("thumbCols", S.cols); fitThumbs(); } });
+  new ResizeObserver(() => fitThumbs()).observe($("grid"));
+  fitThumbs();
   window.addEventListener("resize", drawMap);
 
-  // 保存（CSV）が済んだら置いた場所を出す（窓が dt:saved で知らせる）
-  window.addEventListener("dt:saved", (e) => {
-    const d = e.detail || {};
-    if (!d.ok || !d.path) { status("保存できませんでした", true); return; }
-    status(`保存しました: ${d.path}`);
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "mini"; b.textContent = "フォルダを開く";
-    b.addEventListener("click", () => send("/__desktop/reveal", { path: d.path }).catch((er) => status(er.message, true)));
-    $("status").append(" ", b);
-  });
+  // 保存（CSV・Excel・表示列の設定）は、どれも LotScope の部品と同じ TPA.download で行い、知らせも 1 つにそろえる。
+  // 窓は保存し終えたとき dt:saved を送るので、TPA の知らせ（置いた場所・フォルダを開く・パスをコピー）へ渡す
+  window.addEventListener("dt:saved", (e) => window.dispatchEvent(new CustomEvent("tpa:saved", { detail: e.detail })));
 
   (async () => {
+    window.DTLotList.mount($("listView"), {
+      onOpen: openLotPath,
+      onCount: (n) => { $("lotTableN").textContent = n == null ? "" : n.toLocaleString("ja-JP"); },
+      onPick: (path) => { const li = document.querySelector(`#tree li[data-path="${CSS.escape(path)}"]`); if (li) { S.folder = li; setListScope(); } },
+    });
     try { S.pins = await api("/api/pins"); renderPinZones(); renderMapSide(); await loadEquipments(); status("設備を選択してください"); }
     catch (e) { status(e.message, true); }
     // 画面が開けた合図（入れ替えた直後の版は、これが来なければ前の版へ戻す）

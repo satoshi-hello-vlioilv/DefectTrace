@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <title>DefectTrace</title>
+<link rel="stylesheet" href="/static/lotscope/lotscope-base.css?v={{v}}">
+<link rel="stylesheet" href="/static/lotscope/lotlist-columns.css?v={{v}}">
+<link rel="stylesheet" href="/static/lotscope/formula-builder.css?v={{v}}">
+<link rel="stylesheet" href="/static/lotscope/lotscope-theme.css?v={{v}}">
 <link rel="stylesheet" href="/static/style.css?v={{v}}">
 </head>
 <body>
@@ -20,6 +24,11 @@
   <button type="button" id="scMake" class="btn2">作る</button><button type="button" id="scDecline" class="lnk">今後たずねない</button>
 </div>
 
+<!-- 画面全体の切り替え（主）。中央の画像の見方（画像一覧・転写候補・ピッチ候補＝塗りの切り替え・従）とは形を分ける -->
+<nav id="modeBar" class="mbar"><div class="mtabs" role="tablist">
+  <button type="button" data-mode="grid" class="on" title="開いたロットの画像・MAP・ロット情報を見る"><span class="ic" aria-hidden="true">▣</span>画像を見る</button>
+  <button type="button" data-mode="list" title="左の木で選んだ設備・年・月・日の下のロットを表にし、ロット単位の値を全件書き出す"><span class="ic" aria-hidden="true">▦</span>ロット表<span id="lotTableN" class="ltn"></span></button>
+</div></nav>
 <main id="main">
   <aside id="treePane">
     <div class="pane-head">
@@ -42,9 +51,9 @@
         <button type="button" data-v="pitch" title="同一面・同一幅位置で等間隔に並ぶ欠陥">ピッチ候補 <span id="pitchCnt" class="cnt0"></span></button>
       </div>
       <div id="groupTabs" class="seg"></div>
+      <span class="sizer" id="sizerWrap">列 <span id="colSeg" class="seg"></span></span>
       <div class="dz chips cardzone" data-drop="card" title="各画像の下に表示する項目（画像単位の項目をここへドラッグ）"><span class="dzl">画像表示</span><span class="pins" data-place="card"></span></div>
       <span class="spacer"></span>
-      <label class="sizer" id="sizerWrap">サイズ <input id="thumbSize" type="range" min="96" max="320" step="8" value="150"></label>
     </div>
     <div id="loadBand" class="lpband3" data-progress hidden aria-live="polite"></div>
     <div id="grid" tabindex="0"><div class="empty">左のツリーからロットを選択</div></div>
@@ -68,6 +77,7 @@
       <div id="pSum" class="psum"></div>
       <div id="pairList" tabindex="0"></div>
     </div>
+    <div id="listView" class="lv" hidden></div>
     <div id="pitchView" hidden>
       <div class="pbar">
         <label class="fld" title="同一面で幅方向位置(OS～)の許容範囲（候補列の平均位置から）">幅差 ±
@@ -176,6 +186,15 @@
   </div>
 </div>
 <input type="file" id="relFile" accept=".zip" hidden>
+<script src="/static/lotscope/shared.js?v={{v}}"></script>
+<script src="/static/lotscope/unsaved.js?v={{v}}"></script>
+<script src="/static/lotscope/list-formula.js?v={{v}}"></script>
+<script src="/static/lotscope/num-format.js?v={{v}}"></script>
+<script src="/static/lotscope/formula-builder.js?v={{v}}"></script>
+<script src="/static/lotscope/lotlist-rules.js?v={{v}}"></script>
+<script src="/static/lotscope/lotlist-columns.js?v={{v}}"></script>
+<script src="/static/lotscope/xlsx-writer.js?v={{v}}"></script>
+<script src="/static/lotlist-view.js?v={{v}}"></script>
 <script src="/static/app.js?v={{v}}"></script>
 <script src="/static/desktop.js?v={{v}}"></script>
 </body>

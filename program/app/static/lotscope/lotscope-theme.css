@@ -1,0 +1,39 @@
+/* LotScope から持ち込んだ部品（表示列・作り方・読み替え・保存していない変更の窓）が使う色の名前を、DefectTrace の色に結ぶ。
+   持ち込んだ CSS（lotlist-columns.css など）は LotScope のまま変えず、ここで色だけを合わせる（同じ物は同じ色: 主の色は DefectTrace の青、
+   面は白〜地の段、暗い画面でも DefectTrace の暗い色に従う）。LotScope の名前に無い DefectTrace の色は使わない */
+:root{
+  --surface:var(--pane); --ink:var(--txt); --muted:var(--sub); --faint:#8995a0;
+  --line-soft:var(--line2);
+  --h-input:var(--acc); --h-xfer:#2f7d78; --h-pitch:#3f7d55; --h-meta:#3c4b5c;
+  --edit-bg:#fff8ea; --edit-line:#ecd29a; --edit-focus:var(--acc); --edit-field:var(--pane);
+  --ro-bg:#f5f8fa; --ro-ink:var(--txt);
+  --ok-bg:#e0f3e8; --accent:var(--acc); --accent-ink:#fff;
+  --danger:#c0392b; --danger-bg:#fdeeec; --danger-line:#e6bcb6; --warn-ink:#8a5a00;
+  --focus-ring:rgba(30,90,168,.22); --pop-line:#b9ccd4; --pop-shadow:rgba(12,34,48,.22);
+  --on-fill:#fff;
+  --surface-1:#fbfcfd; --surface-2:#f6f9fb; --surface-3:#f4f7f9; --surface-4:#f1f5f8; --surface-5:#eef2f5;
+  --on-dark-fill:rgba(255,255,255,.08); --on-dark-hover:rgba(255,255,255,.2); --on-dark-line:rgba(255,255,255,.45);
+  --ok-soft:#e3f3ea; --ok-ink:#1c7c4a; --info-soft:var(--accbg); --info-ink:var(--acc); --plain-soft:#eef2f6; --plain-ink:#5a6b7c;
+  --input-soft:var(--accbg); --warn-soft:#fff1d6; --amber-soft:#fff4e0; --amber-pale:#fff3d6; --amber-line:#e8b44c; --amber-ink:#6b4a0f;
+  --ll-teal:var(--h-xfer); --ll-teal-dark:#1f5f5b; --ll-pale:var(--accbg); --ll-warn:#b7791f; --ll-warn-bg:#fff5e0;
+  --fs-xs:11.5px; --fs-sm:12.5px; --fs-md:13px; --fs-lg:15px; --fs-xl:18px;
+  --radius:10px; --shadow:0 4px 18px rgba(20,40,55,.08); --shadow-sm:0 1px 3px rgba(20,40,55,.06);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --faint:#7d8792; --h-meta:#2a3646; --edit-bg:#2e2818; --edit-line:#5a4a20; --ro-bg:#1a1d22;
+    --ok-bg:#1d3320; --danger-bg:#3a1d1d; --danger-line:#6b2c26; --warn-ink:#f0c060;
+    --pop-line:#3d4d66; --pop-shadow:rgba(0,0,0,.5);
+    --surface-1:#20242b; --surface-2:#23272e; --surface-3:#252a32; --surface-4:#282d35; --surface-5:#2b3038;
+    --ok-soft:#1d3320; --ok-ink:#7cc67f; --plain-soft:#252a32; --plain-ink:#9aa3ad;
+    --warn-soft:#3a3218; --amber-soft:#3a3218; --amber-pale:#3a3218; --amber-line:#8a6a20; --amber-ink:#f0c060;
+    --ll-warn-bg:#3a3218;
+  }
+}
+/* 持ち込んだ窓は body の直下に出る。DefectTrace の字の大きさ（13px）と字体に合わせる */
+.ll-colpanel,.ll-colmenu,.ll-rulepanel,.tpa-menu,.us-overlay,.tpa-saved,.fetch-overlay{font-family:"Yu Gothic UI","Meiryo UI",sans-serif}
+/* 窓の見出し帯（LotScope は app.css で header と同じ色。DefectTrace の見出し帯・原寸の窓の帯と同じ紺にそろえる） */
+.lc-head{background:#1f2a3a}
+/* LotScope は画面全体で [hidden] を隠す（app.css）。DefectTrace では持ち込んだ窓の中にだけ同じ決まりを置く */
+.ll-colpanel [hidden],.ll-rulepanel [hidden],.ll-colmenu [hidden],.us-overlay [hidden],.tpa-menu [hidden],.fetch-overlay [hidden]{display:none!important}
+.ll-colpanel[hidden],.ll-rulepanel[hidden]{display:none!important}

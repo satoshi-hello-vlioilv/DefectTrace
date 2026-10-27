@@ -64,7 +64,10 @@ aside{background:var(--pane);display:flex;flex-direction:column;min-height:0;fle
 .seg button.on{background:var(--acc);color:#fff;border-color:var(--acc);position:relative}
 .seg button .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px;border:1px solid #fff}
 .sizer{display:flex;align-items:center;gap:6px;color:var(--sub);font-size:12px}
-.sizer input{width:110px;padding:0}
+.sizer{white-space:nowrap}.sizer .seg{flex-wrap:nowrap}
+/* 列のボタンは隣の切り替え（img・fm_img）と同じ高さ・字（13px・本文の色）。幅だけ数に合わせて詰める */
+.sizer .seg button{min-width:30px;padding:3px 8px;font-size:13px;color:var(--txt)}
+.sizer .seg button.on{color:#fff}
 #grid{flex:1;overflow:auto;padding:8px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px;--ts:150px}
 #grid[hidden]{display:none}
 .empty{color:var(--sub);margin:auto;padding:20px;text-align:center}
@@ -88,6 +91,8 @@ aside{background:var(--pane);display:flex;flex-direction:column;min-height:0;fle
 .th .rw{display:flex;justify-content:space-between;gap:6px;font-size:11px;line-height:15px}
 .th .rw b{font:400 11px Consolas,monospace;white-space:nowrap}
 .th .nm2{font:10px Consolas,monospace;color:var(--sub);display:flex;justify-content:space-between;gap:4px}
+/* 幅は中身が入るように決める（fitThumbs）。測りきれない字があっても 1 行のまま末尾を切る（折れて縦に伸びない） */
+.th .rw>span,.th .nm2>*{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ph{width:calc(var(--ts) + 40px);height:calc(var(--ts) + 90px);border:1px dashed var(--line);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:11px}
 .box{border:1px solid var(--line);border-radius:6px;background:var(--pane);flex:0 0 auto}
 .box>summary{cursor:pointer;padding:5px 8px;font-weight:700;color:var(--acc);border-bottom:1px solid var(--line2)}
@@ -349,3 +354,54 @@ button.ghost.dopen{color:#fff;border-color:#7d8da3}
 .lpband3 .lpsum,.lpband3 .lpwsum{display:none}
 @media (max-width:1500px){.lpband3 .lpdn,.lpband3 .lpwt{display:none}.lpband3 .lpsum,.lpband3 .lpwsum{display:inline-flex}}
 @media (prefers-color-scheme:dark){.lpband3{background:#1c2a3d;border-bottom-color:#2c3f5a}.lpband3 .lpbar{background:#2c3f5a}}
+
+/* ===== ロット一覧（版 4.2.0。表は LotScope の表示列の表 .ll-grid と同じ作り。色は DefectTrace の色） */
+.lpband3.off{display:none!important}
+.lv{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--pane)}
+.lv[hidden]{display:none}
+.lv-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.lv-bar input[type=search]{width:240px}
+.lv-scope{display:flex;align-items:center;gap:4px;white-space:nowrap;min-width:0;overflow:hidden}
+.lv-scope .lv-sl{font-size:11px;font-weight:700;color:var(--sub);margin-right:4px}
+.lv-scope b{font-size:14px}.lv-scope .lnk{padding:0 2px}.lv-sep{color:var(--sub)}
+.lv-count{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lv-wrap{flex:1;min-height:0;overflow:auto;position:relative}
+.lv-wrap .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.lv-wrap .empty[hidden]{display:none}
+table.ll-grid{border-collapse:separate;border-spacing:0;font-size:13px;table-layout:fixed}
+.ll-grid th,.ll-grid td{padding:0 var(--ll-cell-padx,10px);border-bottom:1px solid var(--line2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.ll-grid tbody td{padding-top:var(--ll-row-pad,4px);padding-bottom:var(--ll-row-pad,4px);font-variant-numeric:tabular-nums}
+.ll-grid[data-overflow="clip"] th,.ll-grid[data-overflow="clip"] td{text-overflow:clip}
+.ll-grid[data-overflow="wrap"] tbody td{white-space:normal;overflow-wrap:anywhere;line-height:1.35;vertical-align:top}
+.ll-grid thead th{position:sticky;top:0;z-index:2;background:#3c4b5c;color:#fff;font-weight:700;font-size:12.5px;height:30px;cursor:pointer;user-select:none}
+.ll-grid thead th:hover{background:#4a5a6c}
+.ll-grid thead th.ll-lotcol{background:var(--acc)}
+.ll-grid thead th.is-sorted::before{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:#ffd27a;pointer-events:none}
+.ll-grid thead th.is-calc .th-in > span{font-style:italic}
+.ll-grid thead .lv-sort{font-style:normal;font-size:10px;margin-left:4px;color:#ffd27a}
+.ll-grid tbody tr.is-odd td{background:#fafcfd}
+.ll-grid tbody tr:hover td{background:var(--accbg);cursor:default}
+.ll-grid td.al-right{text-align:right}.ll-grid td.al-center{text-align:center}
+.ll-grid td.lv-wait{color:var(--sub)}
+.ll-grid td.c-ok{color:var(--ok);font-weight:700}.ll-grid td.c-ng{color:var(--ng);font-weight:700}.ll-grid td.c-warn{color:#8a5a00;font-weight:700}.ll-grid td.c-muted{color:var(--sub)}
+@media (prefers-color-scheme:dark){.ll-grid tbody tr.is-odd td{background:#1b1e24}.ll-grid thead th{background:#2a3646}}
+/* 表の範囲の節（表の窓の間だけ。木の上で、表がどこの下のロットかを示す） */
+/* 開いているロット（地の色＋左の線）と見分けるため、範囲は枠と「表の範囲」の札で示す */
+.tree li.scope>.row{box-shadow:inset 0 0 0 1.5px var(--acc);border-radius:3px}
+.tree li.scope>.row .nm{font-weight:700;color:var(--acc)}
+.tree li.scope>.row .nm::after{content:"表の範囲";margin-left:6px;padding:0 6px;border-radius:8px;background:var(--acc);color:#fff;font:700 11px "Yu Gothic UI","Meiryo UI",sans-serif;vertical-align:1px}
+/* 画面全体の切り替え（作業域の上いっぱいのタブの段）。主＝字の大きい下線のタブ、中央の画像の見方（塗りの切り替え）は従。
+   決め方は 2 回の案出しと採点で H に決めた（program/tools/proposals/2026-10-27-lot-table*） */
+.mbar{background:var(--pane);padding:2px 10px 0;border-bottom:1px solid var(--line);flex:0 0 auto}
+.mtabs{display:flex;gap:2px}
+.mtabs button{border:0;border-radius:0;background:transparent;border-bottom:3px solid transparent;padding:5px 12px 4px;font:700 14px "Yu Gothic UI","Meiryo UI",sans-serif;color:var(--sub);display:inline-flex;align-items:center;gap:6px}
+.mtabs button:hover{color:var(--txt)}
+.mtabs button.on{color:var(--acc);border-bottom-color:var(--acc)}
+.mtabs .ic{font-size:15px}
+.ltn{font:700 11px "Yu Gothic UI",sans-serif;min-width:18px;padding:0 5px;border-radius:9px;background:var(--line2);color:var(--sub);text-align:center}
+.mtabs button.on .ltn{background:var(--acc);color:#fff}
+.ltn:empty{display:none}
+/* ロット表の窓: 表と関わらない物を出さず、表を木の右いっぱいに広げる */
+body.mode-list #summary,body.mode-list #center>.toolbar,body.mode-list #infoPane,body.mode-list .split[data-split=infoPane]{display:none!important}
+/* ロット表の体の上下の埋め（見えていない行の高さだけ。色も線も付けない） */
+#lvGrid tr.lv-pad td{padding:0!important;border:0!important;background:transparent!important}

@@ -247,3 +247,54 @@ fn names_are_read_behind_and_brief_status_and_cache_reuse() {
     assert_eq!(st["finished"], true, "作る物が残っていない");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// リスト表示（版 4.2.0）: 木の節の下のロットを集め、ロット単位の列の目録と値を返す。値はロット情報（/api/info）の値と同じ作り方。
+#[test]
+fn lot_list_collects_lots_columns_and_values() {
+    let root = fixture("lotlist");
+    let rs = root.display().to_string();
+    let app = App::new(Config::from_value(json!({"workers": 2}), &root.join("_home")), None);
+    let get = |path: &str, q: &str| -> Value { serde_json::from_slice(&app.handle("GET", path, q, &[]).unwrap().body).unwrap() };
+    let post = |path: &str, b: Value| -> Value {
+        serde_json::from_slice(&app.handle("POST", path, "", &serde_json::to_vec(&b).unwrap()).unwrap().body).unwrap()
+    };
+    // 設備の節から（年・月・日をたどって）ロットを集める。新しい順
+    let lots = get("/api/lots", &format!("path={}", enc(&format!("{rs}/LS3"))));
+    let names: Vec<&str> = lots["lots"].as_array().unwrap().iter().map(|l| l["name"].as_str().unwrap()).collect();
+    assert!(names.len() >= 2, "{lots}");
+    let mut sorted = names.clone();
+    sorted.sort_by(|a, b| b.cmp(a));
+    assert_eq!(names, sorted, "新しい順");
+    let paths: Vec<String> = lots["lots"].as_array().unwrap().iter().map(|l| l["path"].as_str().unwrap().to_string()).collect();
+    // 列の目録: フォルダ名・確かめ・1 件の .dat の項目・条件の XML・分類別
+    let cols = post("/api/lotcols", json!({"paths": paths}));
+    let ids: Vec<&str> = cols.as_array().unwrap().iter().map(|c| c["id"].as_str().unwrap()).collect();
+    for want in ["@lot|lot", "@lot|date", "@check|overload", "dat:INSP_INFO|product"] {
+        assert!(ids.contains(&want), "{want} が無い: {ids:?}");
+    }
+    assert!(ids.iter().any(|i| i.starts_with("cond/") || i.contains(".xml|")), "条件の XML の列: {ids:?}");
+    assert!(ids.iter().any(|i| i.starts_with("@class|")), "分類別の列: {ids:?}");
+    assert!(!ids.iter().any(|i| i.starts_with("dat:DETECT_INFO|")), "件数の多い .dat はロット単位の列にしない");
+    // 値: ロット情報の答え（INSP_INFO の品名・多量の数・分類の合計）と同じ
+    let want_cols = json!([{"file": "@lot", "key": "lot"}, {"file": "dat:INSP_INFO", "key": "product"}, {"file": "@check", "key": "overload"}, {"file": "@check", "key": "defects"}]);
+    let rows = post("/api/lotrows", json!({"paths": paths, "cols": want_cols}));
+    for p in &paths {
+        let info = get("/api/info", &format!("lot={}", enc(p)));
+        let v = rows[p].as_array().unwrap_or_else(|| panic!("{p}: {rows}"));
+        assert_eq!(v[0], info["lot"], "ロットのフォルダ名");
+        let insp = info["dat"].as_array().unwrap().iter().find(|d| d["name"] == "INSP_INFO").unwrap();
+        let product = insp["fields"].as_array().unwrap().iter().find(|f| f[0] == "product").map(|f| f[1].clone()).unwrap_or(json!(""));
+        assert_eq!(v[1], product, "{p}: 品名");
+        assert_eq!(v[2], json!(info["overload"]["count"].as_i64().map(|n| n.to_string()).unwrap_or_default()), "{p}: 多量");
+        let total: i64 = info["classes"]["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["total"].as_i64().unwrap_or_else(|| r["sides"].as_object().unwrap().values().filter_map(Value::as_i64).sum()))
+            .sum();
+        assert_eq!(v[3], json!(total.to_string()), "{p}: 分類の合計");
+    }
+    let bad = post("/api/lotrows", json!({"paths": [format!("{rs}/nothing")], "cols": want_cols}));
+    assert!(bad[format!("{rs}/nothing")]["error"].is_string(), "読めないロットは error");
+    let _ = std::fs::remove_dir_all(&root);
+}

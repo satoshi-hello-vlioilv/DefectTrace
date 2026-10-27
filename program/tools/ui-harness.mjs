@@ -34,13 +34,13 @@ export const FAKE = {
     problems: [], me: { canRelease: true, login: "maint", current: "4.0.0" }, checkedAt: "2026-10-26T09:12:00" },
 };
 
-/** 試しの入口を試験のロットで起こす */
-export async function launch(fake = FAKE) {
+/** 試しの入口を試験のロットで起こす（more: 足す設備 [{name, path}]。測る道具が大きなロットの束を足す） */
+export async function launch(fake = FAKE, more = []) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "dt-ui-"));
   execFileSync("python3", [path.join(REPO, "program/tests/fixture_lot.py"), path.join(work, "fx")]);
   const fx = path.join(work, "fx");
   const cfg = path.join(work, "config.json");
-  fs.writeFileSync(cfg, JSON.stringify({ equipments: [{ name: "LS3", path: path.join(fx, "LS3") }, { name: "DL2", path: path.join(fx, "DL2") }] }));
+  fs.writeFileSync(cfg, JSON.stringify({ equipments: [{ name: "LS3", path: path.join(fx, "LS3") }, { name: "DL2", path: path.join(fx, "DL2") }, ...more] }));
   const exe = path.join(REPO, "desktop/target/release/examples/serve");
   if (!fs.existsSync(exe)) execFileSync("cargo", ["build", "--release", "--example", "serve"], { cwd: path.join(REPO, "desktop"), stdio: "inherit" });
   const port = 5600 + Math.floor(Math.random() * 300);
@@ -55,7 +55,13 @@ export async function launch(fake = FAKE) {
       const ctx = await browser.newContext({ viewport: view, deviceScaleFactor: 1.25, locale: "ja-JP" });
       const page = await ctx.newPage();
       await page.addInitScript((lot) => { window.__dtFx = lot; }, path.join(fx, "LS3/2026/2026_10/2026_10_25/2026_10_25_22_03_53"));
-      await page.goto(url);
+      // 開くのが 30 秒で終わらないことがまれにある（再現できていない）。待ったままの問い合わせを書き出し、1 度だけ開き直す
+      const pend = new Set();
+      page.on("request", (r) => pend.add(r)); page.on("requestfinished", (r) => pend.delete(r)); page.on("requestfailed", (r) => pend.delete(r));
+      await page.goto(url).catch(async (e) => {
+        console.error(`開くのが終わらない（${e.message.split("\n")[0]}）。待ったまま: ${[...pend].map((r) => r.url()).join(" , ") || "なし"}。開き直す`);
+        await page.goto(url);
+      });
       await page.waitForFunction(() => window.__dtReady === true);
       return page;
     },
