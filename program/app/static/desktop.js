@@ -47,25 +47,35 @@
     try { st = await call("/__desktop/install"); } catch (_) { return; }
     $("scBar").hidden = !(st.shortcut && st.shortcut.ask);
   }
-  // 作れなかったときは、帯を残して理由を帯の中に出す（押した所で分かる。もう一度押せる）。理由は窓の記録 logs\desktop.log にも残る
+  // ショートカットを作る（帯の「作る」と、いつでも作り直せる所〈配布の窓〉の両方が使う）。→ {ok, msg}
+  // 窓の答えが 15 秒で返らなくても、作れたかを置き場に尋ね直して決める（答えが返らないと、押しても何も起きないように見える）
+  async function makeShortcut() {
+    const links = () => call("/__desktop/install").then((s) => (s.shortcut && s.shortcut.links) || []).catch(() => []);
+    let r = null, err = null;
+    try { r = await Promise.race([post("/__desktop/shortcut"), new Promise((done) => setTimeout(() => done(null), 15000))]); } catch (e) { err = e; }
+    if (!r) {
+      const got = await links();
+      if (got.length) return { ok: true, msg: `ショートカットを作りました（${got.length} か所: デスクトップ・スタート）` };
+      return { ok: false, msg: err ? `作れませんでした。${err.message}` : "作れたか確かめられません（窓から 15 秒答えがありません）。デスクトップを見て、無ければもう一度押してください" };
+    }
+    const made = r.made || [], probs = r.problems || [];
+    if (made.length && !probs.length) return { ok: true, msg: `ショートカットを作りました（${made.length} か所: デスクトップ・スタート）` };
+    return { ok: false, msg: `${made.length ? `${made.length} か所だけ作れました。` : "作れませんでした。"}${probs.join(" / ") || "作る場所がありません"}` };
+  }
+  window.dtMakeShortcut = makeShortcut;
+  // 帯: 押した所で結果が分かるように、作れたら帯の中に「✓ 作りました」を数秒出してから畳む。作れなかったら帯を残して理由を出す（もう一度押せる）
   $("scMake").addEventListener("click", async () => {
-    const b = $("scMake"), why = $("scWhy");
+    const b = $("scMake"), why = $("scWhy"), bar = $("scBar");
     b.disabled = true; b.textContent = "作っています…"; why.hidden = true; $("scAsk").hidden = false;
-    let msg = "";
-    try {
-      const r = await post("/__desktop/shortcut");
-      const made = r.made || [], probs = r.problems || [];
-      if (made.length && !probs.length) {
-        $("scBar").hidden = true;
-        say(`ショートカットを作りました（${made.length} か所: デスクトップ・スタート）`);
-        return;
-      }
-      msg = `${made.length ? `${made.length} か所だけ作れました。` : "作れませんでした。"}${probs.join(" / ") || "作る場所がありません"}`;
-    } catch (e) { msg = `作れませんでした。${e.message}`; }
-    finally { b.disabled = false; b.textContent = "作る"; }
-    why.textContent = msg; why.title = msg; why.hidden = false; $("scAsk").hidden = true;   // 問いの字を畳み、理由を全部見せる
-    b.textContent = "もう一度作る";
-    say(`ショートカット: ${msg}`, true);
+    const r = await makeShortcut();
+    b.disabled = false;
+    why.textContent = r.ok ? `✓ ${r.msg}` : r.msg; why.title = r.msg; why.hidden = false; $("scAsk").hidden = true;   // 問いの字を畳み、結果を全部見せる
+    why.classList.toggle("ok", r.ok);
+    say(r.ok ? r.msg : `ショートカット: ${r.msg}`, !r.ok);
+    if (r.ok) {
+      b.hidden = true; $("scDecline").hidden = true;
+      setTimeout(() => { bar.hidden = true; }, 5000);
+    } else b.textContent = "もう一度作る";
   });
   $("scDecline").addEventListener("click", async () => {
     try { await post("/__desktop/shortcut/decline"); $("scBar").hidden = true; } catch (e) { say(e.message, true); }

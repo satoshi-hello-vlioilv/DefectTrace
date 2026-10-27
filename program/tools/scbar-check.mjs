@@ -1,16 +1,20 @@
-// ショートカットの帯の「作る」「今後たずねない」が、本物のマウスで押せて、窓へ問い合わせが届くか・結果が押した所で分かるかを確かめる（評価関数）。
+// ショートカットの帯の「作る」「今後たずねない」が、本物のマウスで押せて、窓へ問い合わせが届くか・結果が押した所（帯）で分かるかを確かめる（評価関数）。
 // 自己診断（desktop/src/selftest.js）は element.click() で押すので、ほかの物が上に重なって押せない・押しても届かない、は見逃す。
-// 窓の答えは作り物（ui-harness.mjs の FAKE）。作れた・作れなかった（デスクトップへ書けない）の 2 つを確かめる。
+// 窓の答えは作り物（ui-harness.mjs の FAKE）。作れた・作れなかった（デスクトップへ書けない）・作れたのに答えが返らない（版 4.4.0 までの
+// Windows の本物のデスクトップで起きた形）の 3 つを確かめる。
 //   node program/tools/scbar-check.mjs [出力のフォルダ]
 import path from "node:path";
 import { FAKE, launch, parseView } from "./ui-harness.mjs";
 
 const out = process.argv[2] || ".";
+const LNK = ["C:\\Users\\u\\Desktop\\DefectTrace.lnk", "C:\\Users\\u\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\DefectTrace.lnk"];
 const DENIED = "C:\\Users\\u\\Desktop\\DefectTrace.lnk: ショートカットを保存できません: アクセスが拒否されました。";
 const cases = [
-  { name: "作れた", fake: { ...FAKE, shortcut: { made: ["C:\\Users\\u\\Desktop\\DefectTrace.lnk", "C:\\Users\\u\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\DefectTrace.lnk"], problems: [] } },
-    ids: ["scMake", "scDecline"] },
-  { name: "作れない", fake: { ...FAKE, shortcut: { made: [], problems: [DENIED] } }, ids: ["scMake"] },
+  { name: "作れた", fake: { ...FAKE, shortcut: { made: LNK, problems: [] } }, ids: ["scMake", "scDecline"], wait: 800, want: (a) => a.ok && /✓/.test(a.why) },
+  { name: "作れない", fake: { ...FAKE, shortcut: { made: [], problems: [DENIED] } }, ids: ["scMake"], wait: 800,
+    want: (a) => !a.hidden && a.why.includes("アクセスが拒否") && a.btn === "もう一度作る" },
+  { name: "答えが返らない", fake: { ...FAKE, shortcut_wait_ms: 40000, shortcut: { made: LNK, problems: [] },
+    install: { ...FAKE.install, shortcut: { ...FAKE.install.shortcut, links: LNK } } }, ids: ["scMake"], wait: 16500, want: (a) => a.ok && /✓/.test(a.why) },
 ];
 let bad = 0;
 for (const c of cases) {
@@ -26,19 +30,30 @@ for (const c of cases) {
           { x: box.x + box.width / 2, y: box.y + box.height / 2 });
         const sent = [];
         page.on("request", (r) => { if (r.url().includes("/__desktop/shortcut")) sent.push(r.method() + " " + new URL(r.url()).pathname); });
+        // 押している間の字（「作っています…」）は、答えが速いと読む前に消えるので、画面の中で変わりを書き留める
+        await page.evaluate(() => { const b = document.getElementById("scMake"); window.__busy = [];
+          new MutationObserver(() => window.__busy.push(b.textContent)).observe(b, { childList: true, characterData: true, subtree: true }); });
         if (box) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-        await page.waitForTimeout(800);
-        const after = await page.evaluate(() => {
+        await page.waitForTimeout(150);
+        const busy = await page.evaluate(() => (window.__busy.includes("作っています…") ? "作っています…" : document.getElementById("scMake").textContent));
+        await page.waitForTimeout(id === "scDecline" ? 800 : c.wait);
+        const look = () => page.evaluate(() => {
           const w = document.getElementById("scWhy");
           return { hidden: document.getElementById("scBar").hidden, why: w && !w.hidden ? w.textContent : "", btn: document.getElementById("scMake").textContent,
-            status: document.getElementById("status").textContent };
+            ok: w && w.classList.contains("ok"), status: document.getElementById("status").textContent };
         });
+        const after = await look();
         await page.screenshot({ path: path.join(out, `scbar-${c.name}-${id}-${v}.png`) });
-        const reached = shown && top === id && sent.length === 1;
-        const ok = reached && (c.name === "作れた" ? after.hidden : !after.hidden && after.why.includes("アクセスが拒否") && after.btn === "もう一度作る");
+        let ok = shown && top === id && sent.length === 1;
+        let note = "";
+        if (id === "scDecline") ok &&= after.hidden;
+        else {
+          ok &&= busy === "作っています…" && c.want(after);
+          if (c.name !== "作れない") { await page.waitForTimeout(5300); const later = await look(); ok &&= later.hidden; note = `・5 秒後 帯 ${later.hidden ? "畳んだ" : "残る"}`; }
+        }
         if (!ok) bad++;
-        console.log(`${ok ? "OK  " : "NG  "} ${c.name} ${v} ${id}: 帯 ${shown ? "出る" : "出ない"}・押す所の一番上 ${top}・届いた ${JSON.stringify(sent)}・`
-          + `押した後 帯 ${after.hidden ? "消えた" : "残る"}・帯の理由「${after.why}」・ボタン「${after.btn}」・知らせ「${after.status}」`);
+        console.log(`${ok ? "OK  " : "NG  "} ${c.name} ${v} ${id}: 帯 ${shown ? "出る" : "出ない"}・押す所の一番上 ${top}・届いた ${JSON.stringify(sent)}・押した直後「${busy}」・`
+          + `帯の結果「${after.why}」・ボタン「${after.btn}」${note}・知らせ「${after.status}」`);
         await page.context().close();
       }
     }

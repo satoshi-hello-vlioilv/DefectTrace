@@ -110,6 +110,11 @@ try {
     await page.click('#modeBar [data-mode="grid"]');
     const back = await page.evaluate(() => !document.getElementById("grid").hidden && !!document.getElementById("summary").offsetParent && document.getElementById("listView").hidden);
     check(back, `${view.width}: 「画像を見る」で画像の一覧・サマリ・右の列に戻る`);
+    // MAP: ロット表の間に描き直されても（見えない canvas を 0×0 にしない）、戻ると描けている（版 4.4.0 までの不具合）
+    await page.waitForTimeout(300);
+    const map = await page.evaluate(() => { const c = document.getElementById("map"); if (!c.width || !c.height) return { w: c.width, h: c.height, ink: 0 };
+      const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let ink = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) ink++; return { w: c.width, h: c.height, ink }; });
+    check(map.w > 0 && map.h > 0 && map.ink > 1000, `${view.width}: ロット表から戻っても MAP が描けている（${map.w}×${map.h}・${map.ink} 点）`);
     check(!errs.length, `${view.width}: 画面の誤りが出ない（${errs.join(" / ") || "なし"}）`);
     // 片付け（式の列を外す）
     await page.evaluate(() => { const LC = window.LotListColumns, t = "defecttrace:lots", l = LC.layoutOf(t); delete l.formulas["板厚×1000"]; l.order = l.order.filter((c) => c !== "板厚×1000"); LC.replaceLayout(t, l); });

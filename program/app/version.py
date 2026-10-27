@@ -7,10 +7,15 @@
   tests/test_version.py が、いまの中身と RELEASE を比べる（版を上げずにプログラムを変えると失敗する）。
   手順: プログラムを直す → APP_VERSION を上げ、CHANGELOG の先頭に1件足す → python app_build.py --release → テスト
 """
-APP_VERSION = "4.4.0"
-RELEASE = {"version": "4.4.0", "digest": "fc6a7892163ffdab"}
+APP_VERSION = "4.4.1"
+RELEASE = {"version": "4.4.1", "digest": "3336ef75a8b6f5a6"}
 
 CHANGELOG = [
+    {"version": "4.4.1", "date": "2026-10-27", "notes": [
+        "欠陥の MAP が消える不具合を直しました（ロット表を見てから「画像を見る」に戻ると、MAP の高さが 0 になり、別のロットを開いても出ませんでした）。",
+        "ショートカットの「作る」で、ショートカットはできるのに答えが返らず、帯が消えない不具合を直しました（Windows の部品を呼ぶ形を、答えを待たずに済む形にしました）。"
+        "作れたら帯の中に「✓ 作りました」を出して数秒で畳みます。答えが 15 秒返らなくても、作れたかを確かめ直して知らせます。",
+    ]},
     {"version": "4.4.0", "date": "2026-10-27", "notes": [
         "更新の置き場を LotScope と同じ BOX の 90_Releases にしました（各 PC で設定しなくて構いません）。"
         "「配布」→「ZIP から版を置く」で、版は 90_Releases\\DefectTrace\\versions\\<版> に置きます"

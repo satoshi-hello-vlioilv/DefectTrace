@@ -890,6 +890,8 @@
   }
   function drawMap() {
     const cv = $("map"), dpr = window.devicePixelRatio || 1;
+    // 見えていない間（ロット表・右の列を畳んだ）は測らない。0×0 を書くと、高さを canvas の大きさから決めているので 0 のまま戻らない
+    if (!cv.clientWidth || !cv.clientHeight) return;
     cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
     const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, cv.width, cv.height);
     $("mapLegend").innerHTML = "";
@@ -987,6 +989,7 @@
     }
     const [cab, name] = best[4].split("/"); select(S.items.findIndex((x) => x.cab === cab && x.name === name));
   });
+  $("map").closest("details").addEventListener("toggle", drawMap);   // 畳んで開き直したら描き直す
   $("map").addEventListener("dblclick", () => { if (S.view === "pairs") openPV(); else if (S.cur >= 0) openViewer(); });
   // mark size
   $("markSize").value = S.ms;
