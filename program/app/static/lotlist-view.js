@@ -96,6 +96,12 @@
     try { pins = await (await fetch("/api/pins")).json(); } catch (e) { pins = []; }
     if (gen !== V.gen) return;
     V.pins = pins;
+    // 列と同じ項目（ファイル・鍵）の表示項目があれば、その単位の倍率（scale）・日時の形（fmt）で値を作る
+    // （サマリの「検査長(m)」は mm の値 × 0.001。表と画面で同じ項目は同じ値にする）。表示先は 一覧 → サマリ → ロット情報 の順に採る
+    const rank = { list: 0, summary: 1, lot: 2 };
+    V.unit = new Map();
+    pins.filter((p) => p.scope === "lot").sort((a, b) => (rank[a.place] ?? 9) - (rank[b.place] ?? 9))
+      .forEach((p) => { const id = `${p.file}|${p.key}`; if (!V.unit.has(id)) V.unit.set(id, p); });
     const count = new Map();
     cat.forEach((c) => count.set(c.label, (count.get(c.label) || 0) + 1));
     V.byName = new Map();
@@ -105,17 +111,26 @@
     // 見本のロットは、すべての列の値を読んでおく（表示列の窓の「見え方（実データ 1 件）」に、隠している列の値も出す）
     try {
       const d = await (await fetch("/api/lotrows", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paths: pick, cols: V.cols.map((k) => ({ file: V.byName.get(k).file, key: V.byName.get(k).key })) }) })).json();
+        body: JSON.stringify({ paths: pick, cols: V.cols.map(spec) }) })).json();
       if (gen !== V.gen) return;
       pick.forEach((p) => { const v = d[p]; if (!Array.isArray(v)) return; const c = V.cache.get(p) || {}; V.cols.forEach((k, j) => { c[k] = v[j]; }); V.cache.set(p, c); });
     } catch (e) { /* 見本が無くても一覧は出せる */ }
+  }
+  // 1 つの列の問い合わせ（{file, key} と、同じ項目の表示項目の scale・fmt）
+  function spec(k) {
+    const c = V.byName.get(k), p = V.unit && V.unit.get(c.id), out = { file: c.file, key: c.key };
+    if (p && p.scale != null) out.scale = p.scale;
+    if (p && p.fmt) out.fmt = p.fmt;
+    return out;
   }
   // 初めての表: ロット・作業日時・木の一覧に出している項目・確かめを出し、ほかは隠す。前から使っている表: 新しく出た列だけ隠して足す
   async function seedLayout() {
     const pins = V.pins || [];
     const byId = new Map(V.cols.map((c) => [V.byName.get(c).id, c]));
     const want = ["@lot|lot", "@lot|date", "@lot|time", ...pins.filter((p) => p.place === "list" || p.place === "summary").map((p) => `${p.file}|${p.key}`),
-      "@check|overload", "@check|detect_max", "@check|time_warn", "@check|defects"].map((id) => byId.get(id)).filter(Boolean);
+      "@check|overload", "@check|detect_max", "@check|time_warn"].map((id) => byId.get(id)).filter(Boolean);
+    // 「欠陥数（分類の合計）」（@check|defects）と分類別の列は、ロットごとに DETECT_INFO（数 MB）を読むので、初めは出さない
+    // （欠陥数は INSP_INFO の欠陥総数を出している。突き合わせたいときに表示列から出す）
     V.defaults = [...new Set(want)];
     const known = new Set(lsGet(KNOWN, []));
     const l = LC().layoutOf(TARGET);
@@ -160,7 +175,7 @@
         if (gen !== V.gen) return;
         const part = todo.slice(i, i + BATCH);
         const miss = cols.filter((k) => part.some((l) => !(k in (V.cache.get(l.path) || {}))));
-        const body = { paths: part.map((l) => l.path), cols: miss.map((k) => ({ file: V.byName.get(k).file, key: V.byName.get(k).key })) };
+        const body = { paths: part.map((l) => l.path), cols: miss.map(spec) };
         let d = {};
         try { d = await (await fetch("/api/lotrows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json(); } catch (e) { d = {}; }
         if (gen !== V.gen) return;
@@ -173,8 +188,9 @@
         V.got += part.length;
         const el = (performance.now() - t0) / 1000, rate = V.got / Math.max(el, 0.001);
         progress({ phase: "ロットの値を読んでいます", n: V.got, total: V.need, eta: rate > 0 ? (V.need - V.got) / rate : null });
-        // 描き直しは 0.5 秒に 1 度まで（並べ替え・列の幅の計算は全部の行にかかるため）。読み終えたら必ず描く
-        if (performance.now() - (V.drawnAt || 0) > 500 || V.got >= V.need) { render(); V.drawnAt = performance.now(); }
+        // 読む間は行だけを描き直す（0.5 秒に 1 度まで。列の幅・見出しは変わらないので作り直さない）。読み終えたら全部を描く
+        if (V.got >= V.need) render();
+        else if (performance.now() - (V.drawnAt || 0) > 500) { refreshRows(); V.drawnAt = performance.now(); }
       }
     } finally { if (V.busy === gen) V.busy = 0; }
     if (gen !== V.gen) return;
@@ -256,6 +272,14 @@
     $("lvCount").textContent = `${fmtN(rows.length)}${rows.length !== V.lots.length ? ` / ${fmtN(V.lots.length)}` : ""} ロット・${cols.length} 列`;
   }
 
+  // 行だけを描き直す（値が届いたとき。検索・並べ替えは全部の行にかけ直し、見えている行だけを描く）
+  function refreshRows() {
+    if (!V.shown) { render(); return; }
+    const rows = viewRows(V.shown.cols);
+    V.shown = { ...V.shown, rows };
+    paintBody(true);
+    $("lvCount").textContent = `${fmtN(rows.length)}${rows.length !== V.lots.length ? ` / ${fmtN(V.lots.length)}` : ""} ロット・${V.shown.cols.length} 列`;
+  }
   // 表の体は、見えている行（と前後 OVER 行）だけを描き、上下は高さだけの行で埋める（数千ロットでも、値が届くたびの描き直しと送りが軽い）。
   // 書き出し・検索・並べ替えは全部の行（V.shown.rows）で行う
   const OVER = 40;

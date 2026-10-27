@@ -82,6 +82,10 @@ fn columns_of(res: &LotRes) -> Vec<Value> {
         if !(1..=3).contains(&d.records.len()) {
             continue;
         }
+        // 計算で作る項目（検査幅など。表示項目と同じ鍵）を先に、元の欄をその後に
+        for (k, l, _) in lot::virtuals_of(&d) {
+            out.push(col(&format!("dat:{n}"), k, l, &format!("{n}.dat")));
+        }
         for f in d.value_fields() {
             let label = if f.label.is_empty() { f.name.clone() } else { f.label.clone() };
             out.push(col(&format!("dat:{n}"), &f.name, &label, &format!("{n}.dat")));
@@ -136,8 +140,10 @@ pub fn columns(app: &App, paths: &[String]) -> Value {
     Value::Array(out)
 }
 
-/// 1 つのロットの、1 つの列の値。
-pub fn value_of(res: &LotRes, file: &str, key: &str, cache: &mut BTreeMap<&'static str, Value>) -> String {
+/// 1 つのロットの、1 つの列の値。c は {file, key} に、表示項目（ピン）と同じ単位の倍率（scale）・日時の形（fmt）を足せる。
+/// 値の作り方は表示項目と同じ（lot::resolve_lot_pin）。同じ項目なら、ロット表とサマリ・ロット情報で同じ値になる
+pub fn value_of(res: &LotRes, c: &Value, cache: &mut BTreeMap<&'static str, Value>) -> String {
+    let (file, key) = (c["file"].as_str().unwrap_or(""), c["key"].as_str().unwrap_or(""));
     match file {
         "@lot" if key == "lot" => name_of(&res.lot),
         "@check" => {
@@ -169,7 +175,7 @@ pub fn value_of(res: &LotRes, file: &str, key: &str, cache: &mut BTreeMap<&'stat
             let cs = cache.entry("classes").or_insert_with(|| lot::class_summary(res));
             cs["rows"].as_array().and_then(|rs| rs.iter().find(|r| r["kind"] == key)).map(class_total).unwrap_or(0).to_string()
         }
-        _ => lot::resolve_lot_pin(res, &json!({"file": file, "key": key})),
+        _ => lot::resolve_lot_pin(res, c),
     }
 }
 
@@ -178,8 +184,8 @@ fn class_total(r: &Value) -> i64 {
     r["total"].as_i64().unwrap_or_else(|| r["sides"].as_object().map(|m| m.values().filter_map(Value::as_i64).sum()).unwrap_or(0))
 }
 
-/// ロットごとの値（{path: [列の順の値]}。読めないロットは {error}）。
-pub fn values(app: &App, paths: &[String], cols: &[(String, String)]) -> Value {
+/// ロットごとの値（{path: [列の順の値]}。読めないロットは {error}）。cols は value_of の列（{file, key, scale?, fmt?}）。
+pub fn values(app: &App, paths: &[String], cols: &[Value]) -> Value {
     let next = AtomicUsize::new(0);
     let out: Mutex<Map<String, Value>> = Mutex::default();
     std::thread::scope(|s| {
@@ -190,7 +196,7 @@ pub fn values(app: &App, paths: &[String], cols: &[(String, String)]) -> Value {
                 let v = match app.lots.get(p, &app.cfg, app.program.as_ref()) {
                     Ok(res) => {
                         let mut cache = BTreeMap::new();
-                        json!(cols.iter().map(|(f, k)| value_of(&res, f, k, &mut cache)).collect::<Vec<_>>())
+                        json!(cols.iter().map(|c| value_of(&res, c, &mut cache)).collect::<Vec<_>>())
                     }
                     Err(e) => json!({"error": e}),
                 };

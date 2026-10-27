@@ -89,6 +89,19 @@ try {
     }
     // 画像を見るに戻る（前の見方へ。画像の一覧が出る）
     await page.click('#modeBar [data-mode="grid"]');
+    // 同じ項目は同じ値: サマリの札（名前・値）と、ロット表の同じ名前の列の、開いているロットの行
+    await page.click('#modeBar [data-mode="list"]');
+    await page.waitForFunction(() => document.querySelector("#lvLoad").hidden);
+    const same = await page.evaluate(() => {
+      const chips = [...document.querySelectorAll('#summary .chip')].map((c) => [c.querySelector(".cl")?.textContent, c.querySelector(".cv")?.textContent]);
+      const heads = [...document.querySelectorAll("#lvHead th")].map((th) => th.querySelector(".th-in > span")?.textContent);
+      const lot = document.querySelector("#crumb")?.innerText.match(/\d{2}:\d{2}:\d{2}/)?.[0].replace(/:/g, "_");
+      const tr = [...document.querySelectorAll("#lvBody tr[data-path]")].find((r) => r.dataset.path.endsWith(lot));
+      return chips.filter(([l]) => heads.includes(l)).map(([l, v]) => [l, v, tr?.children[heads.indexOf(l)]?.textContent]);
+    });
+    const diff = same.filter(([, a, b]) => a !== b);
+    check(same.length >= 5 && !diff.length, `${view.width}: サマリとロット表で同じ項目は同じ値（${same.length} 項目を比べ、違い ${diff.map((d) => d.join(" ")).join("・") || "なし"}）`);
+    await page.click('#modeBar [data-mode="grid"]');
     const back = await page.evaluate(() => !document.getElementById("grid").hidden && !!document.getElementById("summary").offsetParent && document.getElementById("listView").hidden);
     check(back, `${view.width}: 「画像を見る」で画像の一覧・サマリ・右の列に戻る`);
     check(!errs.length, `${view.width}: 画面の誤りが出ない（${errs.join(" / ") || "なし"}）`);

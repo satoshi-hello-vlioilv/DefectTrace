@@ -2,6 +2,7 @@
 //! 窓（main.rs）は Tauri の自前の仕組み（dt://）で、試しの入口（examples/serve.rs）は HTTP で、ここへ渡す。
 
 use crate::analysis::{self, PitchCond};
+use crate::cache::Lru;
 use crate::config::Config;
 use crate::dat::{Dat, V};
 use crate::images::{self, Images};
@@ -42,6 +43,10 @@ impl Reply {
 
 type R = Result<Reply, Reply>;
 
+/// 覚えの上限（バイト）。木の札の値は小さく、画像と欠陥の対応は 2 万枚で数 MB
+const LOTSUM_BYTES: usize = 16 << 20;
+const IMGMAP_BYTES: usize = 128 << 20;
+
 /// アプリの状態（設定・表示項目・ロットの覚え・画像の仕事）。
 pub struct App {
     pub cfg: Arc<Config>,
@@ -50,8 +55,9 @@ pub struct App {
     pub pins: Pins,
     pub lots: LotCache,
     pub images: Arc<Images>,
-    lotsum: Mutex<HashMap<String, Value>>,
-    imgmap: Mutex<HashMap<(String, String), Arc<ImgMap>>>,
+    /// 木の札の値（ロットごと）・画像と欠陥の対応（ロット・画像の組ごと）。どちらも大きさに上限のある覚え（cache::Lru）
+    lotsum: Lru<String, Value>,
+    imgmap: Lru<(String, String), Arc<ImgMap>>,
     lot_re: Regex,
 }
 
@@ -67,6 +73,11 @@ pub struct ImgMap {
 }
 
 impl ImgMap {
+    /// メモリのだいたいの大きさ（覚えの重さ）。
+    pub fn bytes(&self) -> usize {
+        1024 + self.order.iter().map(|(k, _)| 2 * (k.capacity() + 64)).sum::<usize>()
+    }
+
     pub fn rev(&self) -> HashMap<usize, String> {
         self.order.iter().map(|(k, v)| (*v, k.clone())).collect()
     }
@@ -157,7 +168,16 @@ impl App {
         let lot_re = Regex::new(&cfg.str("lot_regex")).unwrap_or_else(|_| Regex::new(r"^\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}$").unwrap());
         let pins = Pins::load(&cfg.home);
         let images = Images::new(cfg.clone());
-        Arc::new(App { cfg, program, pins, lots: LotCache::default(), images, lotsum: Mutex::default(), imgmap: Mutex::default(), lot_re })
+        Arc::new(App {
+            cfg,
+            program,
+            pins,
+            lots: LotCache::default(),
+            images,
+            lotsum: Lru::new(LOTSUM_BYTES),
+            imgmap: Lru::new(IMGMAP_BYTES),
+            lot_re,
+        })
     }
 
     fn lotres(&self, path: &str) -> Result<Arc<LotRes>, Reply> {
@@ -215,7 +235,7 @@ impl App {
     fn pins_changed(&self, r: Result<Vec<Value>, (u16, String)>) -> R {
         match r {
             Ok(v) => {
-                self.lotsum.lock().unwrap().clear();
+                self.lotsum.clear();
                 Ok(Reply::json(&json!(v)))
             }
             Err((s, e)) => Err(Reply::error(s, &e)),
@@ -240,8 +260,8 @@ impl App {
 
     /// ロット一覧の 1 行（一覧の項目・多量などの印）。
     pub fn lot_summary(&self, path: &str) -> Value {
-        if let Some(v) = self.lotsum.lock().unwrap().get(path) {
-            return v.clone();
+        if let Some(v) = self.lotsum.get(&path.to_string()) {
+            return v;
         }
         let (d, t) = lot::lot_dt(&name_of(Path::new(path)));
         let res = self.lotres(path).ok();
@@ -259,8 +279,8 @@ impl App {
             None => json!({"error": "lot not found"}),
         };
         let r = json!({"date": d, "time": t, "items": items, "flags": flags});
-        self.lotsum.lock().unwrap().insert(path.to_string(), r.clone());
-        r
+        let w = 256 + r.to_string().len();
+        self.lotsum.insert(path.to_string(), r, w)
     }
 
     /// 一覧の行を並べて作る（共有の読みを待つ間に次を進める。8 本まで）。
@@ -299,14 +319,9 @@ impl App {
         Ok(Reply::json(&json!({"lots": lots})))
     }
 
-    /// リスト表示: ロットごとの値（{paths, cols: [{file, key}]}）。
+    /// リスト表示: ロットごとの値（{paths, cols: [{file, key, scale?, fmt?}]}。scale・fmt は表示項目と同じ）。
     fn lot_rows(&self, b: &Value) -> Reply {
-        let cols: Vec<(String, String)> = b["cols"]
-            .as_array()
-            .map(|a| {
-                a.iter().map(|c| (c["file"].as_str().unwrap_or("").to_string(), c["key"].as_str().unwrap_or("").to_string())).collect()
-            })
-            .unwrap_or_default();
+        let cols: Vec<Value> = b["cols"].as_array().cloned().unwrap_or_default();
         Reply::json(&crate::lotlist::values(self, &strs(&b["paths"]), &cols))
     }
 
@@ -397,7 +412,7 @@ impl App {
         let (units, complete) = job.names(g);
         let nimg: usize = units.iter().map(|(_, n)| n.len()).sum();
         let ck = (lot.to_string(), g.to_string());
-        if let Some(m) = self.imgmap.lock().unwrap().get(&ck) {
+        if let Some(m) = self.imgmap.get(&ck) {
             if m.n == nimg && m.fin {
                 return Ok(m.clone());
             }
@@ -413,7 +428,7 @@ impl App {
         if det.records.is_empty() || link.records.is_empty() {
             out.info = json!({"detect": size_or_err(&det), "link": size_or_err(&link)});
             let m = Arc::new(out);
-            self.imgmap.lock().unwrap().insert(ck, m.clone());
+            self.imgmap.put(ck, m.clone(), m.bytes());
             return Ok(m);
         }
         let mut all: Vec<(String, String)> = vec![];
@@ -469,7 +484,7 @@ impl App {
         }
         out.info = json!({"links": link.records.len(), "detects": det.records.len(), "matched": out.map.len(), "by": if ok0 > 0 { "recno" } else { "image_id" }});
         let m = Arc::new(out);
-        self.imgmap.lock().unwrap().insert(ck, m.clone());
+        self.imgmap.put(ck, m.clone(), m.bytes());
         Ok(m)
     }
 
