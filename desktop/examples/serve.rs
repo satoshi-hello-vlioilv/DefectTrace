@@ -6,7 +6,8 @@
 //! 手元のディスクでは一瞬で済む「使えるようになるまで」の画面を撮るため（program/tools/open-check.mjs --slow-ms）。
 //!
 //! 画面の問い合わせは窓と同じ係（dt_core::app）が答える。窓だけが答えること（/__desktop/…）は、撮影に要る分だけ作り物で答える
-//! （DT_FAKE_DESKTOP に JSON を渡すと、その中身で答える: {"update": {...}, "install": {...}, "release": {...}, "info": {...}}）。
+//! （DT_FAKE_DESKTOP に JSON を渡すと、その中身で答える: {"update": {...}, "install": {...}, "release": {...}, "info": {...},
+//! "shortcut": {made, problems}〈「作る」の答え〉}）。
 
 use dt_core::app::{App, Reply};
 use dt_core::config::Config;
@@ -72,6 +73,7 @@ fn main() {
                 } else {
                     fake["release"].clone()
                 }),
+                ("POST", "/__desktop/shortcut") if !fake["shortcut"].is_null() => Reply::json(&fake["shortcut"]),
                 (_, p) if p.starts_with("/__desktop/") => Reply::json(&json!({"ok": true})),
                 _ => app.handle_all(&method, path, query, &body, &static_dir, &version),
             };

@@ -7,6 +7,10 @@
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
+/// 更新の置き場の既定（LotScope と同じ置き場。この下の DefectTrace\versions\<版> に版を置く）。設定の update_source が空ならここ。
+/// BOX の見え方が PC で違っても（上の階層が見えないなど）、release::resolve_source が見える場所を探し直す。
+pub const DEFAULT_UPDATE_SOURCE: &str = r"C:\boxdrive\Box\(D)_仕上課\90_アプリ開発\90_Releases";
+
 /// 組み込みの既定（版 3.8 の DEFAULT_CFG と同じ）。
 pub fn defaults() -> Value {
     json!({
@@ -109,7 +113,28 @@ impl Config {
         }
     }
 
+    /// 更新の置き場（設定が空なら既定の置き場）。
+    pub fn update_source(&self) -> String {
+        match self.str("update_source") {
+            s if s.trim().is_empty() => DEFAULT_UPDATE_SOURCE.to_string(),
+            s => s,
+        }
+    }
+
     pub fn utc_offset(&self) -> chrono::Duration {
         chrono::Duration::milliseconds((self.f64("utc_offset_hours", 9.0) * 3_600_000.0) as i64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_update_source_means_the_default_place() {
+        let home = std::env::temp_dir();
+        assert_eq!(Config::from_value(json!({"update_source": ""}), &home).update_source(), DEFAULT_UPDATE_SOURCE, "空なら既定の置き場");
+        assert_eq!(Config::from_value(json!({"update_source": " "}), &home).update_source(), DEFAULT_UPDATE_SOURCE);
+        assert_eq!(Config::from_value(json!({"update_source": r"\\srv\rel"}), &home).update_source(), r"\\srv\rel", "書けばそこ");
     }
 }

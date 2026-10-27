@@ -2,12 +2,14 @@
 //!
 //! 置き場の形（名前は自由・目印で見分ける）:
 //! ```text
-//! 90_Releases\                 ← 設定（config.json）の update_source
-//!   <アプリのフォルダ>\
+//! 90_Releases\                 ← 設定（config.json）の update_source（空なら既定の置き場 config::DEFAULT_UPDATE_SOURCE）
+//!   <アプリのフォルダ>\          ← 名前は自由（ZIP から版を置くときは brand.json の name で作る）
 //!     distribute.json          { schema:1, app_id, version, entry, setAt, setBy, setPc, previous }（配る版）
-//!     <版>\release.json        { schema:1, app_id, name, version, zip, sha256, exe }（版のフォルダの目印）
-//!     <版>\<name>-<版>-windows.zip
+//!     <exe>                    配る入口
+//!     versions\<版>\release.json        { schema:1, app_id, name, version, zip, sha256, exe }（版のフォルダの目印）
+//!     versions\<版>\<name>-<版>-windows.zip
 //! ```
+//! 版 4.3.0 までは版のフォルダを <アプリのフォルダ>\<版> に置いていた。その形も読む（目印で探すので、どちらでも同じに扱う）。
 //! - 置き場の下を 3 段まで（見るフォルダは 600 個まで）たどり、目印の app_id が合うものだけを使う。点で始まるフォルダ（置いている途中）は見ない
 //! - 書いた場所が無ければ、共有フォルダ・クラウドの同期フォルダ（BOX など）の見え方の違いを付け直して探す（resolve_source）。候補は「;」か改行で複数・%環境変数% も使える
 
@@ -16,6 +18,8 @@ use std::path::{Component, Path, PathBuf};
 
 pub const MARKER: &str = "release.json";
 pub const DISTRIBUTE: &str = "distribute.json";
+/// 版のフォルダを並べるフォルダ（<アプリのフォルダ>\versions\<版>）。
+pub const VERSIONS: &str = "versions";
 const MAX_DEPTH: usize = 3;
 const MAX_DIRS: usize = 600;
 
@@ -53,6 +57,16 @@ pub struct Release {
 impl Release {
     pub fn zip_path(&self) -> PathBuf {
         self.dir.join(&self.zip)
+    }
+
+    /// この版のアプリのフォルダ（versions\<版> なら versions の上、前の形の <版> ならその上）。
+    pub fn app_dir(&self) -> Option<PathBuf> {
+        let up = self.dir.parent()?;
+        if up.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(VERSIONS)) {
+            up.parent().map(Path::to_path_buf)
+        } else {
+            Some(up.to_path_buf())
+        }
     }
 }
 

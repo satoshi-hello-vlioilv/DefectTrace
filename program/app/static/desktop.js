@@ -47,12 +47,25 @@
     try { st = await call("/__desktop/install"); } catch (_) { return; }
     $("scBar").hidden = !(st.shortcut && st.shortcut.ask);
   }
+  // 作れなかったときは、帯を残して理由を帯の中に出す（押した所で分かる。もう一度押せる）。理由は窓の記録 logs\desktop.log にも残る
   $("scMake").addEventListener("click", async () => {
+    const b = $("scMake"), why = $("scWhy");
+    b.disabled = true; b.textContent = "作っています…"; why.hidden = true; $("scAsk").hidden = false;
+    let msg = "";
     try {
       const r = await post("/__desktop/shortcut");
-      $("scBar").hidden = true;
-      say(r.problems && r.problems.length ? `ショートカットを一部作れませんでした: ${r.problems.join(" / ")}` : `ショートカットを作りました（${(r.made || []).length} か所）`, !!(r.problems && r.problems.length));
-    } catch (e) { say(e.message, true); }
+      const made = r.made || [], probs = r.problems || [];
+      if (made.length && !probs.length) {
+        $("scBar").hidden = true;
+        say(`ショートカットを作りました（${made.length} か所: デスクトップ・スタート）`);
+        return;
+      }
+      msg = `${made.length ? `${made.length} か所だけ作れました。` : "作れませんでした。"}${probs.join(" / ") || "作る場所がありません"}`;
+    } catch (e) { msg = `作れませんでした。${e.message}`; }
+    finally { b.disabled = false; b.textContent = "作る"; }
+    why.textContent = msg; why.title = msg; why.hidden = false; $("scAsk").hidden = true;   // 問いの字を畳み、理由を全部見せる
+    b.textContent = "もう一度作る";
+    say(`ショートカット: ${msg}`, true);
   });
   $("scDecline").addEventListener("click", async () => {
     try { await post("/__desktop/shortcut/decline"); $("scBar").hidden = true; } catch (e) { say(e.message, true); }
@@ -70,8 +83,9 @@
   function renderRelease(v) {
     const me = v.me || {};
     if (!v.reachable) {
-      $("relBody").innerHTML = `<div class="rl"><div class="rl-err">置き場に届きません: ${esc(v.why || "")}</div>
-        <div class="rl-note">置き場は、この PC の作業場所の config.json の update_source に書きます（共有フォルダの場所。「;」で区切って複数）。</div></div>`;
+      $("relBody").innerHTML = `<div class="rl"><div class="rl-err">置き場（${esc(v.folder || "")}）に届きません: ${esc(v.why || "")}</div>
+        <div class="rl-note">BOX が同期されているかを確かめてください。版は置き場の下の DefectTrace\\versions\\&lt;版&gt; に置きます。
+          別の場所にするときは、この PC の作業場所の config.json の update_source に書きます（空なら既定の置き場。「;」で区切って複数）。</div></div>`;
       return;
     }
     const dist = v.distributed || {};

@@ -64,7 +64,7 @@ pub fn settings_of(cfg: &dt_core::config::Config) -> Value {
     let pc = if cfg!(windows) { env("COMPUTERNAME") } else { env("HOSTNAME") };
     let users = cfg.strs("release_users");
     let can = users.is_empty() || users.iter().any(|u| u.eq_ignore_ascii_case(&login));
-    json!({"source": cfg.str("update_source"), "who": {"login": login, "pc": pc, "canRelease": can, "users": users}})
+    json!({"source": cfg.update_source(), "who": {"login": login, "pc": pc, "canRelease": can, "users": users}})
 }
 
 fn who_of(settings: &Value) -> Who {
