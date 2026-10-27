@@ -70,7 +70,13 @@ fn main() {
             let _ = dt_core::xml::parse_pairs(&b, 6000);
             tw += lap(&mut t0);
         }
-        println!("条件の XML（{} KB）: 字にする {:.3} ms・XML として読む {:.3} ms・全部（読む＋平らにする）{:.3} ms", b.len() / 1024, td / 50.0, tp / 50.0, tw / 50.0);
+        println!(
+            "条件の XML（{} KB）: 字にする {:.3} ms・XML として読む {:.3} ms・全部（読む＋平らにする）{:.3} ms",
+            b.len() / 1024,
+            td / 50.0,
+            tp / 50.0,
+            tw / 50.0
+        );
     }
     let k = lots.len().max(1) as f64;
     let total: f64 = t.iter().sum();

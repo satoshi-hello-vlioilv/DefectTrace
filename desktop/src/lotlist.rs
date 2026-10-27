@@ -11,8 +11,8 @@
 
 use crate::app::App;
 use crate::dat;
-use crate::lotstore;
 use crate::lot::{self, name_of, LotRes};
+use crate::lotstore;
 use crate::pyfmt::natcmp;
 use crate::xml;
 use regex::Regex;

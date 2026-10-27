@@ -2,9 +2,9 @@
 //!
 //! 検査のデータは基本的に変わらないので、1 度読んだロットの値は残し、範囲を変えても・画面を開き直しても・アプリを起こし直しても
 //! 読み直さない（共有フォルダ〈Box・ネットワーク〉では、ロットを読むたびに数十〜数百 KB と行き来の待ちがかかる）。
-//! 読み直すのは、画面の「読み直す」を押したときと、ロットの INSP_INFO の大きさ・更新時刻が変わったとき
+//! 読み直すのは、画面の「読み直す」を押したときと、ロットの INSP_INFO・DETECT_INFO の大きさ・更新時刻が変わったとき
 //! （検査の途中で書き込みが続いているロット）。値はロット × 列（ファイル・鍵・単位の倍率・日時の形）ごとに覚える。
-//! 書き出しは裏で 1 秒ごとにまとめて行う（読む手を止めない）。
+//! 書き出しは裏で 3 秒ごとにまとめて行う（読む手を止めない）。
 
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -36,15 +36,20 @@ pub fn col_key(c: &Value) -> String {
     format!("{}|{}|{}|{}", s("file"), s("key"), s("scale"), s("fmt"))
 }
 
-/// ロットの印（INSP_INFO の大きさ・更新時刻。中身は読まない）。変わったら、そのロットの覚えを捨てる。
+/// ロットの印（INSP_INFO・DETECT_INFO の大きさ・更新時刻。中身は読まない）。変わったら、そのロットの覚えを捨てる
+/// （検査の途中のロットは、DETECT_INFO が増え、終わると INSP_INFO が書き直される）。
 pub fn lot_sig(lot: &Path) -> String {
-    for n in ["INSP_INFO.DAT", "INSP_INFO.dat"] {
-        if let Ok(m) = std::fs::metadata(lot.join(n)) {
-            let t = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis()).unwrap_or(0);
-            return format!("{}-{t}", m.len());
-        }
-    }
-    String::from("-")
+    let stat = |names: &[&str]| {
+        names
+            .iter()
+            .find_map(|n| std::fs::metadata(lot.join(n)).ok())
+            .map(|m| {
+                let t = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis()).unwrap_or(0);
+                format!("{}-{t}", m.len())
+            })
+            .unwrap_or_else(|| "-".into())
+    };
+    format!("{}|{}", stat(&["INSP_INFO.DAT", "INSP_INFO.dat"]), stat(&["DETECT_INFO.dat", "DETECT_INFO.DAT"]))
 }
 
 impl LotStore {
@@ -55,14 +60,17 @@ impl LotStore {
         let saved = std::fs::read(&path).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).filter(|v| v["salt"] == salt);
         if let Some(Value::Object(o)) = saved.map(|v| v["lots"].clone()) {
             for (lot, e) in o {
-                let vals = e["vals"].as_object().map(|v| v.iter().map(|(k, x)| (k.clone(), x.as_str().unwrap_or("").to_string())).collect()).unwrap_or_default();
+                let vals = e["vals"]
+                    .as_object()
+                    .map(|v| v.iter().map(|(k, x)| (k.clone(), x.as_str().unwrap_or("").to_string())).collect())
+                    .unwrap_or_default();
                 m.insert(lot, Entry { sig: e["sig"].as_str().unwrap_or("").to_string(), vals });
             }
         }
         let me = Arc::new(LotStore { path, salt: salt.to_string(), m: Mutex::new(m), dirty: AtomicBool::new(false) });
         let w = Arc::downgrade(&me);
         std::thread::spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            std::thread::sleep(std::time::Duration::from_secs(3));
             let Some(s) = w.upgrade() else { break };
             if s.dirty.swap(false, Ordering::SeqCst) {
                 s.save();
@@ -117,8 +125,16 @@ impl LotStore {
             serde_json::to_vec(&json!({"version": 1, "salt": self.salt, "lots": lots})).unwrap_or_default()
         };
         let tmp = self.path.with_extension("json.tmp");
-        if std::fs::create_dir_all(self.path.parent().unwrap_or(Path::new("."))).is_ok() && std::fs::write(&tmp, body).is_ok() {
-            let _ = std::fs::rename(&tmp, &self.path);
+        let write = || -> std::io::Result<()> {
+            use std::io::Write;
+            std::fs::create_dir_all(self.path.parent().unwrap_or(Path::new(".")))?;
+            let mut f = std::fs::File::create(&tmp)?;
+            f.write_all(&body)?;
+            f.sync_all()?; // ディスクに書けてから置き換える（電源が落ちても、前のファイルか新しいファイルのどちらかが残る）
+            std::fs::rename(&tmp, &self.path)
+        };
+        if let Err(e) = write() {
+            eprintln!("[WARN] lotvalues.json: {e}");
         }
     }
 }
@@ -140,7 +156,7 @@ mod tests {
         assert!(LotStore::open(&home, "v2").is_empty(), "版・設定が変われば覚えを使わない");
         let s2 = LotStore::open(&home, "v1");
         assert_eq!(s2.get("/lot1", "10-1", &cols)[0], Some("1".into()), "起こし直しても残る");
-        assert_eq!(s2.get("/lot1", "11-2", &cols)[0], None, "印（INSP_INFO の大きさ・時刻）が変われば使わない");
+        assert_eq!(s2.get("/lot1", "11-2", &cols)[0], None, "印（INSP_INFO・DETECT_INFO の大きさ・時刻）が変われば使わない");
         s2.put("/lot1", "11-2", [(cols[1].clone(), "2".to_string())]);
         assert_eq!(s2.get("/lot1", "11-2", &cols), vec![None, Some("2".into())], "印が変わったら前の値は捨てる");
         s2.forget(&["/lot1".to_string()]);

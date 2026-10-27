@@ -304,7 +304,9 @@ impl LotRes {
             return glob(&self.lot, pattern);
         }
         let comps = |p: &Path| -> Vec<String> {
-            p.strip_prefix(&self.lot).map(|r| r.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect()).unwrap_or_default()
+            p.strip_prefix(&self.lot)
+                .map(|r| r.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect())
+                .unwrap_or_default()
         };
         let mut out: Vec<(Vec<String>, PathBuf)> = self
             .rel
