@@ -11,7 +11,7 @@ use crate::xml;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 /// 1 つの値。
 #[derive(Debug, Clone, PartialEq)]
@@ -179,20 +179,22 @@ impl Defs {
     }
 }
 
-/// 定義を読む（ファイルの更新時刻で覚える）。
+/// 定義を読む（中身で覚える）。
 pub fn load_defs(path: &Path) -> Result<Arc<Defs>, String> {
-    type Cache = Mutex<HashMap<(String, u128), Arc<Defs>>>;
-    static CACHE: OnceLock<Cache> = OnceLock::new();
-    let m = std::fs::metadata(path).map_err(|e| e.to_string())?;
-    let t = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos()).unwrap_or(0);
-    let k = (path.display().to_string(), t);
-    let cache = CACHE.get_or_init(Default::default);
-    if let Some(d) = cache.lock().unwrap().get(&k) {
-        return Ok(d.clone());
+    // 中身で覚える: 定義の XML はロットごとにあるが、中身はほとんど同じ（設備・版が同じなら同じ）。56 KB の Shift_JIS を
+    // 読み解くのに 1 ロット約 2.5 ms かかっていたので、同じ中身は 1 度だけ読み解く。覚えの重さは中身の大きさ × 4
+    use std::hash::{Hash, Hasher};
+    static CACHE: OnceLock<crate::cache::Lru<(usize, u64), Arc<Defs>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| crate::cache::Lru::new(32 << 20));
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut h);
+    let k = (bytes.len(), h.finish());
+    if let Some(d) = cache.get(&k) {
+        return Ok(d);
     }
-    let d = Arc::new(Defs::parse(&std::fs::read(path).map_err(|e| e.to_string())?)?);
-    cache.lock().unwrap().insert(k, d.clone());
-    Ok(d)
+    let d = Arc::new(Defs::parse(&bytes)?);
+    Ok(cache.insert(k, d, bytes.len() * 4))
 }
 
 fn prim(t: &str) -> Option<usize> {
@@ -425,6 +427,17 @@ impl Dat {
         m.insert("_flag".into(), json!(r.flag));
         Value::Object(m)
     }
+}
+
+/// .dat の件数（頭の 12 バイトとファイルの大きさから。中身は読まない）。読めなければ None。
+pub fn count_records(path: &Path) -> Option<usize> {
+    use std::io::Read;
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len() as usize;
+    let mut h = [0u8; 12];
+    f.read_exact(&mut h).ok()?;
+    let (hl, rs) = (i32::from_le_bytes(h[0..4].try_into().ok()?), i32::from_le_bytes(h[8..12].try_into().ok()?));
+    (hl >= 0 && rs >= 0).then(|| len.saturating_sub(hl as usize) / (rs as usize + 1))
 }
 
 /// .dat を読む。limit 件まで。refdt はロットのフォルダ名の時刻（日時の保存の仕方を決める）。

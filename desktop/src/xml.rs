@@ -13,9 +13,12 @@ pub type Pairs = Arc<Vec<(String, String)>>;
 /// XML の文字を読む（宣言の encoding に従う。読めなければ Shift_JIS〔cp932〕で置き換えながら）。宣言は外す。
 pub fn decode(data: &[u8]) -> String {
     let head = &data[..data.len().min(200)];
-    let enc = Regex::new(r#"encoding=["']([\w\-]+)["']"#)
-        .ok()
-        .and_then(|r| r.captures(&String::from_utf8_lossy(head)).map(|c| c[1].to_ascii_lowercase()))
+    // 正規表現は 1 度だけ作る（呼ぶたびに作ると、それだけで 1 ファイル約 0.8 ms かかっていた）
+    static ENC: OnceLock<Regex> = OnceLock::new();
+    let enc = ENC
+        .get_or_init(|| Regex::new(r#"encoding=["']([\w\-]+)["']"#).unwrap())
+        .captures(&String::from_utf8_lossy(head))
+        .map(|c| c[1].to_ascii_lowercase())
         .unwrap_or_else(|| "utf-8".into());
     let label = if matches!(enc.as_str(), "shift_jis" | "shift-jis" | "sjis" | "x-sjis" | "cp932") { "shift_jis" } else { enc.as_str() };
     let text = match encoding_rs::Encoding::for_label(label.as_bytes()) {
@@ -98,7 +101,7 @@ fn walk(el: roxmltree::Node, p: &str, out: &mut Vec<(String, String)>, limit: us
     }
 }
 
-fn parse_pairs(data: &[u8], limit: usize) -> Vec<(String, String)> {
+pub fn parse_pairs(data: &[u8], limit: usize) -> Vec<(String, String)> {
     let text = decode(data);
     let opt = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
     match roxmltree::Document::parse_with_options(&text, opt) {
@@ -203,9 +206,21 @@ pub fn label_for(key: &str, labels: &HashMap<String, String>) -> String {
 }
 
 /// 表示の鍵（[*] は「どの番号でも・番号なしでも」）に合う値を集める。
+/// [*] の無い鍵は、字の一致で引く（正規表現を作らない）。[*] のある鍵の正規表現は、鍵ごとに 1 度だけ作る
+/// （呼ぶたびに作ると、ロット表で 1 ロット × 列ごとに約 0.1〜0.8 ms かかっていた）。
 pub fn match_values(pairs: &[(String, String)], key: &str) -> Vec<String> {
-    let pat = format!("^{}$", regex::escape(key).replace(r"\[\*\]", r"(?:\[\d+\])?"));
-    let Ok(rx) = Regex::new(&pat) else { return vec![] };
+    if !key.contains("[*]") {
+        return pairs.iter().filter(|(k, _)| k == key).map(|(_, v)| v.trim().to_string()).collect();
+    }
+    static RX: OnceLock<std::sync::Mutex<HashMap<String, Option<Regex>>>> = OnceLock::new();
+    let rx = RX
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .entry(key.to_string())
+        .or_insert_with(|| Regex::new(&format!("^{}$", regex::escape(key).replace(r"\[\*\]", r"(?:\[\d+\])?"))).ok())
+        .clone();
+    let Some(rx) = rx else { return vec![] };
     pairs.iter().filter(|(k, _)| rx.is_match(k)).map(|(_, v)| v.trim().to_string()).collect()
 }
 

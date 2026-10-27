@@ -54,6 +54,8 @@ pub struct App {
     pub program: Option<PathBuf>,
     pub pins: Pins,
     pub lots: LotCache,
+    /// ロット表の値の覚え（作業場所の lotvalues.json。1 度読んだロットは読み直さない）
+    pub lotstore: Arc<crate::lotstore::LotStore>,
     pub images: Arc<Images>,
     /// 木の札の値（ロットごと）・画像と欠陥の対応（ロット・画像の組ごと）。どちらも大きさに上限のある覚え（cache::Lru）
     lotsum: Lru<String, Value>,
@@ -168,11 +170,18 @@ impl App {
         let lot_re = Regex::new(&cfg.str("lot_regex")).unwrap_or_else(|_| Regex::new(r"^\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}$").unwrap());
         let pins = Pins::load(&cfg.home);
         let images = Images::new(cfg.clone());
+        // 値の作り方の印: アプリの版と設定（時差・多量の名前・時刻の差の許容などで値が変わる）。設備の一覧は値に関わらないので外す
+        let mut how = cfg.v.clone();
+        if let Some(o) = how.as_object_mut() {
+            o.remove("equipments");
+        }
+        let lotstore = crate::lotstore::LotStore::open(&cfg.home, &format!("{}|{how}", env!("CARGO_PKG_VERSION")));
         Arc::new(App {
             cfg,
             program,
             pins,
             lots: LotCache::default(),
+            lotstore,
             images,
             lotsum: Lru::new(LOTSUM_BYTES),
             imgmap: Lru::new(IMGMAP_BYTES),
@@ -319,10 +328,12 @@ impl App {
         Ok(Reply::json(&json!({"lots": lots})))
     }
 
-    /// リスト表示: ロットごとの値（{paths, cols: [{file, key, scale?, fmt?}]}。scale・fmt は表示項目と同じ）。
+    /// リスト表示: ロットごとの値（{paths, cols: [{file, key, scale?, fmt?}], refresh?}。scale・fmt は表示項目と同じ。
+    /// refresh: 覚えを捨てて読み直す。cached: 読まずに覚えている値だけ〈無い所は null〉）。
     fn lot_rows(&self, b: &Value) -> Reply {
         let cols: Vec<Value> = b["cols"].as_array().cloned().unwrap_or_default();
-        Reply::json(&crate::lotlist::values(self, &strs(&b["paths"]), &cols))
+        let flag = |k: &str| b[k].as_bool().unwrap_or(false);
+        Reply::json(&crate::lotlist::values(self, &strs(&b["paths"]), &cols, flag("refresh"), flag("cached")))
     }
 
     fn open(&self, b: &Value) -> R {

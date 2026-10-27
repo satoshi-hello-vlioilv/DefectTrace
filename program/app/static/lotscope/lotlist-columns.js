@@ -67,21 +67,31 @@
     l.aligns = al; l.widths = w;
     return l;
   }
+  /* 設定は、変わるまで同じ物を使い回す（DefectTrace 版 4.3.0。セル 1 つごとに get が呼ばれ、毎回 83 列ぶんの設定を JSON で写して
+     300 行の描き直しに約 3.5 秒かかっていた）。使い回す物は凍らせる（書き換えると厳格モードで誤りになり、気づける）。
+     設定を変える所（writeSaved・stage・discard・hold・release）で ver を上げ、使い回しを捨てる */
+  let ver = 0;
+  const memo = {};
+  const deepFreeze = (o) => { if (o && typeof o === "object" && !Object.isFrozen(o)) { Object.freeze(o); Object.values(o).forEach(deepFreeze); } return o; };
   function get(t) {
+    const m = memo[t];
+    if (m && m.ver === ver) return m.l;
     const out = norm(saved[t]);
     [draft[t], live[t]].forEach((layer) => { if (layer) KEYS.forEach((k) => { if (k in layer) out[k] = TPA.clone(layer[k]); }); });
-    return safeLayout(out);
+    const l = deepFreeze(safeLayout(out));
+    memo[t] = { ver, l };
+    return l;
   }
-  const writeSaved = () => LS.set(KEY.layouts, saved);
-  function stage(t, patch) { draft[t] = Object.assign(draft[t] || {}, patch); }
-  function discard(t) { delete draft[t]; }
+  const writeSaved = () => { ver++; LS.set(KEY.layouts, saved); };
+  function stage(t, patch) { ver++; draft[t] = Object.assign(draft[t] || {}, patch); }
+  function discard(t) { ver++; delete draft[t]; }
   function isDirty(t) { return !!draft[t] && Object.keys(draft[t]).length > 0; }
   /** 保存した設定と本当に違うか（同じ値を入れ直しただけなら違わない。保存していない変更の見張り: 版 3.43.0） */
   function changedFrom(t) { const base = norm(saved[t]); return !!draft[t] && Object.keys(draft[t]).some((k) => !TPA.unsaved.same(draft[t][k], base[k])); }
-  function save(t) { saved[t] = get(t); delete draft[t]; writeSaved(); }
+  function save(t) { saved[t] = norm(get(t)); delete draft[t]; writeSaved(); }
   function patch(t, p) { saved[t] = Object.assign(norm(saved[t]), p); writeSaved(); }
-  function hold(t, p) { live[t] = Object.assign(live[t] || {}, p); }
-  function release(t) { delete live[t]; }
+  function hold(t, p) { ver++; live[t] = Object.assign(live[t] || {}, p); }
+  function release(t) { ver++; delete live[t]; }
 
   /* ================= 計算列・読み替え（式は WaveLog と同じ list-formula.js） =================
      値の段取り（WaveLog の cellFormat と同じ）: 作り方の式 → 読み替え（当たればその言葉で確定）→ 当たらなければ値の整え方。

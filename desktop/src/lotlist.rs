@@ -10,7 +10,9 @@
 //!   値はロット情報・サマリ・一覧の表示項目と同じ作り方（lot::resolve_lot_pin）。数の整え方は画面（表示列）が決める
 
 use crate::app::App;
+use crate::dat;
 use crate::lot::{self, name_of, LotRes};
+use crate::lotstore;
 use crate::pyfmt::natcmp;
 use crate::xml;
 use regex::Regex;
@@ -78,6 +80,10 @@ fn columns_of(res: &LotRes) -> Vec<Value> {
         .collect();
     dats.sort_by(|a, b| natcmp(a, b));
     for n in dats {
+        // 件数は頭と大きさから数える（件数の多い DETECT_INFO〈数 MB〉を、列にしないのに読まない）
+        if !res.find(&format!("{n}.dat")).and_then(|p| dat::count_records(&p)).is_some_and(|c| (1..=3).contains(&c)) {
+            continue;
+        }
         let d = res.dat(&n);
         if !(1..=3).contains(&d.records.len()) {
             continue;
@@ -184,21 +190,53 @@ fn class_total(r: &Value) -> i64 {
     r["total"].as_i64().unwrap_or_else(|| r["sides"].as_object().map(|m| m.values().filter_map(Value::as_i64).sum()).unwrap_or(0))
 }
 
+/// 読む手の数。ロットを読むのは、ほとんどがファイルを待つ時間（共有フォルダでは特に）なので、芯の数より多く並べる。
+fn workers(n: usize) -> usize {
+    let cpu = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    n.min((cpu * 2).clamp(8, 32))
+}
+
 /// ロットごとの値（{path: [列の順の値]}。読めないロットは {error}）。cols は value_of の列（{file, key, scale?, fmt?}）。
-pub fn values(app: &App, paths: &[String], cols: &[Value]) -> Value {
+/// 1 度読んだ値は覚え（lotstore）から返し、覚えに無い列があるロットだけを読む。refresh なら、覚えを捨てて読み直す。
+/// cached_only なら、ロットを読まずに覚えている値だけを返す（無い所は null。画面が、読む前に覚えている分を一度に並べるため）。
+pub fn values(app: &App, paths: &[String], cols: &[Value], refresh: bool, cached_only: bool) -> Value {
+    if refresh {
+        app.lotstore.forget(paths);
+        app.lots.forget(paths);
+    }
+    let keys: Vec<String> = cols.iter().map(lotstore::col_key).collect();
     let next = AtomicUsize::new(0);
     let out: Mutex<Map<String, Value>> = Mutex::default();
+    // 覚えだけを返すときは、ファイルの印（大きさ・時刻）を見るだけなので、並べる数を絞る
+    let n = if cached_only { paths.len().min(8) } else { workers(paths.len()) };
     std::thread::scope(|s| {
-        for _ in 0..paths.len().min(8) {
+        for _ in 0..n {
             s.spawn(|| loop {
                 let i = next.fetch_add(1, Ordering::SeqCst);
                 let Some(p) = paths.get(i) else { break };
-                let v = match app.lots.get(p, &app.cfg, app.program.as_ref()) {
-                    Ok(res) => {
-                        let mut cache = BTreeMap::new();
-                        json!(cols.iter().map(|c| value_of(&res, c, &mut cache)).collect::<Vec<_>>())
+                let sig = lotstore::lot_sig(Path::new(p));
+                let mut got = app.lotstore.get(p, &sig, &keys);
+                let v = if got.iter().all(Option::is_some) {
+                    json!(got.into_iter().flatten().collect::<Vec<_>>())
+                } else if cached_only {
+                    json!(got)
+                } else {
+                    match app.lots.get(p, &app.cfg, app.program.as_ref()) {
+                        Ok(res) => {
+                            let mut cache = BTreeMap::new();
+                            let mut new = vec![];
+                            for (j, c) in cols.iter().enumerate() {
+                                if got[j].is_none() {
+                                    let v = value_of(&res, c, &mut cache);
+                                    new.push((keys[j].clone(), v.clone()));
+                                    got[j] = Some(v);
+                                }
+                            }
+                            app.lotstore.put(p, &sig, new);
+                            json!(got.into_iter().flatten().collect::<Vec<_>>())
+                        }
+                        Err(e) => json!({"error": e}),
                     }
-                    Err(e) => json!({"error": e}),
                 };
                 out.lock().unwrap().insert(p.clone(), v);
             });
