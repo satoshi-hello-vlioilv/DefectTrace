@@ -102,7 +102,7 @@ aside{background:var(--pane);display:flex;flex-direction:column;min-height:0;fle
 .ihead{display:flex;gap:8px;align-items:baseline;font-weight:700;margin:2px 0 4px;flex-wrap:wrap}
 .tag{font-size:11px;font-weight:700;color:#fff;border-radius:3px;padding:0 5px}
 table.kv{width:100%;border-collapse:collapse;font-size:12px}
-table.kv td{padding:2px 4px;border-bottom:1px solid var(--line2);vertical-align:top;word-break:break-all}
+table.kv td{padding:2px 4px;border-bottom:1px solid var(--line2);vertical-align:top;overflow-wrap:anywhere}
 table.kv td.k{color:var(--sub);width:46%}
 table.kv td.k small{display:block;font:10px Consolas,monospace;color:#9aa3ad}
 table.kv td.b{width:22px;padding:1px}

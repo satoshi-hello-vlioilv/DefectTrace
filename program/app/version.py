@@ -8,7 +8,7 @@
   手順: プログラムを直す → APP_VERSION を上げ、CHANGELOG の先頭に1件足す → python app_build.py --release → テスト
 """
 APP_VERSION = "4.1.0"
-RELEASE = {"version": "4.1.0", "digest": "26b10bc0fc7eb446"}
+RELEASE = {"version": "4.1.0", "digest": "cb79a0e70dd541fe"}
 
 CHANGELOG = [
     {"version": "4.1.0", "date": "2026-10-27", "notes": [
