@@ -1,7 +1,7 @@
 {
   "title": "サムネイルの大きさを列の数で決める（一覧の幅に合わせる・版 4.2.0）",
   "rule": "2026-10-17",
-  "evaluator": "採点者: 案を作っていない別のエージェント（Claude・採点専任）。2026-10-27 に自分で node program/tools/ui-variants.mjs <scratchpad>/score-tc1 program/tools/proposals/2026-10-27-thumb-cols.mjs を流して撮り（lot〈5 列〉・many〈8 列を選んだ後〉× 1728・1536・1280、now と A〜F）、sheet-lot-1728・sheet-many-1280 と、各案の lot-1728・many-1280・many-1536（now は lot-1728・lot-1280）を Read で直接開いて見て採点した。案の定義・アプリのコードは変えていない。減点の『見切れ』（狭いカードの項目名の『…』切り）は共通の計算によるので A〜F に同じく 1 つずつ付けた。 2 回目の採点者: 1 回目の採点者・案を作った者とは別のエージェント（Claude・採点専任）。2026-10-27 に自分で node program/tools/ui-variants.mjs <scratchpad>/score-tc2 program/tools/proposals/2026-10-27-thumb-cols-2.mjs を流して撮り（lot〈5 列〉・many〈8 列を選んだ後〉× 1728・1536・1280、now と A2・G・H・I・E2）、sheet-lot-1728・sheet-many-1280 と、各案の lot-1728・many-1280・many-1536（now は lot-1728 と sheet）を Read で直接開いて見て採点した。案の定義・アプリのコードは変えていない。押せない数の灰色の字は、無効のボタンなので読みにくい字の減点には入れなかった（1 回目と同じ扱い）。入る最大の列が 1728 で 5 列までに減ることは、どの案にも共通の計算なので減点にせず、各案の seen に書いた。",
+  "evaluator": "採点者: 案を作っていない別のエージェント（Claude・採点専任）。2026-10-27 に自分で node program/tools/ui-variants.mjs <scratchpad>/score-tc1 program/tools/proposals/2026-10-27-thumb-cols.mjs を流して撮り（lot〈5 列〉・many〈8 列を選んだ後〉× 1728・1536・1280、now と A〜F）、sheet-lot-1728・sheet-many-1280 と、各案の lot-1728・many-1280・many-1536（now は lot-1728・lot-1280）を Read で直接開いて見て採点した。案の定義・アプリのコードは変えていない。減点の『見切れ』（狭いカードの項目名の『…』切り）は共通の計算によるので A〜F に同じく 1 つずつ付けた。 2 回目の採点者: 1 回目の採点者・案を作った者とは別のエージェント（Claude・採点専任）。2026-10-27 に自分で node program/tools/ui-variants.mjs <scratchpad>/score-tc2 program/tools/proposals/2026-10-27-thumb-cols-2.mjs を流して撮り（lot〈5 列〉・many〈8 列を選んだ後〉× 1728・1536・1280、now と A2・G・H・I・E2）、sheet-lot-1728・sheet-many-1280 と、各案の lot-1728・many-1280・many-1536（now は lot-1728 と sheet）を Read で直接開いて見て採点した。案の定義・アプリのコードは変えていない。押せない数の灰色の字は、無効のボタンなので読みにくい字の減点には入れなかった（1 回目と同じ扱い）。入る最大の列が 1728 で 5 列までに減ることは、どの案にも共通の計算なので減点にせず、各案の seen に書いた。 作った後の採点者: 案を作った者・作った者・1・2 回目の採点者とは別のエージェント（Claude・採点専任）。2026-10-27 に自分で node program/tools/ui-check.mjs <scratchpad>/built-tc を流して本物の画面を撮り（start・lot・info・release × 1728・1536・1280。1 度目は開くのが時間切れで道具が自分で開き直し、全部撮れた）、node program/tools/thumb-cols-check.mjs <scratchpad>/built-tcc で各窓の 1〜最大の列を押して 1 段の枚数・右の空き・切れた字・最大の確かさ・覚えるかを測った（全部 OK）。作る前（<scratchpad>/now）と作った後の lot-1728・lot-1536・lot-1280、built-tcc の max-1728・max-1280 を Read で直接開き、1728 のツールバーとカード下端は切り出して拡大して見た。アプリのコードは変えていない。",
   "rounds": [
     {
       "name": "1 回目",
@@ -298,5 +298,26 @@
         }
       }
     }
-  ]
+  ],
+  "built": {
+    "name": "作った後: I 入る数だけのボタン（1〜最大。窓が狭いと減る）",
+    "images": "node program/tools/ui-check.mjs <scratchpad>/built-tc（lot-1728・lot-1536・lot-1280 を作る前の <scratchpad>/now と見比べた）と node program/tools/thumb-cols-check.mjs <scratchpad>/built-tcc（max-1728・max-1536・max-1280 と、押して測った数）",
+    "result": {
+      "score": {
+        "order": 8,
+        "chunk": 8,
+        "hierarchy": 8,
+        "visual": 8,
+        "steps": 9,
+        "effortless": 8,
+        "intuitive": 8,
+        "form": 8,
+        "place": 7,
+        "layout": 9,
+        "tone": 8
+      },
+      "minus": [],
+      "seen": "良い所: 案の再現（2 回目の I）と同じ形で作られている。built-tc/lot-1728 で img・fm_img の右に『列 1 2 3 4 5』、lot-1536 で『1 2 3 4』、lot-1280 で『1 2 3』と押せる数だけが並び、今の数が青い塗りで光る（数の字も出るので色だけの区別ではない）。作る前（now/lot-1728）は 5 列の右に約 60px の空きが残っていたが、作った後は 5 枚が一覧の幅いっぱいに並ぶ。測った数でも 1728・1536・1280 のどの列でも右の空きは 0〜2px・切れた字は 0。最大（5・4・3 列）は中身が入るいちばん上で、1 つ上の列の幅では字が 1px・3px・16px 切れるので、最大の計算は確か。開き直しても選んだ 2 列を覚えている。now/lot-1280 では『サイズ』のつまみが 1 段を占め画像表示が 3 段目だったが、作った後の lot-1280 ではボタンがタブの段に収まって画像表示が 2 段目に上がり、カードの始まりが約 37px 上がった（1 枚目のカードがより多く見える）。項目名・値・面と札（表面・転写候補 1）・ファイル名（0000/0.bmp）は lot-1728 のカード下端の拡大でも切れていない。悪い所: 列のボタンは左の img・fm_img の切り替えより背が低く、字も灰色で、並んだ 2 つの切り替えの形がそろっていない（lot-1728 のツールバーの拡大）。並ぶボタンの数が窓の幅で 5・4・3 と変わり、『最大』の言葉が無く右端が最大と読ませる。1728 で 6 列以上へ小さくすることはできない（案の時から分かっていたことで、どの案にも共通）。カード下端の面・ファイル名の小さな字（ui-check の small の数）は作る前からあり、この改良で増えた字ではない（1280 で 41→61 に増えたのは、カードが上がって画面に入る枚数が増えたため）。画像表示の枠は 1728 で 2 段に折れているが、作る前（now/lot-1728）も同じく 2 段で、この改良で増えた折り返しではない。"
+    }
+  }
 }

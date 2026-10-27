@@ -64,7 +64,10 @@ aside{background:var(--pane);display:flex;flex-direction:column;min-height:0;fle
 .seg button.on{background:var(--acc);color:#fff;border-color:var(--acc);position:relative}
 .seg button .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px;border:1px solid #fff}
 .sizer{display:flex;align-items:center;gap:6px;color:var(--sub);font-size:12px}
-.sizer{white-space:nowrap}.sizer .seg{flex-wrap:nowrap}.sizer .seg button{min-width:28px;padding:2px 6px}
+.sizer{white-space:nowrap}.sizer .seg{flex-wrap:nowrap}
+/* 列のボタンは隣の切り替え（img・fm_img）と同じ高さ・字（13px・本文の色）。幅だけ数に合わせて詰める */
+.sizer .seg button{min-width:30px;padding:3px 8px;font-size:13px;color:var(--txt)}
+.sizer .seg button.on{color:#fff}
 #grid{flex:1;overflow:auto;padding:8px;display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px;--ts:150px}
 #grid[hidden]{display:none}
 .empty{color:var(--sub);margin:auto;padding:20px;text-align:center}
