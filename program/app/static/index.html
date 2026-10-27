@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <title>DefectTrace</title>
+<link rel="stylesheet" href="/static/lotscope/lotscope-base.css?v={{v}}">
+<link rel="stylesheet" href="/static/lotscope/lotlist-columns.css?v={{v}}">
+<link rel="stylesheet" href="/static/lotscope/formula-builder.css?v={{v}}">
+<link rel="stylesheet" href="/static/lotscope/lotscope-theme.css?v={{v}}">
 <link rel="stylesheet" href="/static/style.css?v={{v}}">
 </head>
 <body>
@@ -40,6 +44,7 @@
         <button type="button" data-v="grid" class="on">画像一覧</button>
         <button type="button" data-v="pairs" title="表と裏で幅方向位置が近い欠陥の組">転写候補 <span id="pairCnt" class="cnt0"></span></button>
         <button type="button" data-v="pitch" title="同一面・同一幅位置で等間隔に並ぶ欠陥">ピッチ候補 <span id="pitchCnt" class="cnt0"></span></button>
+        <button type="button" data-v="list" title="左の木で選んだ設備・年・月・日の下のロットを表にし、ロット単位の値を全件書き出す">ロット一覧</button>
       </div>
       <div id="groupTabs" class="seg"></div>
       <div class="dz chips cardzone" data-drop="card" title="各画像の下に表示する項目（画像単位の項目をここへドラッグ）"><span class="dzl">画像表示</span><span class="pins" data-place="card"></span></div>
@@ -68,6 +73,7 @@
       <div id="pSum" class="psum"></div>
       <div id="pairList" tabindex="0"></div>
     </div>
+    <div id="listView" class="lv" hidden></div>
     <div id="pitchView" hidden>
       <div class="pbar">
         <label class="fld" title="同一面で幅方向位置(OS～)の許容範囲（候補列の平均位置から）">幅差 ±
@@ -176,6 +182,15 @@
   </div>
 </div>
 <input type="file" id="relFile" accept=".zip" hidden>
+<script src="/static/lotscope/shared.js?v={{v}}"></script>
+<script src="/static/lotscope/unsaved.js?v={{v}}"></script>
+<script src="/static/lotscope/list-formula.js?v={{v}}"></script>
+<script src="/static/lotscope/num-format.js?v={{v}}"></script>
+<script src="/static/lotscope/formula-builder.js?v={{v}}"></script>
+<script src="/static/lotscope/lotlist-rules.js?v={{v}}"></script>
+<script src="/static/lotscope/lotlist-columns.js?v={{v}}"></script>
+<script src="/static/lotscope/xlsx-writer.js?v={{v}}"></script>
+<script src="/static/lotlist-view.js?v={{v}}"></script>
 <script src="/static/app.js?v={{v}}"></script>
 <script src="/static/desktop.js?v={{v}}"></script>
 </body>

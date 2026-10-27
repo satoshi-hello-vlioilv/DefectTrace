@@ -349,3 +349,34 @@ button.ghost.dopen{color:#fff;border-color:#7d8da3}
 .lpband3 .lpsum,.lpband3 .lpwsum{display:none}
 @media (max-width:1500px){.lpband3 .lpdn,.lpband3 .lpwt{display:none}.lpband3 .lpsum,.lpband3 .lpwsum{display:inline-flex}}
 @media (prefers-color-scheme:dark){.lpband3{background:#1c2a3d;border-bottom-color:#2c3f5a}.lpband3 .lpbar{background:#2c3f5a}}
+
+/* ===== ロット一覧（版 4.2.0。表は LotScope の表示列の表 .ll-grid と同じ作り。色は DefectTrace の色） */
+.lpband3.off{display:none!important}
+.lv{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--pane)}
+.lv[hidden]{display:none}
+.lv-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.lv-bar input[type=search]{width:240px}
+.lv-scope{display:flex;align-items:center;gap:4px;white-space:nowrap;min-width:0;overflow:hidden}
+.lv-scope .lv-sl{font-size:11px;font-weight:700;color:var(--sub);margin-right:4px}
+.lv-scope b{font-size:14px}.lv-scope .lnk{padding:0 2px}.lv-sep{color:var(--sub)}
+.lv-count{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lv-wrap{flex:1;min-height:0;overflow:auto;position:relative}
+.lv-wrap .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.lv-wrap .empty[hidden]{display:none}
+table.ll-grid{border-collapse:separate;border-spacing:0;font-size:13px;table-layout:fixed}
+.ll-grid th,.ll-grid td{padding:0 var(--ll-cell-padx,10px);border-bottom:1px solid var(--line2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.ll-grid tbody td{padding-top:var(--ll-row-pad,4px);padding-bottom:var(--ll-row-pad,4px);font-variant-numeric:tabular-nums}
+.ll-grid[data-overflow="clip"] th,.ll-grid[data-overflow="clip"] td{text-overflow:clip}
+.ll-grid[data-overflow="wrap"] tbody td{white-space:normal;overflow-wrap:anywhere;line-height:1.35;vertical-align:top}
+.ll-grid thead th{position:sticky;top:0;z-index:2;background:#3c4b5c;color:#fff;font-weight:700;font-size:12.5px;height:30px;cursor:pointer;user-select:none}
+.ll-grid thead th:hover{background:#4a5a6c}
+.ll-grid thead th.ll-lotcol{background:var(--acc)}
+.ll-grid thead th.is-sorted::before{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:#ffd27a;pointer-events:none}
+.ll-grid thead th.is-calc .th-in > span{font-style:italic}
+.ll-grid thead .lv-sort{font-style:normal;font-size:10px;margin-left:4px;color:#ffd27a}
+.ll-grid tbody tr.is-odd td{background:#fafcfd}
+.ll-grid tbody tr:hover td{background:var(--accbg);cursor:default}
+.ll-grid td.al-right{text-align:right}.ll-grid td.al-center{text-align:center}
+.ll-grid td.lv-wait{color:var(--sub)}
+.ll-grid td.c-ok{color:var(--ok);font-weight:700}.ll-grid td.c-ng{color:var(--ng);font-weight:700}.ll-grid td.c-warn{color:#8a5a00;font-weight:700}.ll-grid td.c-muted{color:var(--sub)}
+@media (prefers-color-scheme:dark){.ll-grid tbody tr.is-odd td{background:#1b1e24}.ll-grid thead th{background:#2a3646}}

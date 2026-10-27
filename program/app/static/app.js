@@ -52,7 +52,7 @@
     const li = document.createElement("li");
     li.dataset.path = d.path; li.dataset.eq = eq;
     li.innerHTML = `<div class="row${isEq ? " eq" : ""}" title="${esc(d.path)}"><span class="tw">▶</span><span class="nm">${esc(isEq ? d.name : dirLabel(d.name))}</span><span class="cnt"></span></div><ul hidden></ul>`;
-    li.firstChild.addEventListener("click", () => toggle(li));
+    li.firstChild.addEventListener("click", () => { toggle(li); S.folder = li; if (S.view === "list") window.DTLotList.setScope(listScope()); });
     return li;
   }
   async function toggle(li, open) {
@@ -77,6 +77,27 @@
     }
     ul.hidden = false; tw.textContent = "▼";
   }
+  // ロット一覧の範囲: 木で最後に押した節（設備・年・月・日）。押していなければ、開いているロットの日。
+  // 設備から押した節までの道（crumbs）も渡す（一覧の範囲の表示で、押すと広げられる）
+  function listScope() {
+    let li = S.folder && S.folder.isConnected ? S.folder : document.querySelector(".lot.sel")?.parentElement?.closest("li");
+    if (!li) li = $("tree").querySelector(":scope>li");
+    if (!li) return null;
+    const crumbs = [];
+    for (let x = li; x && x.dataset && x.dataset.path; x = x.parentElement.closest("li")) {
+      const isEq = x.parentElement === $("tree");
+      crumbs.unshift({ path: x.dataset.path, label: isEq ? x.dataset.eq : x.querySelector(":scope>.row .nm").textContent });
+    }
+    return { path: li.dataset.path, eq: li.dataset.eq, crumbs };
+  }
+  // 一覧の行（ロット）を開く: 木にまだ無いロットも開けるよう、木と同じ形の節を作って渡す
+  function openLotPath(path) {
+    const name = path.split(/[\\/]/).pop();
+    const li = document.querySelector(`.lot[data-path="${CSS.escape(path)}"]`) || lotNode({ name, path }, S.folder?.dataset.eq || "");
+    setView("grid"); openLot(li);
+  }
+  window.dtStatus = (m, err) => status(m, err);
+
   function lotNode(c, eq) {
     const li = document.createElement("li");
     li.className = "lot"; li.dataset.path = c.path; li.dataset.name = c.name; li.dataset.eq = eq;
@@ -935,7 +956,9 @@
   function setView(v) {
     S.view = v;
     document.querySelectorAll("#viewSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
-    $("grid").hidden = v !== "grid"; $("pairView").hidden = v !== "pairs"; $("pitchView").hidden = v !== "pitch";
+    $("grid").hidden = v !== "grid"; $("pairView").hidden = v !== "pairs"; $("pitchView").hidden = v !== "pitch"; $("listView").hidden = v !== "list";
+    $("loadBand").classList.toggle("off", v === "list");   // 画像の読み込みの帯は画像の画面だけ
+    if (v === "list") window.DTLotList.setScope(listScope());
     document.querySelector(".cardzone").style.display = v === "grid" ? "" : "none";
     $("sizerWrap").style.display = v === "grid" ? "" : "none";
     if (v === "pairs") { if (S.mapSide !== "all") { S.mapSide = "all"; renderMapSide(); } renderPairs(); }
@@ -1134,10 +1157,7 @@
       rows.push([sideName(b.side), b.no, b.kname, b.x, b.y, b.a, b.img || "", sideName(d.side), d.no, d.kname, d.x, d.y, d.a, d.img || "", c.dx, c.dy, g.cands.length, c.dup]);
     }
     const csv = "\ufeff" + rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `転写候補_${S.lot?.eq || ""}_${S.lot?.name || ""}.csv`;
-    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    TPA.download(new Blob([csv], { type: "text/csv" }), `転写候補_${S.lot?.eq || ""}_${S.lot?.name || ""}.csv`);
   });
 
 
@@ -1244,10 +1264,7 @@
     const out = [["候補No", "面", "ピッチ(m)", "個数", "ばらつき最大(m)", "平均幅方向OS(mm)", "推定ロール径(mm)", "順", "欠陥No", "分類", "幅方向OS(mm)", "長さ方向(m)", "面積(mm2)", "前との間隔(m)", "画像"]];
     rows.forEach(({ c }, ri) => c.members.forEach((m, k) => out.push([ri + 1, sideName(c.side), c.pitch, c.n, c.dev, c.x, c.dia, k + 1, m.no, m.kname, m.x, m.y, m.a, k ? c.intervals[k - 1] : "", m.img || ""])));
     const csv = "\ufeff" + out.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `ピッチ候補_${S.lot?.eq || ""}_${S.lot?.name || ""}.csv`;
-    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    TPA.download(new Blob([csv], { type: "text/csv" }), `ピッチ候補_${S.lot?.eq || ""}_${S.lot?.name || ""}.csv`);
   });
 
   // ================================================================ viewer
@@ -1320,18 +1337,12 @@
   ts.addEventListener("input", setTs); setTs();
   window.addEventListener("resize", drawMap);
 
-  // 保存（CSV）が済んだら置いた場所を出す（窓が dt:saved で知らせる）
-  window.addEventListener("dt:saved", (e) => {
-    const d = e.detail || {};
-    if (!d.ok || !d.path) { status("保存できませんでした", true); return; }
-    status(`保存しました: ${d.path}`);
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "mini"; b.textContent = "フォルダを開く";
-    b.addEventListener("click", () => send("/__desktop/reveal", { path: d.path }).catch((er) => status(er.message, true)));
-    $("status").append(" ", b);
-  });
+  // 保存（CSV・Excel・表示列の設定）は、どれも LotScope の部品と同じ TPA.download で行い、知らせも 1 つにそろえる。
+  // 窓は保存し終えたとき dt:saved を送るので、TPA の知らせ（置いた場所・フォルダを開く・パスをコピー）へ渡す
+  window.addEventListener("dt:saved", (e) => window.dispatchEvent(new CustomEvent("tpa:saved", { detail: e.detail })));
 
   (async () => {
+    window.DTLotList.mount($("listView"), { onOpen: openLotPath });
     try { S.pins = await api("/api/pins"); renderPinZones(); renderMapSide(); await loadEquipments(); status("設備を選択してください"); }
     catch (e) { status(e.message, true); }
     // 画面が開けた合図（入れ替えた直後の版は、これが来なければ前の版へ戻す）

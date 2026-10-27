@@ -119,6 +119,11 @@ impl Args {
     }
 }
 
+/// JSON の字の並び（無ければ空）。
+fn strs(v: &Value) -> Vec<String> {
+    v.as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default()
+}
+
 /// 1 つの名前か（区切り・.. を含まない）。
 fn safe_part(x: &str) -> Result<&str, Reply> {
     if x.is_empty() || x == "." || x == ".." || x.contains(['/', '\\']) {
@@ -175,6 +180,11 @@ impl App {
             ))),
             ("GET", "/api/children") => self.children(&a),
             ("POST", "/api/lotsum") => Ok(self.lotsum_many(&b)),
+            ("GET", "/api/lots") => self.lots_list(&a),
+            ("POST", "/api/lotcols") => Ok(Reply::json(&crate::lotlist::columns(self, &strs(&b["paths"])))),
+            ("POST", "/api/lotrows") => Ok(self.lot_rows(&b)),
+            // LotScope から持ち込んだ部品（shared.js）が画面の設定の控えを送る先。DefectTrace は設定を窓の保存（localStorage）にだけ置くので、受けて返すだけ
+            ("POST", "/api/ui-state") => Ok(Reply::json(&json!({"rev": 0}))),
             ("POST", "/api/open") => self.open(&b),
             ("GET", "/api/status") => self.status(&a),
             ("GET", "/api/info") => a.req("lot").and_then(|l| self.lot_info(l)).map(|v| Reply::json(&v)),
@@ -270,6 +280,34 @@ impl App {
             }
         });
         Reply::json(&Value::Object(out.into_inner().unwrap()))
+    }
+
+    /// リスト表示: 木の節の下のロット（新しい順）。
+    fn lots_list(&self, a: &Args) -> R {
+        let p = PathBuf::from(a.req("path")?);
+        if !p.is_dir() {
+            return Err(Reply::error(400, &format!("開けません: {}", p.display())));
+        }
+        let lots: Vec<Value> = crate::lotlist::lots_under(&p, &self.lot_re, 6)
+            .iter()
+            .map(|l| {
+                let n = name_of(l);
+                let (d, t) = lot::lot_dt(&n);
+                json!({"name": n, "path": l.display().to_string(), "date": d, "time": t})
+            })
+            .collect();
+        Ok(Reply::json(&json!({"lots": lots})))
+    }
+
+    /// リスト表示: ロットごとの値（{paths, cols: [{file, key}]}）。
+    fn lot_rows(&self, b: &Value) -> Reply {
+        let cols: Vec<(String, String)> = b["cols"]
+            .as_array()
+            .map(|a| {
+                a.iter().map(|c| (c["file"].as_str().unwrap_or("").to_string(), c["key"].as_str().unwrap_or("").to_string())).collect()
+            })
+            .unwrap_or_default();
+        Reply::json(&crate::lotlist::values(self, &strs(&b["paths"]), &cols))
     }
 
     fn open(&self, b: &Value) -> R {

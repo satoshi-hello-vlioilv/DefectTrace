@@ -11,6 +11,7 @@ pub mod images;
 pub mod install;
 pub mod locate;
 pub mod lot;
+pub mod lotlist;
 pub mod pins;
 pub mod pool;
 pub mod pyfmt;

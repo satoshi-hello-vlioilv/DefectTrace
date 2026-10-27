@@ -1,0 +1,148 @@
+/* LotScope（satoshi-hello-vlioilv/LotScope）の program/app/static/css/app.css から、持ち込んだ JS が使う組だけを抜き出した物
+   （ボタン・メニュー tm-・保存していない変更の窓 us-・窓の取っ手 fp-・保存の窓 tpa-saved-・待ち wait- など）。色は lotscope-theme.css が DefectTrace の色へ結ぶ */
+.btn-ghost.on-dark{height:32px;border-color:var(--on-dark-line);color:var(--on-fill);background:var(--on-dark-fill)}
+.btn-ghost.on-dark:hover{background:var(--on-dark-hover)}
+@keyframes imp-spin{to{transform:rotate(360deg)}}
+.fetch-overlay{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;background:rgba(15,31,46,.38);backdrop-filter:blur(1.5px)}
+.fetch-card{width:min(420px,calc(100vw - 32px));background:var(--surface);border-radius:14px;box-shadow:0 18px 50px rgba(10,30,50,.28);padding:18px 20px 14px}
+.fetch-head{display:flex;align-items:center;gap:10px}
+.fetch-head h3{margin:0;font-size:var(--fs-lg);color:var(--ink)}
+.fetch-lot{margin-left:auto;font-size:var(--fs-lg);letter-spacing:.04em;color:var(--h-input)}
+/* 動くものは「いま処理している段階」の回転の1つだけ（見出しにも回転を置くと、同じ「動いている」を2回言う）。左端は見出し・道・段階でそろえる */
+.fetch-route{margin:4px 0 12px;font-size:var(--fs-sm);color:var(--muted)}
+.fetch-steps{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.fetch-steps li{display:flex;align-items:center;gap:10px;font-size:var(--fs-md);color:#9aa8b5}
+.fetch-steps li i{width:16px;height:16px;border-radius:50%;border:2px solid #cfd8e1;flex:none;display:grid;place-items:center;font-style:normal;font-size:10px;font-weight:800}
+.fetch-steps li.done{color:var(--ink)}
+.fetch-steps li.done i{background:var(--ok-ink);border-color:var(--ok-ink);color:var(--on-fill)}
+.fetch-steps li.done i::after{content:"✓"}
+.fetch-steps li.skip{color:#9aa8b5;text-decoration:line-through;text-decoration-color:#cfd8e1}
+.fetch-steps li.skip i{border-style:dashed}
+.fetch-steps li.now{color:var(--ink);font-weight:700}
+.fetch-steps li.now i{border-color:#c9d6e2;border-top-color:var(--h-input);animation:imp-spin .8s linear infinite}
+.fetch-hint{margin-top:12px;padding:8px 10px;border-radius:8px;background:var(--amber-soft);color:#7a4f00;font-size:var(--fs-sm);line-height:1.55}
+.fetch-foot{display:flex;align-items:center;margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
+.fetch-time{font-variant-numeric:tabular-nums;color:var(--muted);font-size:var(--fs-sm)}
+.fetch-foot button{margin-left:auto}
+.fetch-foot kbd{font-size:10px;padding:0 4px;border:1px solid var(--line);border-radius:3px;color:var(--muted);margin-left:2px}
+.tpa-wait .fetch-card:focus{outline:none}
+.wait-from{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:Consolas,"Yu Gothic UI",monospace}
+.wait-now{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:var(--fs-md);font-weight:700;color:var(--ink)}
+.wait-spin{width:16px;height:16px;flex:none;border-radius:50%;border:2px solid #c9d6e2;border-top-color:var(--h-input);animation:imp-spin .8s linear infinite}
+/* 控え（なぜ時間がかかるか・次から速いか）は淡い 1 行。乗せると全文（7 案＋2 回目で選んだ: program/tools/ui-proposals/2026-10-waiting*.mjs） */
+.wait-note{margin:6px 0 0;color:var(--muted);font-size:12px;line-height:1.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@keyframes wait-in{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.fetch-steps li.now i{animation:none;background:var(--h-input)}.wait-spin{animation:none;border-color:var(--h-input)}
+}
+.btn-ghost{height:30px;border:1px solid var(--line);background:var(--surface);color:var(--h-meta);border-radius:8px;
+  padding:0 13px;font-weight:700;cursor:pointer;font-size:var(--fs-sm)}
+.btn-ghost:hover{background:var(--surface-4);border-color:#c7d2da}
+/* 自動計算のセル: 寒色の淡いグレーで“触れない”表現 */
+tbody td.calc{background:var(--ro-bg);color:var(--ro-ink)}
+tbody td.calc.dim{color:#aab5bd}
+.cl-update .btn-primary{flex:none;white-space:nowrap}
+/* ---------- 動かせる・大きさを変えられる窓（TPA.floatPanel）: 4辺と4隅の取っ手・位置と大きさの数 ----------
+   取っ手は窓の内側の縁に重ねる（窓は overflow:clip なので外へは出せない）。見た目は出さず、指す形（カーソル）で知らせる。
+   右下だけは小さな斜線を見せる（大きさを変えられることの手がかり）。 */
+.fp-h{position:absolute;z-index:6;display:block}
+.fp-n,.fp-s{left:12px;right:12px;height:6px;cursor:ns-resize}
+.fp-n{top:0}
+.fp-s{bottom:0}
+.fp-e,.fp-w{top:12px;bottom:12px;width:6px;cursor:ew-resize}
+.fp-e{right:0}
+.fp-w{left:0}
+.fp-ne,.fp-nw,.fp-se,.fp-sw{width:14px;height:14px}
+.fp-ne{top:0;right:0;cursor:nesw-resize}
+.fp-sw{bottom:0;left:0;cursor:nesw-resize}
+.fp-nw{top:0;left:0;cursor:nwse-resize}
+.fp-se{bottom:0;right:0;cursor:nwse-resize}
+.fp-se::after{content:"";position:absolute;right:3px;bottom:3px;width:8px;height:8px;
+  background:linear-gradient(135deg,transparent 45%,#9aabb8 45%,#9aabb8 55%,transparent 55%,transparent 70%,#9aabb8 70%,#9aabb8 80%,transparent 80%)}
+.fp-h:hover{background:rgba(63,101,145,.14)}
+.fp-read{position:absolute;right:18px;bottom:10px;z-index:7;padding:3px 9px;border-radius:6px;background:#1f3b54;color:#fff;
+  font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;pointer-events:none;box-shadow:0 6px 16px rgba(10,30,45,.25)}
+body.fp-busy{user-select:none}
+body.fp-busy iframe{pointer-events:none}
+/* ---------- 書き出したファイルの置き場所の知らせ（shared.js の saved）: 右下・閉じるまで残る ---------- */
+.tpa-saved{position:fixed;right:24px;bottom:24px;z-index:200;width:440px;max-width:calc(100vw - 48px);display:grid;gap:6px;
+  padding:12px 14px 12px 16px;background:var(--surface);border:1px solid var(--pop-line);border-left:4px solid var(--ok);border-radius:10px;
+  box-shadow:0 14px 36px var(--pop-shadow);font-size:12.5px;color:var(--ink)}
+.tpa-saved.is-ng{border-left-color:var(--danger)}
+.tpa-saved-t{padding-right:24px;font-size:13.5px;color:var(--ok-ink);word-break:break-all}
+.tpa-saved.is-ng .tpa-saved-t{color:var(--danger)}
+.tpa-saved-l{color:var(--muted);font-size:11.5px}
+.tpa-saved-p{line-height:1.6}
+code.tpa-saved-p{font-family:Consolas,"BIZ UDGothic",monospace;font-size:12.5px;word-break:break-all;background:var(--surface-4);border-radius:5px;padding:3px 7px;user-select:all}
+.tpa-saved-acts{display:flex;gap:6px;margin-top:2px}
+.tpa-saved-acts button{height:28px;border:1px solid var(--line);border-radius:6px;background:var(--surface);padding:0 12px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
+.tpa-saved-acts button:hover{border-color:var(--h-input)}
+.tpa-saved-acts .is-main{background:var(--h-input);border-color:var(--h-input);color:var(--on-fill);font-weight:700}
+.tpa-saved-acts .is-main:hover{filter:brightness(1.08)}
+.tpa-saved-msg{color:var(--muted);font-size:12px}
+.tpa-saved-msg:empty{display:none}
+.tpa-saved-x{position:absolute;right:8px;top:6px;width:24px;height:24px;border:0;border-radius:6px;background:none;color:var(--muted);font-size:16px;cursor:pointer}
+.tpa-saved-x:hover{background:var(--surface-4);color:var(--ink)}
+/* ---------- 引いて並べ替える（TPA.sortable。版 3.28.0: 作業実績の設備のタブ・マスタ管理の設備の一覧）----------
+   差し込む所に入力の藍の線（周りに淡い輪）。引いている物は持ち上げた形（影）で、元の所は淡く */
+.tpa-sort-mark{position:fixed;z-index:200;pointer-events:none;background:var(--h-input);border-radius:2px;box-shadow:0 0 0 3px color-mix(in srgb,var(--h-input) 20%,transparent)}
+.tpa-sort-mark.is-x{width:3px}
+.tpa-sort-mark.is-y{height:3px}
+body.tpa-sorting,body.tpa-sorting *{cursor:grabbing!important;user-select:none}
+/* 保存していない変更の窓（版 3.43.0。static/js/unsaved.js）。マスタ管理・組む所より手前に出す */
+.us-overlay{position:fixed;inset:0;z-index:4000;display:grid;place-items:center;background:rgba(18,30,44,.42)}
+.us-card{width:min(480px,calc(100vw - 32px));box-sizing:border-box;padding:18px 20px 16px;border-radius:12px;background:var(--surface);box-shadow:0 18px 48px rgba(10,20,32,.32);border-top:4px solid #c27a12}
+.us-head{display:flex;align-items:center;gap:10px}
+.us-head h3{margin:0;font-size:16px;color:var(--ink)}
+.us-ico{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#fff1d6;color:#8a5200;font-weight:800;flex:0 0 auto}
+.us-body{margin:10px 0 0 34px;font-size:13.5px;color:var(--ink)}
+.us-body p{margin:0 0 6px}
+.us-body ul{margin:0;padding-left:1.2em;max-height:180px;overflow:auto}
+.us-body li{margin:2px 0;font-weight:700}
+.us-err{min-height:0;margin:8px 0 0 34px;color:#a33a2c;font-size:12.5px}
+.us-err:empty{display:none}
+.us-acts{display:flex;flex-direction:column;gap:8px;margin:16px 0 0 34px}
+.us-act{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:12px}
+.us-act small{font-size:12.5px;color:#4b5a68}
+.us-acts .pv-btn,.us-acts .btn-primary{width:150px;height:34px;padding:0 14px;white-space:nowrap}
+.us-acts button:focus{outline:2px solid #8fb0d4;outline-offset:2px;box-shadow:none}
+/* 焦点（最初は「戻る」）: 枠の色は変えず、細い藍の輪を外に（主のボタンと強さを競わない） */
+.us-discard{color:#a33a2c}
+.tpa-menu .tm-head{margin:4px 8px 5px;font-weight:800;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tpa-menu .tm-group{margin:6px 8px 2px;padding-top:6px;border-top:1px solid var(--line-soft);color:var(--muted);font-weight:800;font-size:12px}
+.tpa-menu .tm-head + .tm-group{border-top:0;padding-top:0}
+.tpa-menu .tm-sep{margin:5px 6px;border:0;border-top:1px solid var(--line-soft)}
+.tpa-menu .tm-why{display:block;white-space:normal;overflow-wrap:anywhere;font-size:11.5px;line-height:1.35;color:#6b7782}
+/* 押せない理由（灰色の項目の下に、乗せなくても見える） */
+.tpa-menu .tm-ico{flex:0 0 18px;text-align:center;font-style:normal;color:var(--muted);font-size:13px}
+.tpa-menu button.is-on .tm-ico{color:var(--h-xfer);font-weight:800}
+.tpa-menu button:disabled .tm-ico{color:#b4bec6}
+.tpa-menu button.is-danger .tm-ico{color:#b42318}
+/* 置き場の見出し（版 3.49.0。shared.js の TPA.scope.head。ダッシュボード・セット・集計表の組み方で同じ形） */
+.tpa-sci{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.4;vertical-align:-2px;margin-right:5px}
+.tpa-sch{display:flex;align-items:baseline;gap:10px;padding:2px 2px 0;flex-wrap:wrap}
+.tpa-sch b{font-size:12px;color:var(--h-meta);font-weight:800;white-space:nowrap}
+.tpa-sch small{font-size:11.5px;color:var(--muted);font-weight:400}
+.tpa-sch small i{font-style:normal;font-weight:700;color:var(--h-meta);margin-right:4px}
+
+/* 持ち込んだ窓の中のボタン（master.css・lotlist-pivot.css から） */
+.btn-primary,.btn-danger{height:30px;border:0;border-radius:7px;padding:0 14px;
+  font-weight:700;cursor:pointer;font-size:14px;font-family:inherit}
+.btn-primary{background:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover:not(:disabled){background:#d69720}
+.btn-primary:disabled{background:var(--surface-4);color:var(--faint);cursor:default}   /* 押せないときは色を抜く（押せそうに見せない） */
+.btn-danger{background:var(--danger);color:var(--on-fill)}
+.btn-danger:hover{background:#a52f21}
+.pv-btn{height:28px;border:1px solid var(--line);border-radius:7px;background:var(--surface);font:inherit;font-size:12.5px;font-weight:700;padding:0 10px;cursor:pointer}
+.pv-btn:hover:not(:disabled){border-color:var(--h-input);color:var(--h-input)}
+.pv-btn:disabled,.pv-link:disabled{opacity:.45;cursor:default}
+/* メニュー（app.css） */
+.tpa-menu{position:fixed;z-index:120;min-width:230px;max-width:340px;max-height:calc(100vh - 16px);overflow:auto;background:var(--surface);border:1px solid var(--pop-line);border-radius:10px;
+  box-shadow:0 18px 44px var(--pop-shadow);padding:5px;font-size:13px}
+.tpa-menu button{display:flex;align-items:center;gap:8px;width:100%;min-height:30px;text-align:left;border:0;background:transparent;border-radius:6px;padding:4px 10px 4px 6px;
+  cursor:pointer;font:inherit;color:var(--ink)}
+.tpa-menu button > span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tpa-menu kbd{flex:none;font:12px/1 Consolas,"BIZ UDGothic",monospace;color:var(--muted);background:none;border:0;padding:0}
+.tpa-menu button:hover:not(:disabled),.tpa-menu button:focus-visible{background:var(--ll-pale);outline:none}
+.tpa-menu button:disabled{color:#97a3ad;cursor:not-allowed}
+.tpa-menu button.is-danger{color:#b42318}.tpa-menu button.is-danger .tm-ico{color:#b42318}
+.tpa-menu button.is-danger:hover:not(:disabled),.tpa-menu button.is-danger:focus-visible{background:#fdecea}
