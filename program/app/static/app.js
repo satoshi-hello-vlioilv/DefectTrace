@@ -170,11 +170,11 @@
     const n = S.lot.name;
     $("crumb").innerHTML = `${esc(S.lot.eq)} › ${esc(n.slice(0, 10).replace(/_/g, "/"))} › <b>${esc(n.slice(11).replace(/_/g, ":"))}</b>`;
     cardIO.disconnect(); seenCards.clear();   // 前のロットの枠を見張らない
-    $("grid").innerHTML = '<div class="empty">展開中...</div>';
+    $("grid").innerHTML = "";   // 読み込みの進みは帯（#loadBand）が出す
     $("groupTabs").innerHTML = ""; $("groupTabs").dataset.g = "";
     $("imgInfo").innerHTML = '<div class="hint">画像をクリックで表示</div>'; $("imgTitle").textContent = "";
     $("lotInfo").innerHTML = '<div class="hint">読込中...</div>';
-    $("srcList").innerHTML = '<div class="hint">読込中...</div>';
+    SRC.pick = null; renderSources();
     $("pairList").innerHTML = '<div class="empty">読込中...</div>'; $("pSum").textContent = ""; $("pairCnt").textContent = "";
     drawMap();
     status("ロットを開いています...");
@@ -207,6 +207,7 @@
   function finishIfDone() {
     const st = S.st;
     if (!st || !st.finished || S.queue.length || S.phase.link !== "done" || S.finishedGen === S.gen) return;
+    if (!loadModel().all) return;
     S.finishedGen = S.gen;
     const ng = st.cabs.filter((c) => c.state === "error").length;
     const kd = st.kinds || {}, kl = [kd.cab ? `CAB ${kd.cab}` : "", kd.dir ? `フォルダ ${kd.dir}` : "", kd.loose ? "直下" : ""].filter(Boolean).join("・");
@@ -340,28 +341,35 @@
   const itemOf = (th) => { const [g, cab, name] = th.dataset.key.split("/"); return { g, cab, name }; };
 
   // ================================================================ loading progress
-  // 読み込みの段階（何を・どこまで・あとどれくらい）。数は /api/status と、画面で描いた数から
+  // 読み込みの段階（何を・どこまで・あとどれくらい・もう使えるか）。数は /api/status と、画面で並べた数から。
+  // 見せ方は 3 回の案出しと採点で R4 に決めた（program/tools/proposals/2026-10-26-load-progress*.）: ツールバーの下の 1 つの帯
+  // （いまの段階・数・棒・残り時間・操作できます／段階の並び）。使えるようになるまでは大きく、使えると小さく（場所は変えない）。
+  // 左下の状態も同じ言葉
   function loadModel() {
     const st = S.st || { total: 0, done: 0, thumbs: 0, thumbs_total: 0 }, ph = S.phase || {};
-    const now = performance.now(), el = (now - (S.t0 || now)) / 1000;
+    const now = performance.now();
     // 縮小画像の速さ: 直近 3 秒の進み（始めは全体の平均）
     const sm = S.samples || [], last = sm[sm.length - 1];
     const old = sm.find((x) => x[0] >= now - 3000) || sm[0];
     const rate = last && old && last[0] > old[0] ? ((last[1] - old[1]) * 1000) / (last[0] - old[0]) : 0;
-    const left = st.thumbs_total - st.thumbs;
-    const eta = st.finished ? 0 : rate > 0 ? left / rate : null;
+    const eta = st.finished ? 0 : rate > 0 ? (st.thumbs_total - st.thumbs) / rate : null;
     const an = ["map", "pairs", "pitch"].filter((k) => ph[k] === "done").length;
+    const fin = (s) => s === "done" || s === "error";
     const steps = [
-      { k: "names", label: "画像の一覧", done: st.done, total: st.total, state: st.total && st.done >= st.total ? "done" : "run" },
-      { k: "info", label: "欠陥データ", state: ph.info },
-      { k: "cards", label: "画像の枠", done: S.drawn || 0, total: S.total || 0, state: S.named && !S.queue.length ? "done" : "run" },
-      { k: "link", label: "画像と欠陥の対応", state: ph.link },
-      { k: "analysis", label: "MAP・転写・ピッチ", done: an, total: 3, state: an === 3 ? "done" : ph.link === "done" ? "run" : "wait" },
-      { k: "thumbs", label: "縮小画像", done: st.thumbs, total: st.thumbs_total, state: st.finished ? "done" : "run", rate, eta },
+      { k: "names", label: "画像の一覧", verb: "を読んでいます", vs: "読込中", num: `CAB ${fmtN(st.done)} / ${fmtN(st.total)}`, frac: st.total ? st.done / st.total : 0, state: S.named || (st.total && st.done >= st.total) ? "done" : "run" },
+      { k: "info", label: "欠陥データ", verb: "を読んでいます", vs: "読込中", num: "", frac: null, state: ph.info === "done" ? "done" : ph.info === "error" ? "error" : "run" },
+      { k: "cards", label: "画像の枠", verb: "を並べています", vs: "並べ中", num: `${fmtN(S.drawn || 0)} / ${fmtN(S.total || 0)}`, frac: S.total ? (S.drawn || 0) / S.total : 0, state: S.named && !S.queue.length ? "done" : S.named ? "run" : "wait" },
+      { k: "link", label: "画像と欠陥の対応", verb: "を付けています", vs: "対応中", num: "", frac: null, state: ph.link === "run" ? "run" : fin(ph.link) ? ph.link : "wait" },
+      { k: "analysis", label: "MAP・転写・ピッチ", verb: "を計算しています", vs: "計算中", num: `${an} / 3`, frac: an / 3, state: an === 3 ? "done" : ph.link === "done" ? "run" : "wait" },
+      { k: "thumbs", label: "縮小画像", verb: "を作っています", vs: "作成中", num: `${fmtN(st.thumbs)} / ${fmtN(st.thumbs_total)}`, frac: st.thumbs_total ? st.thumbs / st.thumbs_total : 1, state: st.finished ? "done" : S.named ? "run" : "wait", eta },
     ];
-    const ready = steps.filter((s) => s.k !== "thumbs").every((s) => s.state === "done" || s.state === "error");
-    const all = ready && st.finished;
-    return { steps, el, rate, eta, ready, all, st };
+    // 使える: 一覧・欠陥データ・画像の枠がそろった（縮小画像は見ている所から先に作るので、待たなくてよい）
+    const usable = ["names", "info", "cards"].every((k) => fin(steps.find((s) => s.k === k).state));
+    const all = steps.every((s) => fin(s.state));
+    // いま見せる段階: 走っている物のうち、まだ使えないなら前の方、使えるなら縮小画像（いちばん長い）を先に
+    const runs = steps.filter((s) => s.state === "run");
+    const cur = (usable && runs.find((s) => s.k === "thumbs")) || runs[0] || null;
+    return { steps, rate, eta, usable, all, cur, st };
   }
   let progFrame = 0;
   function loadProgress() {
@@ -370,13 +378,22 @@
   }
   const fmtN = (n) => Number(n || 0).toLocaleString("ja-JP");
   const fmtSec = (s) => (s == null ? "計算中" : s < 1 ? "1 秒未満" : s < 60 ? `約 ${Math.ceil(s)} 秒` : `約 ${Math.floor(s / 60)} 分 ${Math.round(s % 60)} 秒`);
+  const ICON = { done: "✓", run: "●", wait: "○", error: "!" };
   function renderLoad(m) {
-    const tt = m.st.thumbs_total || 0;
-    $("prog").hidden = m.all || !S.lot;
-    $("progBar").style.width = (tt ? Math.round((m.st.thumbs / tt) * 100) : 0) + "%";
-    const cur = m.steps.find((s) => s.state === "run");
-    $("progTxt").textContent = cur ? `${cur.label} ${cur.total ? `${fmtN(cur.done)}/${fmtN(cur.total)}` : "…"}${cur.k === "thumbs" ? ` あと${fmtSec(m.eta)}` : ""}` : "";
-    $("prog").dataset.progress = "1";
+    if (m.all) finishIfDone();
+    const band = $("loadBand"), show = !!S.lot && !m.all && S.phase;
+    band.hidden = !show;
+    if (!show) return;
+    const c = m.cur || m.steps.find((s) => s.state !== "done") || m.steps[5];
+    const eta = c.k === "thumbs" ? fmtSec(m.eta) : "計算中";
+    const steps = m.steps.map((s) => `<span class="lpst ${s.state}${s.state === "done" ? " lpdn" : s.state === "wait" ? " lpwt" : ""}" title="${esc(s.label)}"><i>${ICON[s.state]}</i>${esc(s.label)}</span>`).join("");
+    const nd = m.steps.filter((s) => s.state === "done").length, waits = m.steps.filter((s) => s.state === "wait");
+    band.classList.toggle("big", !m.usable);
+    band.innerHTML = `<div class="r1"><span class="now">${esc(c.label)}<em class="vl">${esc(c.verb)}</em><em class="vs">（${esc(c.vs)}）</em></span><span class="num">${esc(c.num)}</span>
+      <div class="lpbar${c.frac == null ? " ind" : ""}"><i style="width:${c.frac == null ? 30 : Math.round(c.frac * 100)}%"></i></div><span class="sub">あと</span><span class="lpeta">${esc(eta)}</span>${m.usable ? '<span class="use">✓ 操作できます</span>' : ""}</div>
+      <div class="r2">${nd ? `<span class="lpst done lpsum" title="済んだ段階"><i>✓</i>済み ${nd} / 6</span>` : ""}${steps}${waits.length ? `<span class="lpst wait lpwsum" title="${esc(waits.map((s) => s.label).join("・"))}"><i>○</i>残り ${waits.length} 段階</span>` : ""}</div>
+      ${m.usable ? "" : '<div class="r3 sub" title="縮小画像は、見ている所から先に作ります">画像の一覧と欠陥データがそろうと、操作できるようになります</div>'}`;
+    if (!S.finishedGen || S.finishedGen !== S.gen) status(`${c.label}${c.verb}${c.num ? " " + c.num : ""} ・ あと ${eta}`);
   }
 
   // ================================================================ detect data
@@ -527,50 +544,108 @@
     const pos = new Map(ord.map((k, i) => [k, i]));
     return rows.map((r, i) => [r, pos.has(r[0]) ? pos.get(r[0]) : 1e6 + i]).sort((a, b) => a[1] - b[1]).map((x) => x[0]);
   }
-  function renderSources() {
-    const f = $("srcFilter").value.trim().toLowerCase();
-    const match = (k, v, l) => !f || (k + " " + v + " " + l).toLowerCase().includes(f);
-    const opened = new Set([...document.querySelectorAll("#srcList details[open]")].map((x) => x.dataset.k));
-    const isOpen = (k, def) => (opened.size ? opened.has(k) : def) || !!f;
-    let h = "";
-    if (S.img && S.img.detect.length) {
-      const rows = applySrcOrder("dat:DETECT_INFO", S.img.detect).filter(([k, v, l]) => match(k, v, l)).map(([k, v, l]) => srcRow("image", "dat:DETECT_INFO", k, v, l)).join("");
-      h += `<details class="xf" data-k="det"${isOpen("det", true) ? " open" : ""}><summary>画像：DETECT_INFO（選択画像）</summary><table class="kv">${rows}</table></details>`;
-    }
-    if (S.img) for (const x of S.img.xml) {
-      h += `<details class="xf" data-k="ix:${esc(x.name)}"${isOpen("ix:" + x.name, false) ? " open" : ""}><summary>画像：${esc(x.name)}</summary><table class="kv">${x.items.filter(([k, v]) => match(k, v, "")).map(([k, v]) => srcRow("image", "@image", k, v, "")).join("")}</table></details>`;
-    }
+  // ---------------------------------------------------------------- データ項目の窓（3 回の案出しと採点で M に決めた:
+  // program/tools/proposals/2026-10-26-data-items*.）左に分類・中に探せる項目・右に表示先（いつも右の 1 か所）。
+  // 項目はドラッグで表示先へ（窓の中の表示先にも、窓の外の本物の枠にも置ける）。行を選ぶと、その行に置ける先がボタンで出て、
+  // 押して出し入れできる（置き済みは ✓）。名前は置いた表示項目の名前でも探せる
+  const SRC = { cat: 0, pick: null };
+  // 行の札は短い名前（列の幅に収める。長い名前は表示先の列にある）
+  const PLACE_SHORT = { list: "一覧", summary: "サマリ", lot: "ロット情報", card: "画像表示", image: "画像情報", mapx: "MAP 横軸", mapy: "MAP 縦軸" };
+  const PLACE_SUB = { list: "左の一覧の各行", summary: "中央上の帯", lot: "右列", card: "各画像の下", image: "右列の上", mapx: "MAP の横", mapy: "MAP の縦" };
+  // 表示先の位置の小さな図（画面のどこに出るか）
+  const POS = { list: [0, 0, 22, 100], summary: [25, 0, 47, 20], card: [25, 24, 47, 14], image: [75, 0, 25, 30], mapx: [75, 34, 25, 12], mapy: [75, 48, 25, 12], lot: [75, 64, 25, 36] };
+  const ico = (pl) => `<span class="pico" aria-hidden="true">${Object.entries(POS).map(([k, [x, y, w, h]]) => `<i style="left:${x}%;top:${y}%;width:${w}%;height:${h}%"${k === pl ? ' class="on"' : ""}></i>`).join("")}</span>`;
+  const scopeTag = (s) => `<span class="dsc ${s}">${s === "image" ? "画像ごと" : s === "lot" ? "ロット" : "どちらも"}</span>`;
+  const wildKey = (k) => k.replace(/\[\d+\]/g, "[*]");
+  // その行（file・key）を出している表示項目（[*] でまとめた物も）
+  const pinsOf = (file, key) => S.pins.filter((p) => p.file === file && (p.key === key || p.key === wildKey(key)));
+  function srcGroups() {
+    const gs = [];
+    const add = (src, name, scope, file, items, info = "", order = file) =>
+      gs.push({ src, name, scope, file, info, rows: applySrcOrder(order, items).map(([k, v, l]) => {
+        const pin = pinsOf(file, k)[0];
+        return { key: k, val: v, l: l || "", label: pin?.label || l || shortKey(k) };
+      }) });
+    if (S.img && S.img.detect.length) add("画像", "DETECT_INFO（選んだ画像）", "image", "dat:DETECT_INFO", S.img.detect);
+    if (S.img) for (const x of S.img.xml) add("画像", x.name, "image", "@image", x.items);
     const d = S.LOT;
     if (d) {
-      if (d.meta) {
-        const rows = d.meta.filter(([k, v, l]) => match(k, v, l)).map(([k, v, l]) => srcRow("lot", "@lot", k, v, l)).join("");
-        if (rows) h += `<details class="xf" data-k="meta"${isOpen("meta", false) ? " open" : ""}><summary>ロット：フォルダ名（作業日時）</summary><table class="kv">${rows}</table></details>`;
-      }
-      for (const x of d.dat) {
-        const info = x.error ? `<span class="err">${esc(x.error)}</span>` : `${x.count}件`;
-        const rows = applySrcOrder("dat:" + x.name, x.fields).filter(([k, v, l]) => match(k, v, l)).map(([k, v, l]) => srcRow("lot", "dat:" + x.name, k, v, l)).join("");
-        if (f && !rows) continue;
-        h += `<details class="xf" data-k="d:${esc(x.name)}"${isOpen("d:" + x.name, false) ? " open" : ""}><summary>ロット：${esc(x.name)}.dat <span class="sub">${info}</span></summary>${rows ? `<table class="kv">${rows}</table>` : `<div class="hint">${x.count > 3 ? "レコード多数（画像・MAPで使用）" : ""}</div>`}</details>`;
-      }
-      for (const x of d.xml) {
-        const rows = applySrcOrder(x.glob, x.items).filter(([k, v, l]) => match(k, v, l)).map(([k, v, l]) => srcRow("lot", x.glob, k, v, l)).join("");
-        if (f && !rows) continue;
-        h += `<details class="xf" data-k="x:${esc(x.name)}"${isOpen("x:" + x.name, false) ? " open" : ""}><summary>ロット：${esc(x.name)} (${x.items.length})</summary><table class="kv">${rows}</table></details>`;
-      }
-      h += `<details class="xf" data-k="files"${isOpen("files", false) ? " open" : ""}><summary>付帯ファイル (${d.files.length})</summary><table class="kv">${d.files.map((x) => kv(x.name, (x.size / 1024).toFixed(1) + " KB")).join("")}</table></details>`;
+      if (d.meta) add("ロット", "フォルダ名（作業日時）", "lot", "@lot", d.meta);
+      for (const x of d.dat) add("ロット", x.name + ".dat", "lot", "dat:" + x.name, x.fields, x.error ? x.error : `${x.count}件${x.count > 3 ? "（レコード多数: 画像・MAP で使う）" : ""}`);
+      for (const x of d.xml) add("ロット", x.name, "lot", x.glob, x.items);
+      gs.push({ src: "ロット", name: "付帯ファイル", scope: null, file: "", info: `${d.files.length} 件`, rows: d.files.map((x) => ({ key: x.name, val: (x.size / 1024).toFixed(1) + " KB", l: "", label: x.name })) });
     }
-    $("srcList").innerHTML = h || '<div class="hint">データなし</div>';
+    return gs;
   }
-  $("srcFilter").addEventListener("input", renderSources);
+  function renderSources() {
+    if ($("srcModal").hidden) return;
+    // ドラッグ中に描き直すと、つかんでいる行が消えてドラッグが切れる。離してから描く（dragend）
+    if (DRAG) { SRC.dirty = true; return; }
+    SRC.dirty = false;
+    const f = $("srcFilter").value.trim().toLowerCase();
+    const hit = (r) => !f || (r.label + " " + r.key + " " + r.val + " " + r.l).toLowerCase().includes(f);
+    const gs = srcGroups();
+    SRC.cat = Math.min(SRC.cat, Math.max(0, gs.length - 1));
+    const total = gs.reduce((a, g) => a + g.rows.length, 0), hits = gs.reduce((a, g) => a + g.rows.filter(hit).length, 0);
+    $("srcCount").textContent = f ? `${hits} 件` : `${total} 項目`;
+    $("srcCats").innerHTML = gs.map((g, i) => { const n = f ? g.rows.filter(hit).length : g.rows.length;
+      return `<button type="button" class="dcat${i === SRC.cat && !f ? " on" : ""}${!n ? " zero" : ""}" data-cat="${i}" title="${esc(g.src + "：" + g.name)}"><span>${esc(g.src)}：${esc(g.name)}</span><span class="n">${n}</span></button>`; }).join("") || '<div class="hint">ロットを選ぶと出ます</div>';
+    const hl = (s) => { const t = esc(s); if (!f) return t; const i = t.toLowerCase().indexOf(esc(f).toLowerCase()); return i < 0 ? t : t.slice(0, i) + "<mark>" + t.slice(i, i + esc(f).length) + "</mark>" + t.slice(i + esc(f).length); };
+    const show = f ? gs.filter((g) => g.rows.some(hit)) : gs.slice(SRC.cat, SRC.cat + 1);
+    $("srcRows").innerHTML = show.map((g) => {
+      const rs = g.rows.filter(hit);
+      const head = `<div class="dgh">${esc(g.src)}：<b>${esc(g.name)}</b><span class="sub"> ${rs.length} 件${g.info ? " ・ " + esc(g.info) : ""}</span></div>`;
+      if (!g.scope) return head + `<table class="dtab">${rs.map((r) => `<tr><td class="dl1">${hl(r.label)}</td><td class="dv">${hl(r.val)}</td><td></td></tr>`).join("")}</table>`;
+      if (!rs.length) return head + '<div class="hint">（値の項目なし）</div>';
+      return head + `<table class="dtab"><colgroup><col><col style="width:180px"><col style="width:220px"></colgroup>` + rs.map((r) => {
+        const placed = [...new Set(pinsOf(g.file, r.key).map((p) => p.place))];
+        const tags = placed.slice(0, 2).map((p) => `<span class="dpl" title="${esc(PLACE[p])}">${esc(PLACE_SHORT[p])}</span>`).join("") + (placed.length > 2 ? `<span class="dpl more">+${placed.length - 2}</span>` : "");
+        const picked = SRC.pick && SRC.pick.file === g.file && SRC.pick.key === r.key;
+        const row = `<tr class="src drow${picked ? " picked" : ""}" draggable="true" data-scope="${g.scope}" data-file="${esc(g.file)}" data-key="${esc(r.key)}" data-val="${esc(r.val)}" data-label="${esc(r.l)}" title="ドラッグで表示先へ／押すと置く先のボタン">
+          <td class="dl1"><span class="grip" aria-hidden="true">⠿</span><b>${hl(r.label)}</b><small>${hl(r.key)} ${scopeTag(g.scope)}</small></td>
+          <td class="dv" title="${esc(r.val)}">${hl(r.val || "—")}</td><td class="dps">${tags}<span class="dgo">${picked ? "▴" : "置く先 ▾"}</span></td></tr>`;
+        if (!picked) return row;
+        const btns = Object.keys(PLACE).filter((pl) => ok(g.scope, pl)).map((pl) => { const on = placed.includes(pl);
+          return `<button type="button" class="mb${on ? " on" : ""}" data-toggle="${pl}" aria-pressed="${on}" title="${on ? "押すと外す" : "押すと置く"}">${ico(pl)}${esc(PLACE[pl])}${on ? " ✓" : ""}</button>`; }).join("");
+        return row + `<tr class="mq"><td colspan="3"><span class="sub">置く先:</span>${btns}<button type="button" class="lnk" data-named="1">名前を付けて置く…</button></td></tr>`;
+      }).join("") + "</table>";
+    }).join("") || `<div class="hint">${f ? "見つかりません（項目名・キー・値で探します）" : "ロットを選ぶと出ます"}</div>`;
+    $("srcPlaces").innerHTML = Object.keys(PLACE).map((pl) => `<div class="dplace dz" data-drop="${pl}"><div class="dph">${ico(pl)}<b>${esc(PLACE[pl])}</b><span class="sub">${esc(PLACE_SUB[pl])}</span>${scopeTag(NEED[pl] === "any" ? "any" : NEED[pl])}</div>
+      <div class="dchips"><span class="pins" data-place="${pl}">${S.pins.filter((p) => p.place === pl).map((p) => chip({ id: p.id, label: p.label || shortKey(p.key), value: "" }, pl, false)).join("") || '<span class="hint">ここへドラッグ</span>'}</span></div></div>`).join("");
+  }
+  function openSources() {
+    $("srcModal").hidden = false; renderSources();
+    $("srcFilter").focus(); $("srcFilter").select();
+  }
+  const closeSources = () => { $("srcModal").hidden = true; $("pinPop").hidden = true; };
+  $("btnSources").addEventListener("click", openSources);
+  $("srcClose").addEventListener("click", closeSources);
+  $("srcModal").addEventListener("mousedown", (e) => { if (e.target === $("srcModal")) closeSources(); });
+  $("srcFilter").addEventListener("input", () => { SRC.pick = null; renderSources(); });
+  $("srcCats").addEventListener("click", (e) => { const b = e.target.closest("[data-cat]"); if (!b) return; SRC.cat = +b.dataset.cat; $("srcFilter").value = ""; SRC.pick = null; renderSources(); });
+  $("srcRows").addEventListener("click", async (e) => {
+    const tg = e.target.closest("[data-toggle]");
+    if (tg) {
+      e.stopPropagation();
+      const tr = tg.closest("tr").previousElementSibling, pl = tg.dataset.toggle;
+      const have = pinsOf(tr.dataset.file, tr.dataset.key).filter((p) => p.place === pl);
+      try {
+        if (have.length) for (const p of have) await api("/api/pins/" + encodeURIComponent(p.id), { method: "DELETE" });
+        else await send("/api/pins", { scope: tr.dataset.scope, file: tr.dataset.file, key: tr.dataset.key, label: tr.dataset.label || autoLabel(tr.dataset.key), place: pl });
+        await afterPins(); status(have.length ? `「${PLACE[pl]}」から外しました` : `「${PLACE[pl]}」に置きました`);
+      } catch (er) { status(er.message, true); }
+      return;
+    }
+    const nm = e.target.closest("[data-named]");
+    if (nm) { e.stopPropagation(); openPop(nm.closest("tr").previousElementSibling, nm); return; }
+    const tr = e.target.closest("tr.src"); if (!tr) return;
+    const same = SRC.pick && SRC.pick.file === tr.dataset.file && SRC.pick.key === tr.dataset.key;
+    SRC.pick = same ? null : { file: tr.dataset.file, key: tr.dataset.key };
+    renderSources();
+  });
 
   function kv(k, v) { return `<tr><td class="k">${esc(k)}</td><td>${esc(v)}</td><td class="b"></td></tr>`; }
   const shortKey = (k) => k.split("/").slice(-2).join("/");
-  function srcRow(scope, file, k, v, l) {
-    const lab = l || shortKey(k);
-    return `<tr class="src" draggable="true" data-scope="${scope}" data-file="${esc(file)}" data-key="${esc(k)}" data-val="${esc(v)}" data-label="${esc(l || "")}">
-      <td class="k" title="${esc(k)}">${esc(lab)}${l ? `<small>${esc(shortKey(k))}</small>` : ""}</td><td>${esc(v)}</td>
-      <td class="b"><button type="button" class="pb" data-add="1" title="表示先を選んで追加">＋</button></td></tr>`;
-  }
   function pinRow(p, place, num) {
     const movable = place !== "x";
     return `<tr class="pinned"${movable ? ` draggable="true" data-pid="${esc(p.id)}" data-place="${place}"` : ""}><td class="k" title="ドラッグで並べ替え・移動／ダブルクリックで名前変更">${esc(p.label || "（無題）")}</td><td${num ? ' class="num"' : ""}>${esc(p.value || "—")}</td><td class="b">${movable ? `<button type="button" class="pb" data-unpin="${esc(p.id)}" title="表示から外す">×</button>` : ""}</td></tr>`;
@@ -598,9 +673,11 @@
     e.dataTransfer.effectAllowed = "copyMove";
     e.dataTransfer.setData("text/plain", DRAG.key || DRAG.id);
     if (ok(DRAG.scope, "list")) requestAnimationFrame(() => document.body.classList.add("dragging"));
+    // データ項目の窓の表示先: 置ける所を緑に、置けない所を薄く
+    document.querySelectorAll("#srcPlaces .dplace").forEach((z) => { z.classList.toggle("ok", ok(DRAG.scope, z.dataset.drop)); z.classList.toggle("ng", !ok(DRAG.scope, z.dataset.drop)); });
   });
   const clearIns = () => document.querySelectorAll(".ins-before,.ins-after,.ins-l,.ins-r").forEach((x) => x.classList.remove("ins-before", "ins-after", "ins-l", "ins-r"));
-  document.addEventListener("dragend", () => { DRAG = null; clearIns(); document.body.classList.remove("dragging"); document.querySelectorAll(".dz.over").forEach((x) => x.classList.remove("over")); });
+  document.addEventListener("dragend", () => { DRAG = null; if (SRC.dirty) renderSources(); clearIns(); document.querySelectorAll("#srcPlaces .dplace").forEach((z) => z.classList.remove("ok", "ng")); document.body.classList.remove("dragging"); document.querySelectorAll(".dz.over").forEach((x) => x.classList.remove("over")); });
   const ok = (scope, place) => NEED[place] === "any" || NEED[place] === scope;
   function insPos(el, e) {
     const r = el.getBoundingClientRect();
@@ -616,7 +693,7 @@
     while (n && !(n.dataset && n.dataset.pid && n.dataset.place === place)) n = n.nextElementSibling;
     return n ? n.dataset.pid : null;
   }
-  const sameBlock = (sr) => DRAG && DRAG.kind === "src" && DRAG.el && sr.closest("#srcList") && sr.parentElement === DRAG.el.parentElement;
+  const sameBlock = (sr) => DRAG && DRAG.kind === "src" && DRAG.el && sr.closest("#srcRows") && sr.parentElement === DRAG.el.parentElement;
   document.addEventListener("dragover", (e) => {
     if (!DRAG) return;
     const sr = e.target.closest?.("tr.src");
@@ -708,7 +785,7 @@
   });
   async function afterPins() {
     S.pins = await api("/api/pins");
-    renderPinZones();
+    renderPinZones(); renderSources();
     if (S.lot) { const gen = S.gen; await loadLotInfo(gen); await loadImgMap(gen); }
     refreshSummaries();
   }
@@ -1204,6 +1281,12 @@
   $("vNext").addEventListener("click", () => select(S.cur + 1));
 
   document.addEventListener("keydown", (e) => {
+    // データ項目の窓が開いている間は、窓の中だけ（Esc で閉じる・Ctrl+F で探す欄へ）
+    if (!$("srcModal").hidden) {
+      if (e.key === "Escape") { if (!$("pinPop").hidden) $("pinPop").hidden = true; else closeSources(); e.preventDefault(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") { $("srcFilter").focus(); $("srcFilter").select(); e.preventDefault(); }
+      return;
+    }
     if (e.target.closest("input,select,#pinPop")) { if (e.key === "Escape") $("pinPop").hidden = true; return; }
     if (S.view === "pitch" && $("viewer").hidden && $("pv").hidden) {
       if (e.key === "ArrowRight") { stepPitch(0, 1); e.preventDefault(); return; }

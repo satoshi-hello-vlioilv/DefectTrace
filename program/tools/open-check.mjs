@@ -1,7 +1,7 @@
 // 大きなロットを開いたときの「待ち」を、画面（本物の app.js）で測る（読み込みの速さと進捗の見え方の評価関数）。
 //
 //   python program/tests/fixture_lot.py <置き場> --bench 200 256 200      # CAB 200 個 × 100 枚 = 2 万枚のロット
-//   node program/tools/open-check.mjs <ロット> [出力フォルダ] [--runs 2] [--images 20000]
+//   node program/tools/open-check.mjs <ロット> [出力フォルダ] [--runs 2] [--images 20000] [--shots 1,3] [--slow-ms 0] [--view 1728x1152]
 //
 // 試しの入口（serve）を、そのロットだけの設備で起こし、前に開いたロット（lastLot）として開き直させて、開いた瞬間からの秒を測る:
 //   first     最初のカード（画像の枠）が出る
@@ -10,13 +10,13 @@
 //   done      読み込みが済んだと画面が言う（下の帯が「… 枚 / …秒」になる）
 //   block     画面が固まった時間の合計（50ms を超えた長い仕事の、超えた分の合計）と、いちばん長い 1 回（longest）
 //   blank     読み込み中なのに、進み（何を・どこまで・あとどれくらい）が画面に出ていなかった時間
-// 0.25 秒ごとに、画面に出ている進みの字を控え、1 秒・3 秒の所で撮る（出力フォルダがあれば）。
+// 0.25 秒ごとに、画面に出ている進みの字を控え、--shots の時刻（既定 1 秒・3 秒）で撮る（出力フォルダがあれば）。
 import { spawn, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { REPO } from "./ui-harness.mjs";
+import { REPO, parseView } from "./ui-harness.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -24,6 +24,10 @@ const [lotArg, outArg, ...rest] = process.argv.slice(2).filter((a, i, all) => !a
 if (!lotArg) { console.error("使い方: node program/tools/open-check.mjs <ロット> [出力フォルダ] [--runs 2]"); process.exit(2); }
 const opt = (n, d) => (process.argv.includes(n) ? +process.argv[process.argv.indexOf(n) + 1] : d);
 const RUNS = opt("--runs", 2), IMAGES = opt("--images", 20000);
+// 撮る時刻（秒）。--shots 0.3,1,3
+const SLOW = opt("--slow-ms", 0);
+const VIEW = parseView(process.argv.includes("--view") ? process.argv[process.argv.indexOf("--view") + 1] : "");   // 共有フォルダの遅さを真似る（serve --slow-ms）
+const SHOTS = (process.argv.includes("--shots") ? process.argv[process.argv.indexOf("--shots") + 1] : "1,3").split(",").map(Number);
 void rest;
 const LOT = path.resolve(lotArg);
 const OUT = outArg ? path.resolve(outArg) : null;
@@ -37,11 +41,11 @@ async function once(run) {
   const cfg = path.join(work, "config.json");
   fs.writeFileSync(cfg, JSON.stringify({ equipments: [{ name: "BIG", path: EQ }] }));
   const port = 5900 + Math.floor(Math.random() * 300);
-  const proc = spawn(exe, ["--port", String(port), "--config", cfg, "--home", path.join(work, "home")], { stdio: "ignore" });
+  const proc = spawn(exe, ["--port", String(port), "--config", cfg, "--home", path.join(work, "home"), "--slow-ms", String(SLOW)], { stdio: "ignore" });
   const url = `http://127.0.0.1:${port}/`;
   for (let i = 0; i < 100; i++) { try { if ((await fetch(url)).ok) break; } catch { /* 起動待ち */ } await new Promise((r) => setTimeout(r, 100)); }
   const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 1728, height: 1152 }, deviceScaleFactor: 1.25, locale: "ja-JP" });
+  const ctx = await browser.newContext({ viewport: VIEW, deviceScaleFactor: 1.25, locale: "ja-JP" });
   const page = await ctx.newPage();
   await page.addInitScript((lot) => {
     localStorage.setItem("lastLot", lot);
@@ -68,14 +72,14 @@ async function once(run) {
     if (s.linked && seen.linked == null) seen.linked = t;
     const done = /枚 \/ .*秒/.test(s.status);
     samples.push({ t: Math.round(t * 100) / 100, ...s });
-    if (OUT && run === 0 && ((shot === 0 && t >= 1) || (shot === 1 && t >= 3))) {
+    if (OUT && run === 0 && shot < SHOTS.length && t >= SHOTS[shot]) {
       fs.mkdirSync(OUT, { recursive: true });
-      await page.screenshot({ path: path.join(OUT, `open-${shot ? 3 : 1}s.png`) });
+      await page.screenshot({ path: path.join(OUT, `open-${SHOTS[shot]}s.png`) });
       shot++;
     }
     if (done && seen.done == null) { seen.done = t; break; }
     if (t > 180) break;
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(shot < SHOTS.length && SHOTS[shot] < 1 ? 30 : 250);
   }
   if (OUT && run === 0) await page.screenshot({ path: path.join(OUT, "open-done.png") });
   const long = await page.evaluate(() => window.__long);

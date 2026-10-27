@@ -12,6 +12,7 @@
   <span class="spacer"></span>
   <span id="verBox" class="vgrp" hidden></span>
   <button type="button" id="btnRelease" class="ghost" hidden title="版を置く・配る版を選ぶ・推奨の札">配布</button>
+  <button type="button" id="btnSources" class="ghost dopen" title="表示する項目を探して、表示先へ置く">☰ データ項目</button>
   <button type="button" id="btnReset" class="ghost" title="表示項目の設定を初期状態に戻す">表示設定を初期化</button>
 </header>
 <div id="scBar" class="scbar" hidden>
@@ -42,10 +43,10 @@
       </div>
       <div id="groupTabs" class="seg"></div>
       <div class="dz chips cardzone" data-drop="card" title="各画像の下に表示する項目（画像単位の項目をここへドラッグ）"><span class="dzl">画像表示</span><span class="pins" data-place="card"></span></div>
-      <div id="prog" class="prog" hidden><div id="progBar"></div><span id="progTxt"></span></div>
       <span class="spacer"></span>
       <label class="sizer" id="sizerWrap">サイズ <input id="thumbSize" type="range" min="96" max="320" step="8" value="150"></label>
     </div>
+    <div id="loadBand" class="lpband3" data-progress hidden aria-live="polite"></div>
     <div id="grid" tabindex="0"><div class="empty">左のツリーからロットを選択</div></div>
     <div id="pairView" hidden>
       <div class="pbar">
@@ -109,15 +110,10 @@
       <summary>ロット情報</summary>
       <div id="lotInfo"><div class="hint">ロットを選択すると表示</div></div>
     </details>
-    <details class="box" id="srcBox">
-      <summary>データ項目 <span class="sub">（ドラッグで各表示先へ／同じ枠内で並べ替え）</span></summary>
-      <input id="srcFilter" type="search" placeholder="項目名・値で絞込">
-      <div id="srcList"><div class="hint">ロットを選択すると表示</div></div>
-    </details>
   </aside>
 </main>
 
-<footer><span id="status">準備完了</span><span class="sub">クリック 選択 / ダブルクリック・Enter 拡大・比較 / ← → 送り（ピッチ：↑↓ 候補切替）/ Esc 閉じる / 項目はドラッグで表示先へ</span></footer>
+<footer><span id="status">準備完了</span><span class="sub">クリック 選択 / ダブルクリック・Enter 拡大・比較 / ← → 送り（ピッチ：↑↓ 候補切替）/ Esc 閉じる / 表示する項目は右上の「データ項目」から</span></footer>
 
 <div id="viewer" hidden>
   <div class="vbar">
@@ -163,6 +159,20 @@
     <div class="mhead"><b id="relTitle">配布</b><span class="sub">版を置く・配る版を選ぶ・推奨の札</span>
       <button type="button" id="relClose" class="mclose" title="閉じる（Esc）" aria-label="閉じる">×</button></div>
     <div id="relBody"></div>
+  </div>
+</div>
+<div id="srcModal" class="dmodal" hidden>
+  <div class="dbox" role="dialog" aria-modal="true" aria-labelledby="srcTitle">
+    <div class="dhead"><b id="srcTitle">データ項目</b><span class="sub">探して、右の表示先へドラッグ／行を押すと置く先のボタン</span><span class="spacer"></span>
+      <button type="button" id="srcClose" class="mclose" title="閉じる（Esc）" aria-label="閉じる">×</button></div>
+    <div class="dbody">
+      <div id="srcCats" class="dcol dcats"></div>
+      <div class="dcol dmain">
+        <label class="dsearch"><span class="ic" aria-hidden="true">⌕</span><input id="srcFilter" type="search" placeholder="項目名・キー・値で探す（Ctrl+F）" autocomplete="off"><span id="srcCount" class="sub"></span></label>
+        <div id="srcRows"></div>
+      </div>
+      <div class="dcol dplaces"><div class="sub dpt">表示先（ここへドラッグ）</div><div id="srcPlaces"></div></div>
+    </div>
   </div>
 </div>
 <input type="file" id="relFile" accept=".zip" hidden>
