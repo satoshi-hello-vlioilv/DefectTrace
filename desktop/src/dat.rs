@@ -28,6 +28,16 @@ pub enum V {
 }
 
 impl V {
+    /// 値 1 つのメモリの大きさ（文字・並びの中身も）。
+    pub fn heap(&self) -> usize {
+        std::mem::size_of::<V>()
+            + match self {
+                V::S(s) => s.capacity(),
+                V::L(l) => l.iter().map(V::heap).sum(),
+                _ => 0,
+            }
+    }
+
     pub fn num(&self) -> Option<f64> {
         match self {
             V::I(i) => Some(*i as f64),
@@ -253,10 +263,16 @@ fn read_prim(t: &str, d: &[u8]) -> V {
     }
 }
 
-fn parse_rec(data: &[u8], mut off: usize, fields: &[Field], sizes: &[usize]) -> Vec<V> {
+/// 1 件を読む。want があれば、その欄（true の物）だけを読み、ほかは Null（数えるだけのとき: 軽く・速く）。
+fn parse_rec(data: &[u8], mut off: usize, fields: &[Field], sizes: &[usize], want: Option<&[bool]>) -> Vec<V> {
     let mut out = Vec::with_capacity(fields.len());
-    for (f, &sz) in fields.iter().zip(sizes) {
+    for (i, (f, &sz)) in fields.iter().zip(sizes).enumerate() {
         if f.typ == "System.Byte[]" {
+            off += sz;
+            continue;
+        }
+        if want.is_some_and(|w| !w[i]) {
+            out.push(V::Null);
             off += sz;
             continue;
         }
@@ -373,6 +389,8 @@ pub struct Dat {
     pub dt_mode: Option<&'static str>,
     /// 欄の名前 → 位置（Byte[] を除いた並び）
     index: HashMap<String, usize>,
+    /// メモリの上のだいたいの大きさ（バイト。覚えの重さ）
+    pub bytes: usize,
 }
 
 impl Dat {
@@ -419,6 +437,26 @@ pub fn read_dat(path: &Path, defs: &Defs, name: &str, limit: usize, refdt: Optio
 }
 
 pub fn parse_dat(data: &[u8], defs: &Defs, name: &str, limit: usize, refdt: Option<DateTime>, utc_offset: chrono::Duration) -> Dat {
+    parse_dat_cols(data, defs, name, limit, refdt, utc_offset, None)
+}
+
+/// 欄を選んで読む（cols の欄だけ。ほかは Null。欄の並び・名前は全部の時と同じ）。
+pub fn read_dat_cols(path: &Path, defs: &Defs, name: &str, cols: &[&str], refdt: Option<DateTime>, utc_offset: chrono::Duration) -> Dat {
+    match std::fs::read(path) {
+        Ok(d) => parse_dat_cols(&d, defs, name, usize::MAX, refdt, utc_offset, Some(cols)),
+        Err(e) => Dat::empty(name, &format!("読込エラー: {e}")),
+    }
+}
+
+fn parse_dat_cols(
+    data: &[u8],
+    defs: &Defs,
+    name: &str,
+    limit: usize,
+    refdt: Option<DateTime>,
+    utc_offset: chrono::Duration,
+    cols: Option<&[&str]>,
+) -> Dat {
     let mut res = Dat { name: name.into(), ..Default::default() };
     if data.len() < 13 {
         res.error = Some("読込エラー: 頭が短すぎます".into());
@@ -451,14 +489,16 @@ pub fn parse_dat(data: &[u8], defs: &Defs, name: &str, limit: usize, refdt: Opti
             let rest = data.len().saturating_sub(hl) % step;
             res.layout = Some(json!({"header": hl, "record_size": rs, "count": count, "name": hname, "rest": rest}));
             let take = count.min(limit);
+            let want: Option<Vec<bool>> = cols.map(|c| fields.iter().map(|f| c.contains(&f.name.as_str())).collect());
             res.records.reserve(take);
             for i in 0..take {
                 let off = hl + i * step;
-                res.records.push(Rec { vals: parse_rec(data, off + 1, &fields, s), flag: data[off] });
+                res.records.push(Rec { vals: parse_rec(data, off + 1, &fields, s, want.as_deref()), flag: data[off] });
             }
             let (binary, n) = decide_mode(&res.records, refdt, utc_offset);
             finish(&mut res.records, binary, utc_offset);
             res.dt_mode = (n > 0).then_some(if binary { "binary" } else { "internal" });
+            res.bytes = res.records.iter().map(|r| std::mem::size_of::<Rec>() + r.vals.iter().map(V::heap).sum::<usize>()).sum();
         }
         _ => {
             let def = sizes.as_ref().map(|s| s.iter().sum::<usize>()).unwrap_or(0);

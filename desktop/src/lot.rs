@@ -1,6 +1,7 @@
 //! 1 ロットの資源（ファイルの一覧・.dat・条件の XML）と、ロットの値・確かめ（多量・欠陥数上限・日時の整合・分類別の数）。
 //! 版 3.8 の Python 版（app.py の LotRes・lot_info・overload_count・time_check など）と同じ答えを返す（tests/golden.rs が確かめる）。
 
+use crate::cache::Lru;
 use crate::config::Config;
 use crate::dat::{self, Dat, Rec, V};
 use crate::pyfmt::{fixed, fmt_float, natcmp, py_repr, round_to};
@@ -61,21 +62,24 @@ fn sub(a: Option<&V>, b: Option<&V>) -> Option<f64> {
     Some(a?.num()? - b?.num()?)
 }
 
-/// 計算で作る項目（DETECT_INFO・INSP_INFO から）。
+/// 計算で作る項目（鍵・名前・a − b の 2 つの欄）。DETECT_INFO の @os_x、INSP_INFO の @insp_width。
+pub const VIRTUALS: [(&str, &str, [&str; 2]); 2] =
+    [("@os_x", "幅方向OS～(mm)", ["x_mm", "base_x"]), ("@insp_width", "検査幅(mm)", ["insp_area_ed", "insp_area_st"])];
+
 pub fn virtual_label(key: &str) -> Option<&'static str> {
-    match key {
-        "@os_x" => Some("幅方向OS～(mm)"),
-        "@insp_width" => Some("検査幅(mm)"),
-        _ => None,
-    }
+    VIRTUALS.iter().find(|v| v.0 == key).map(|v| v.1)
+}
+
+/// この .dat から作れる計算の項目（両方の欄がある物）。
+pub fn virtuals_of(d: &Dat) -> impl Iterator<Item = &'static (&'static str, &'static str, [&'static str; 2])> + '_ {
+    VIRTUALS.iter().filter(|v| v.2.iter().all(|f| d.col(f).is_some()))
 }
 
 /// 1 件の値（計算で作る項目も）。無ければ None。
 pub fn rec_get(d: &Dat, r: &Rec, key: &str) -> Option<V> {
-    match key {
-        "@os_x" => sub(d.get(r, "x_mm"), d.get(r, "base_x")).map(V::F),
-        "@insp_width" => sub(d.get(r, "insp_area_ed"), d.get(r, "insp_area_st")).map(V::F),
-        _ => d.get(r, key).cloned(),
+    match VIRTUALS.iter().find(|v| v.0 == key) {
+        Some((_, _, [a, b])) => sub(d.get(r, a), d.get(r, b)).map(V::F),
+        None => d.get(r, key).cloned(),
     }
 }
 
@@ -323,6 +327,28 @@ impl LotRes {
     }
 
     /// .dat を読む（ロットごとに覚える）。
+    /// 覚えの重さ: 読んだ .dat の大きさ＋ファイルの一覧（だいたいのバイト）。
+    pub fn bytes(&self) -> usize {
+        4096 + self.rel.len() * 160 + self.dats.lock().unwrap().values().map(|d| d.bytes).sum::<usize>()
+    }
+
+    /// 欄を選んで読んだ .dat（数えるだけのとき。全部を読んだ物があればそれを使う）。覚えは「名前#欄」で別に持つ。
+    pub fn dat_cols(&self, name: &str, cols: &[&str]) -> Arc<Dat> {
+        let key = format!("{name}#{}", cols.join(","));
+        {
+            let m = self.dats.lock().unwrap();
+            if let Some(d) = m.get(name).or_else(|| m.get(&key)) {
+                return d.clone();
+            }
+        }
+        let d = Arc::new(match (self.find(&format!("{name}.dat")), self.defs()) {
+            (None, _) => Dat::empty(name, "ファイルなし"),
+            (_, None) => Dat::empty(name, "InspectDataInfo.xml が見つかりません"),
+            (Some(p), Some(defs)) => dat::read_dat_cols(&p, &defs, name, cols, self.ref_time(), self.cfg.utc_offset()),
+        });
+        self.dats.lock().unwrap().entry(key).or_insert(d).clone()
+    }
+
     pub fn dat(&self, name: &str) -> Arc<Dat> {
         if let Some(d) = self.dats.lock().unwrap().get(name) {
             return d.clone();
@@ -528,31 +554,42 @@ pub fn side_info(sides: &BTreeMap<i64, Side>, v: &V) -> Side {
     }
 }
 
-/// ロットの資源を覚える（300 ロットまで）。
-#[derive(Default)]
+/// ロットの資源を覚える（読んだ .dat の大きさの合計が LOT_CACHE_BYTES まで。使った順に捨てる）。
+/// 画像の画面は開いているロットを何度も問い合わせ、ロット表・木の札は多くのロットを 1 度ずつ読む。どちらでもメモリが増え続けない
+pub const LOT_CACHE_BYTES: usize = 384 << 20;
+
 pub struct LotCache {
-    m: Mutex<HashMap<String, Arc<LotRes>>>,
+    m: Lru<String, Arc<LotRes>>,
+}
+
+impl Default for LotCache {
+    fn default() -> Self {
+        LotCache { m: Lru::weighed(LOT_CACHE_BYTES, |r| r.bytes()) }
+    }
 }
 
 impl LotCache {
     pub fn get(&self, path: &str, cfg: &Arc<Config>, program: Option<&PathBuf>) -> Result<Arc<LotRes>, String> {
-        if let Some(r) = self.m.lock().unwrap().get(path) {
-            return Ok(r.clone());
+        // .dat は使うときに読むので、覚えた後で重くなる。重さは捨てるかを決める前に量り直す（Lru::weighed）
+        if let Some(r) = self.m.get(&path.to_string()) {
+            return Ok(r);
         }
         let lot = Path::new(path);
         if !lot.is_dir() {
             return Err("lot not found".into());
         }
         let r = Arc::new(LotRes::new(lot, cfg.clone(), program.cloned()));
-        let mut m = self.m.lock().unwrap();
-        if m.len() > 300 {
-            m.clear();
-        }
-        Ok(m.entry(path.to_string()).or_insert(r).clone())
+        let w = r.bytes();
+        Ok(self.m.insert(path.to_string(), r, w))
+    }
+
+    /// 覚えている数と重さ（確かめ用）。
+    pub fn stats(&self) -> (usize, usize) {
+        self.m.stats()
     }
 
     pub fn clear(&self) {
-        self.m.lock().unwrap().clear();
+        self.m.clear();
     }
 }
 
@@ -645,7 +682,8 @@ pub fn overload_count(res: &LotRes, detail: bool) -> Value {
     if !detail && !out["count"].is_null() {
         return out;
     }
-    let det = res.dat("DETECT_INFO");
+    // 数えるのに使う欄だけを読む（全部を読んだ物があればそれ）
+    let det = res.dat_cols("DETECT_INFO", &["type", "kindID", "group", "camera", "y_mm"]);
     if !det.records.is_empty() && det.error.is_none() {
         let types = cfg.ints("overload_types");
         let types = if types.is_empty() { vec![2] } else { types };
@@ -782,7 +820,8 @@ pub fn time_check(res: &LotRes, quick: bool) -> Value {
 
 /// 分類別の数: INSP_INFO.classification_count（番号 = kindID）＋ DETECT_INFO の面別の数。
 pub fn class_summary(res: &LotRes) -> Value {
-    let det = res.dat("DETECT_INFO");
+    // 数えるのに使う欄だけを読む（全部を読んだ物があればそれ）
+    let det = res.dat_cols("DETECT_INFO", &["type", "kindID", "group"]);
     let mut per: BTreeMap<String, BTreeMap<String, i64>> = BTreeMap::new();
     for r in &det.records {
         if det.get(r, "type").map(|t| t.int() != Some(1)).unwrap_or(false) {

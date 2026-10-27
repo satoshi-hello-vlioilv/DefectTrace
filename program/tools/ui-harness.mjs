@@ -50,7 +50,7 @@ export async function launch(fake = FAKE, more = []) {
   for (let i = 0; i < 100; i++) { try { if ((await fetch(url)).ok) break; } catch { /* 起動待ち */ } await new Promise((r) => setTimeout(r, 100)); }
   const browser = await chromium.launch();
   return {
-    browser, url, fx,
+    browser, url, fx, pid: proc.pid,
     async newPage(view) {
       const ctx = await browser.newContext({ viewport: view, deviceScaleFactor: 1.25, locale: "ja-JP" });
       const page = await ctx.newPage();

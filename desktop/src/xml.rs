@@ -2,10 +2,11 @@
 //! 鍵の形は `condition/group_conditions/group[1]/disp_name@value`（同じ名前が 2 つ以上なら [番号]）。
 //! 定義ファイル（*Def.xml）の注釈（<!-- -->）は、項目の名前（ラベル）に使う。
 
+use crate::cache::Lru;
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 pub type Pairs = Arc<Vec<(String, String)>>;
 
@@ -119,24 +120,28 @@ fn file_key(path: &Path) -> Option<Key> {
     Some((path.display().to_string(), t, m.len()))
 }
 
+/// (鍵, 値) の組のメモリのだいたいの大きさ（覚えの重さ）。
+fn weight<'a>(kv: impl Iterator<Item = (&'a String, &'a String)>) -> usize {
+    kv.map(|(k, v)| 48 + k.capacity() + v.capacity()).sum()
+}
+
+/// XML の覚え（(鍵, 値) の組・定義の名前）の上限。ロットごとに条件の XML があるので、数千ロットを読んでも増え続けないように
+const XML_CACHE_BYTES: usize = 96 << 20;
+
 /// XML を (鍵, 値) に平らにする（6000 組まで）。ファイルの大きさ・更新時刻で覚える。
 pub fn pairs(path: &Path) -> Pairs {
-    static CACHE: OnceLock<Mutex<HashMap<Key, Pairs>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(Default::default);
+    static CACHE: OnceLock<Lru<Key, Pairs>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Lru::new(XML_CACHE_BYTES));
     let Some(k) = file_key(path) else { return Arc::new(vec![]) };
-    if let Some(v) = cache.lock().unwrap().get(&k) {
-        return v.clone();
+    if let Some(v) = cache.get(&k) {
+        return v;
     }
     let v = Arc::new(match std::fs::read(path) {
         Ok(b) => parse_pairs(&b, 6000),
         Err(e) => vec![("(parse error)".into(), e.to_string())],
     });
-    let mut c = cache.lock().unwrap();
-    if c.len() > 4000 {
-        c.clear();
-    }
-    c.insert(k, v.clone());
-    v
+    let w = weight(v.iter().map(|(a, b)| (a, b)));
+    cache.insert(k, v, w)
 }
 
 /// 注釈を項目の名前らしく短くする（Python 版の clean_label と同じ）。
@@ -163,12 +168,11 @@ pub fn clean_label(c: &str) -> String {
 
 /// 定義ファイルの注釈 → 鍵ごとの名前（覚える）。
 pub fn def_labels(path: &Path) -> Arc<HashMap<String, String>> {
-    type Cache = Mutex<HashMap<Key, Arc<HashMap<String, String>>>>;
-    static CACHE: OnceLock<Cache> = OnceLock::new();
-    let cache = CACHE.get_or_init(Default::default);
+    static CACHE: OnceLock<Lru<Key, Arc<HashMap<String, String>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Lru::new(XML_CACHE_BYTES / 4));
     let Some(k) = file_key(path) else { return Arc::default() };
-    if let Some(v) = cache.lock().unwrap().get(&k) {
-        return v.clone();
+    if let Some(v) = cache.get(&k) {
+        return v;
     }
     let mut raw = HashMap::new();
     if let Ok(b) = std::fs::read(path) {
@@ -180,9 +184,8 @@ pub fn def_labels(path: &Path) -> Arc<HashMap<String, String>> {
         }
     }
     let m: HashMap<String, String> = raw.into_iter().map(|(k, v)| (k, clean_label(&v))).filter(|(_, v)| !v.is_empty()).collect();
-    let v = Arc::new(m);
-    cache.lock().unwrap().insert(k, v.clone());
-    v
+    let w = weight(m.iter());
+    cache.insert(k, Arc::new(m), w)
 }
 
 /// 鍵の名前（定義の注釈）。属性が value 以外なら @属性 を添える。

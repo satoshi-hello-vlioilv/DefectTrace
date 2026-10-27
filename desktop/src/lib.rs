@@ -4,6 +4,7 @@ pub mod analysis;
 pub mod app;
 pub mod brand;
 pub mod cab;
+pub mod cache;
 pub mod config;
 pub mod dat;
 pub mod distribute;

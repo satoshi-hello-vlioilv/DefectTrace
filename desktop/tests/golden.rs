@@ -294,6 +294,37 @@ fn lot_list_collects_lots_columns_and_values() {
             .sum();
         assert_eq!(v[3], json!(total.to_string()), "{p}: 分類の合計");
     }
+    // 表示項目（サマリ・ロット情報・一覧）と同じ項目は、ロット表でも同じ値（単位の倍率・日時の形も同じ）。
+    // 画面（lotlist-view.js の spec）は、列と同じファイル・鍵の表示項目の scale・fmt を付けて問い合わせる
+    assert!(ids.contains(&"dat:INSP_INFO|@insp_width"), "計算で作る項目（検査幅）も列にする: {ids:?}");
+    let pins = get("/api/pins", "");
+    let lot_pins: Vec<&Value> = pins.as_array().unwrap().iter().filter(|p| p["scope"] == "lot").collect();
+    let spec = |p: &Value| {
+        let mut c = json!({"file": p["file"], "key": p["key"]});
+        for k in ["scale", "fmt"] {
+            if !p[k].is_null() {
+                c[k] = p[k].clone();
+            }
+        }
+        c
+    };
+    let rows = post("/api/lotrows", json!({"paths": paths, "cols": lot_pins.iter().map(|p| spec(p)).collect::<Vec<_>>()}));
+    for p in &paths {
+        let info = get("/api/info", &format!("lot={}", enc(p)));
+        let shown = info["pinned"].as_array().unwrap();
+        for (j, pin) in lot_pins.iter().enumerate() {
+            let want = &shown.iter().find(|x| x["id"] == pin["id"]).unwrap()["value"];
+            assert_eq!(&rows[p][j], want, "{p}: 「{}」がサマリ・ロット情報と同じ値", pin["label"]);
+        }
+    }
+    // 単位: 検査長(m) は INSP_INFO.insp_end_y（mm）× 0.001。倍率を付けないと mm のまま（直す前のロット表はこちらで、桁が 1000 倍違った）
+    let raw = post(
+        "/api/lotrows",
+        json!({"paths": [&paths[0]], "cols": [{"file": "dat:INSP_INFO", "key": "insp_end_y"}, {"file": "dat:INSP_INFO", "key": "insp_end_y", "scale": 0.001}]}),
+    );
+    let (mm, m) =
+        (raw[&paths[0]][0].as_str().unwrap().parse::<f64>().unwrap(), raw[&paths[0]][1].as_str().unwrap().parse::<f64>().unwrap());
+    assert!((mm * 0.001 - m).abs() < 0.01, "検査長: {mm} mm → {m} m");
     let bad = post("/api/lotrows", json!({"paths": [format!("{rs}/nothing")], "cols": want_cols}));
     assert!(bad[format!("{rs}/nothing")]["error"].is_string(), "読めないロットは error");
     let _ = std::fs::remove_dir_all(&root);
