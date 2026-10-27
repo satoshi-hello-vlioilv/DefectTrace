@@ -1,7 +1,7 @@
 {
  "title": "MAP の欠陥の記号（既定を小さく・極小まで・半透明・輪郭）（版 4.5.0）",
  "rule": "2026-10-17",
- "evaluator": "採点は案を作っていない別のエージェント（Claude・採点役）が 2026-10-27 に付けた。自分で撮った: 多いロット（7,016 点・画像なし。DT_UI_MORE/DT_UI_LOT 付き）を ui-check.mjs（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk/now-dense）と ui-variants.mjs（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk/dense）、少ないロット（58 点・画像あり）を同じ道具で DT_UI_* なし（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk/now・/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk/few）。各 3 幅。右の列の MAP を PIL で切り出し・拡大して（crop-dense-1728.png・few-zoom.png・dense-back.png）見比べた。作った者の self_check も読んだ。2 回目は、案を作っておらず 1 回目の採点者とも別の Claude（採点役）が 2026-10-27 に付けた。自分で撮った: 多いロット（7,016 点・画像なし）を DT_UI_MORE/DT_UI_LOT 付きで、少ないロット（58 点・画像あり）を DT_UI_* なしで、node program/tools/ui-variants.mjs <出力> 2026-10-27-map-marks-2.mjs（作業木が他の作業で揺れていたので定義の写しで撮った。中身は同じ）。各 3 幅（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk2/dense・/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk2/few）。右の列の MAP を PIL で切り出し・拡大して（dense-maps.png・few-maps.png・dense-zoom.png・dense-1280.png・few-1280.png・zoom-ctl.png）見比べた。作った者の self_check も読んだ 作った後: 案を作った者・作った者・各回の案の採点者のどれとも別の採点者（子エージェント。Claude Opus 5.5）が 2026-10-27 に自分で撮って採点した（node program/tools/ui-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/after〈start・lot・info・release × 1728・1536・1280〉、DT_UI_MORE・DT_UI_LOT 付きで /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/after-dense〈1728・1280〉、node program/tools/filter-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/filter〈全部 OK〉、node program/tools/scbar-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/sc〈全部 OK〉）。画像を Read で直接開き、作る前（score-rel/now・score-mk/now・score-mk/now-dense・score-flt/now）と案の再現（score-rel3・score-mk2・score-flt3）と並べ、細部は PIL で切り出して見比べた。",
+ "evaluator": "採点は案を作っていない別のエージェント（Claude・採点役）が 2026-10-27 に付けた。自分で撮った: 多いロット（7,016 点・画像なし。DT_UI_MORE/DT_UI_LOT 付き）を ui-check.mjs（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk/now-dense）と ui-variants.mjs（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk/dense）、少ないロット（58 点・画像あり）を同じ道具で DT_UI_* なし（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk/now・/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk/few）。各 3 幅。右の列の MAP を PIL で切り出し・拡大して（crop-dense-1728.png・few-zoom.png・dense-back.png）見比べた。作った者の self_check も読んだ。2 回目は、案を作っておらず 1 回目の採点者とも別の Claude（採点役）が 2026-10-27 に付けた。自分で撮った: 多いロット（7,016 点・画像なし）を DT_UI_MORE/DT_UI_LOT 付きで、少ないロット（58 点・画像あり）を DT_UI_* なしで、node program/tools/ui-variants.mjs <出力> 2026-10-27-map-marks-2.mjs（作業木が他の作業で揺れていたので定義の写しで撮った。中身は同じ）。各 3 幅（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk2/dense・/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-mk2/few）。右の列の MAP を PIL で切り出し・拡大して（dense-maps.png・few-maps.png・dense-zoom.png・dense-1280.png・few-1280.png・zoom-ctl.png）見比べた。作った者の self_check も読んだ 作った後: 案を作った者・作った者・各回の案の採点者のどれとも別の採点者（子エージェント。Claude Opus 5.5）が 2026-10-27 に自分で撮って採点した（node program/tools/ui-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/after〈start・lot・info・release × 1728・1536・1280〉、DT_UI_MORE・DT_UI_LOT 付きで /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/after-dense〈1728・1280〉、node program/tools/filter-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/filter〈全部 OK〉、node program/tools/scbar-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/sc〈全部 OK〉）。画像を Read で直接開き、作る前（score-rel/now・score-mk/now・score-mk/now-dense・score-flt/now）と案の再現（score-rel3・score-mk2・score-flt3）と並べ、細部は PIL で切り出して見比べた。 作った後（直した後の撮り直し）: 案を作った者・作った者・各回の案の採点者・前の作った後の採点者のどれとも別の採点者（子エージェント。Claude Opus 5.5）が 2026-10-27 に自分で撮って採点した（node program/tools/filter-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45b/filter〈17 項目すべて OK〉、node program/tools/ui-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45b/after 1728x1152,1536x864,1280x720、DT_UI_MORE・DT_UI_LOT 付きで /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45b/after-dense〈1728・1280〉）。画像を Read で直接開き、帯（band-1280.png）と MAP のつまみ（ctl-d1728.png・col-d1280.png）は PIL で切り出して拡大し、前の作った後の採点（built45）の指摘と見比べた。",
  "rounds": [
   {
    "name": "1 回目",
@@ -299,24 +299,24 @@
   }
  ],
  "built": {
-  "name": "作った後: M7 自動＋つまみ 2 本＋描き方・形の段",
-  "images": "欠陥の多いロット（7,016 点）: DT_UI_MORE・DT_UI_LOT を付けて node program/tools/ui-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/after-dense 1728x1152,1280x720。少ないロット（58 点）: /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/after/lot-*。右の列の MAP を PIL で切り出し、作る前（score-mk/now-dense・score-mk/now）と並べた（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45/map-dense-cmp.png・map-after.png・map-dense-1280.png）",
+  "name": "作った後: M7 自動＋つまみ 2 本＋描き方・形の段（つまみの左端と自動の置き場を直した後）",
+  "images": "欠陥の多いロット（7,016 点）: DT_UI_MORE・DT_UI_LOT を付けて node program/tools/ui-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45b/after-dense 1728x1152,1280x720。少ないロット（58 点）: /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45b/after/lot-*（1728・1536・1280）と /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45b/filter/lot-*（絞り込み中）。つまみの部分を /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45b/ctl-d1728.png（3 倍）、1280 の右の列を /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built45b/col-d1280.png に切り出した",
   "result": {
    "score": {
     "order": 8,
-    "chunk": 8,
+    "chunk": 9,
     "hierarchy": 8,
     "visual": 8,
     "steps": 9,
     "effortless": 9,
-    "intuitive": 8,
+    "intuitive": 9,
     "form": 8,
     "place": 8,
-    "layout": 7,
+    "layout": 8,
     "tone": 8
    },
    "minus": [],
-   "seen": "良い: 多いロットは自動で 2.5px・25% になり、作る前（11px の ● が一様な灰の太い帯）と違って裏面の芯の粒と、上は薄く下（12018 付近）ほど濃い濃淡が読める（map-dense-cmp.png）。芯の右の離れた点も小さな点として分かれて見える。大きさ・濃さのつまみに今の値（2.5px・25%／7px・85%）が出て、作る前の『記号』のつまみの値が出ない所（状態が見えない）は直った。『✓ 自動』は案の緑の飾りの札から、青い枠の丸いボタンの形になり押せる物に見える。描き方（塗り・輪郭・塗り＋輪郭）と形（分類・点）が 1 段にそろい、3 幅とも 3 段で折れない（1280 も切れない）。少ないロットは ● ▲ ■ ★ の形が図と凡例でそろい、凡例に『灰＝画像なし』が足されて灰色の点の意味が分かる。絞り込み中は MAP の見出しに『10件（絞り込み中・全 58）』と出る。悪い: 大きさと濃さのつまみの左端がそろわない（ラベルの幅の差で、濃さの方が約 15px 左から始まり、長さも違う。1728・1280 とも）。『自動』は濃さの行にだけ付き、大きさにも効くことが位置から読みにくい。多いロットの下半分（12018〜16024）はまだ濃い灰と多量の赤い帯が重なり、芯の中の差は小さい。MAP の段が 2 段増え、ロット情報が約 120px 下がる"
+   "seen": "前の作った後（81.1 点）の弱い所は直った: 大きさ（2.5px）と濃さ（25%）のつまみが 2 段に積まれ、左端・長さ・値の位置がそろう（ctl-d1728・col-d1280。少ないロットの 7px・85% も 1728・1280 でそろう）。『✓ 自動』は 2 本のつまみの右に縦の区切り線を挟んで 2 段の真ん中に置かれ、両方に効くことが位置から読める。描き方（塗り・輪郭・塗り＋輪郭）と形（分類・点）はその下の 1 段で、3 幅とも折れ・切れなし。多いロットは自動の小さく薄い点で裏面の芯の粒と上から下への濃淡が読め、離れた点も分かれる。少ないロットは ● ▲ ■ ★ の形が図と凡例でそろい、灰＝画像なしが凡例にある。絞り込み中は見出しに『10件（絞り込み中・全 58）』。残る弱い所（減点ではない）: 多いロットの下半分（12018〜16024）は赤い多量の帯と濃い灰が重なり、芯の中の差は小さい。MAP の操作が 3 段あり、ロット情報が作る前より下がる。前の採点の要点: 作る前は 11px の ● が一様な灰の帯になり値も出なかった"
   }
  }
 }
