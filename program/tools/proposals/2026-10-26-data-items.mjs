@@ -22,7 +22,7 @@ document.querySelectorAll('#imgInfo tr.pinned td.k').forEach((e) => placedOf.set
 const groups = [...document.querySelectorAll("#srcList details.xf")].map((d) => {
   const t = d.querySelector("summary").childNodes[0].textContent.trim();
   const [src, name] = t.split("：");
-  return { src, name: name || t, rows: [...d.querySelectorAll("tr.src")].map((tr) => ({ label: tr.dataset.label || tr.dataset.key.split(/[/@]/).filter(Boolean).pop(), key: tr.dataset.key, val: tr.dataset.val, scope: tr.dataset.scope })) };
+  return { src, name: name || t, rows: [...d.querySelectorAll("tr.src")].map((tr) => ({ label: tr.dataset.label || tr.dataset.key.split(/[/@]/).filter(Boolean).pop(), file: tr.dataset.file, key: tr.dataset.key, val: tr.dataset.val, scope: tr.dataset.scope })) };
 }).filter((g) => g.rows.length);
 const state = document.body.dataset.state;
 const Q = state === "search" || state === "drag" ? "幅" : "";

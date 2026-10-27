@@ -9,16 +9,16 @@
 // 状態: early（開いて 0.5 秒。CAB の一覧を読み、欠陥データを読んでいる）・mid（使える。縮小画像を作っている 39%）
 // 数は 2 万枚のロット（CAB 200 個）を開いたときの本物の進みから取った（open-check.mjs の控え）。
 
-const STEPS = {
+export const STEPS = {
   early: [["names", "画像の一覧", "run", "CAB 120 / 200"], ["info", "欠陥データ", "run", "読込中"], ["cards", "画像の枠", "wait", ""], ["link", "画像と欠陥の対応", "wait", ""],
     ["analysis", "MAP・転写・ピッチ", "wait", ""], ["thumbs", "縮小画像", "wait", ""]],
   mid: [["names", "画像の一覧", "done", "CAB 200"], ["info", "欠陥データ", "done", "20,000 件"], ["cards", "画像の枠", "done", "20,000 枚"], ["link", "画像と欠陥の対応", "done", ""],
     ["analysis", "MAP・転写・ピッチ", "done", ""], ["thumbs", "縮小画像", "run", "7,898 / 20,000"]],
 };
-const PCT = { early: 6, mid: 39 };
-const ETA = { early: "計算中", mid: "約 8 秒" };
-const NOW = { early: "画像の一覧を読んでいます（CAB 120 / 200）", mid: "縮小画像を作っています 7,898 / 20,000" };
-const USE = { early: "", mid: "操作できます（見ている所から先に作っています）" };
+export const PCT = { early: 6, mid: 39 };
+export const ETA = { early: "計算中", mid: "約 8 秒" };
+export const NOW = { early: "画像の一覧を読んでいます（CAB 120 / 200）", mid: "縮小画像を作っています 7,898 / 20,000" };
+export const USE = { early: "", mid: "操作できます（見ている所から先に作っています）" };
 
 const COMMON = `
 const S = ${JSON.stringify(STEPS)}, PCT = ${JSON.stringify(PCT)}, ETA = ${JSON.stringify(ETA)}, NOW = ${JSON.stringify(NOW)}, USE = ${JSON.stringify(USE)};
@@ -36,7 +36,7 @@ export const STATES = {
   mid: "document.body.dataset.state='mid';window.__lp&&window.__lp()",
 };
 
-const BASE = `
+export const BASE = `
 body.early #grid .th{display:none}
 body.early #grid .cabsep .st{color:var(--sub)}
 .lp{font-size:13px}
