@@ -9,7 +9,7 @@
   const NEED = { list: "lot", summary: "lot", lot: "lot", card: "image", image: "any", mapx: "image", mapy: "image" };
 
   const S = { lot: null, gen: 0, group: null, items: [], cur: -1, seen: new Set(), poll: null, zoom: "fit", fk: null, fd: null, fn: 0,
-    pins: [], LOT: null, img: null, mapSide: "all", sides: {}, kinds: {}, imap: {}, card: [], map: null,
+    pins: [], ini: { ids: new Set(), source: "builtin", developer: false }, LOT: null, img: null, mapSide: "all", sides: {}, kinds: {}, imap: {}, card: [], map: null,
     view: "grid", mk: (() => { const d = { auto: true, size: 4, alpha: 0.55, look: "fill", shape: "kind" }; try { return { ...d, ...JSON.parse(localStorage.getItem("mapMarkStyle") || "{}") }; } catch (_) { return d; } })(), PT: null, ptsel: null, P: null, D: new Map(), psel: null, pselRef: null, pairN: {}, plist: [], plistPairs: [], pshow: 150 };
 
   const status = (m, err) => { $("status").textContent = m; $("status").className = err ? "err" : ""; };
@@ -164,13 +164,14 @@
       cnt.innerHTML = `${lots.length}ロット${n ? ` <span class="fl ovl" title="多量ありのロット数">多量${n}</span>` : ""}`;
     }
   }
+  // ロットの木の行は li.lot（データ項目の窓の札〈span.dsc.lot〉も lot を持つので、li に限る）
   function refreshSummaries() {
-    const ps = [...document.querySelectorAll(".lot")].map((x) => x.dataset.path);
+    const ps = [...document.querySelectorAll("li.lot")].map((x) => x.dataset.path);
     if (ps.length) fillLotSummaries(ps);
   }
   function applyFilter() {
     const f = $("treeFilter").value.trim().toLowerCase();
-    document.querySelectorAll(".lot").forEach((li) => {
+    document.querySelectorAll("li.lot").forEach((li) => {
       const s = li.dataset.search || li.dataset.name.slice(11).replace(/_/g, ":");
       li.hidden = !!f && !s.includes(f) && !li.dataset.name.includes(f);
     });
@@ -565,14 +566,13 @@
     let h = "";
     if (d.head) h += `<div class="ihead"><span>欠陥No:${esc(d.head.no)}</span><span>${esc(d.head.kname)}${markHtml(d.head)}</span><span class="tag" style="background:${d.head.scolor}">${esc(d.head.sname)}</span></div>`;
     h += '<table class="kv">';
-    h += d.card.map((p) => pinRow(p, "card", true)).join("");
-    h += d.pinned.map((p) => pinRow(p, "image")).join("");
-    h += lotPins("image").map((p) => pinRow(p, "image")).join("");
+    h += grouped([...d.card.map((p) => [p, "card", true]), ...d.pinned.map((p) => [p, "image"]), ...lotPins("image").map((p) => [p, "image"])], (a) => a[0].id,
+      (a) => pinRow(...a), SEP_ROW);
     h += kv("画像", `${it.cab}/${it.name}  ${d.width}×${d.height}${d.bits ? " " + d.bits + "bit" : ""}`);
     h += "</table>";
     if (d.detect_index == null) h += `<div class="hint">${d.map_final ? "欠陥データとの対応なし" : "全画像の展開後に欠陥データと対応付けます"}</div>`;
     $("imgInfo").innerHTML = h;
-    $("vInfo").innerHTML = h + `<div class="sec">ロット</div><table class="kv">${lotPins("summary").concat(lotPins("lot")).map((p) => pinRow(p, "x")).join("")}</table>`;
+    $("vInfo").innerHTML = h + `<div class="sec">ロット</div><table class="kv">${grouped(lotPins("summary").concat(lotPins("lot")), (p) => p.id, (p) => pinRow(p, "x"), SEP_ROW)}</table>`;
   }
 
   // ================================================================ lot info
@@ -589,10 +589,10 @@
   const lotPins = (place) => (S.LOT ? S.LOT.pinned.filter((p) => p.place === place) : []);
   function renderLot() {
     const d = S.LOT;
-    $("summary").querySelector(".pins").innerHTML = d ? (lotPins("summary").map((p) => chip(p, "summary", true)).join("") || '<span class="hint">ロット情報の項目をここへドラッグ</span>') : "";
+    $("summary").querySelector(".pins").innerHTML = d ? (grouped(lotPins("summary"), (p) => p.id, (p) => chip(p, "summary", true), SEP_CHIP) || '<span class="hint">ロット情報の項目をここへドラッグ</span>') : "";
     if (!d) return;
     let h = '<table class="kv">' + kv("設備", S.lot.eq) + kv("作業日時", `${d.date} ${d.time}`);
-    h += lotPins("lot").map((p) => pinRow(p, "lot")).join("");
+    h += grouped(lotPins("lot"), (p) => p.id, (p) => pinRow(p, "lot"), SEP_ROW);
     h += kv("画像", Object.entries(d.cab_groups).map(([k, v]) => `${k}:${v}`).join(" / ") || "なし");
     h += kv("総容量", (d.total_bytes / 1048576).toFixed(1) + " MB") + "</table>";
     const ov = d.overload;
@@ -627,11 +627,13 @@
     if (d.work) h += '<div class="sec">作業情報</div><table class="kv">' + Object.entries(d.work).map(([k, v]) => kv(k, v)).join("") + "</table>";
     $("lotInfo").innerHTML = h;
   }
+  /** その表示先の札（初期を先・足した物を後ろ。窓の外の枠とデータ項目の窓の表示先が使う） */
+  const placeChips = (pl) => grouped(S.pins.filter((p) => p.place === pl), (p) => p.id, (p) => chip({ id: p.id, label: p.label || shortKey(p.key), value: "" }, pl, false), SEP_CHIP);
   function renderPinZones() {
     for (const el of document.querySelectorAll(".pins[data-place]")) {
       const pl = el.dataset.place;
       if (pl === "summary") continue;
-      el.innerHTML = S.pins.filter((p) => p.place === pl).map((p) => chip({ id: p.id, label: p.label || shortKey(p.key), value: "" }, pl, false)).join("") || '<span class="hint">ここへドラッグ</span>';
+      el.innerHTML = placeChips(pl) || '<span class="hint">ここへドラッグ</span>';
     }
   }
 
@@ -702,7 +704,8 @@
       if (!rs.length) return head + '<div class="hint">（値の項目なし）</div>';
       return head + `<table class="dtab"><colgroup><col><col style="width:180px"><col style="width:220px"></colgroup>` + rs.map((r) => {
         const placed = [...new Set(pinsOf(g.file, r.key).map((p) => p.place))];
-        const tags = placed.slice(0, 2).map((p) => `<span class="dpl" title="${esc(PLACE[p])}">${esc(PLACE_SHORT[p])}</span>`).join("") + (placed.length > 2 ? `<span class="dpl more">+${placed.length - 2}</span>` : "");
+        const mine = (pl) => pinsOf(g.file, r.key).some((p) => p.place === pl && !isIni(p.id));
+        const tags = placed.slice(0, 2).map((p) => `<span class="dpl ${mine(p) ? "add" : "ini"}" title="${esc(PLACE[p])}（${mine(p) ? "足した物" : "初期の項目"}）">${esc(PLACE_SHORT[p])}</span>`).join("") + (placed.length > 2 ? `<span class="dpl more">+${placed.length - 2}</span>` : "");
         const picked = SRC.pick && SRC.pick.file === g.file && SRC.pick.key === r.key;
         const row = `<tr class="src drow${picked ? " picked" : ""}" draggable="true" data-scope="${g.scope}" data-file="${esc(g.file)}" data-key="${esc(r.key)}" data-val="${esc(r.val)}" data-label="${esc(r.l)}" title="ドラッグで表示先へ／押すと置く先のボタン">
           <td class="dl1"><span class="grip" aria-hidden="true">⠿</span><b>${hl(r.label)}</b><small>${hl(r.key)} ${scopeTag(g.scope)}</small></td>
@@ -714,7 +717,7 @@
       }).join("") + "</table>";
     }).join("") || `<div class="hint">${f ? "見つかりません（項目名・キー・値で探します）" : "ロットを選ぶと出ます"}</div>`;
     $("srcPlaces").innerHTML = Object.keys(PLACE).map((pl) => `<div class="dplace dz" data-drop="${pl}"><div class="dph">${ico(pl)}<b>${esc(PLACE_SHORT[pl])}</b><span class="sub">${esc(PLACE_SUB[pl])}</span>${scopeTag(NEED[pl] === "any" ? "any" : NEED[pl])}</div>
-      <div class="dchips"><span class="pins" data-place="${pl}">${S.pins.filter((p) => p.place === pl).map((p) => chip({ id: p.id, label: p.label || shortKey(p.key), value: "" }, pl, false)).join("") || '<span class="hint">ここへドラッグ</span>'}</span></div></div>`).join("");
+      <div class="dchips"><span class="pins" data-place="${pl}">${placeChips(pl) || '<span class="hint">ここへドラッグ</span>'}</span></div></div>`).join("");
   }
   function openSources() {
     $("srcModal").hidden = false; renderSources();
@@ -736,6 +739,7 @@
       e.stopPropagation();
       const tr = tg.closest("tr").previousElementSibling, pl = tg.dataset.toggle;
       const have = pinsOf(tr.dataset.file, tr.dataset.key).filter((p) => p.place === pl);
+      if (have.length && !(await confirmUnpin(have.map((p) => p.id)))) return;
       try {
         if (have.length) for (const p of have) await api("/api/pins/" + encodeURIComponent(p.id), { method: "DELETE" });
         else await send("/api/pins", { scope: tr.dataset.scope, file: tr.dataset.file, key: tr.dataset.key, label: tr.dataset.label || autoLabel(tr.dataset.key), place: pl });
@@ -751,11 +755,49 @@
     renderSources();
   });
 
+  // ---------------------------------------------------------------- 表示の初期値（初期の項目と足した物の見分け・開発者が決める初期値）
+  // 初期の項目は角の少し丸い輪郭の札、この PC で足した物は丸い黄の札。どの置き場でも初期を先に並べ、足した物の前に「足した物」の区切りを置く
+  // （3 回の案出しと採点で決めた: program/tools/proposals/2026-10-27-pin-defaults*）
+  const isIni = (id) => S.ini.ids.has(id);
+  const pinKind = (id) => (isIni(id) ? "ini" : "add");
+  const SEP_CHIP = '<span class="pinsep" title="この PC で足した表示項目">足した物</span>';
+  const SEP_ROW = '<tr class="pinsep"><td colspan="3" title="この PC で足した表示項目">足した物</td></tr>';
+  /** 初期の項目を先、足した物を後ろに（それぞれの中の並びはそのまま）。足した物があれば前に区切り */
+  function grouped(list, idOf, one, sep) {
+    const a = list.filter((x) => isIni(idOf(x))), b = list.filter((x) => !isIni(idOf(x)));
+    return a.map(one).join("") + (b.length ? sep : "") + b.map(one).join("");
+  }
+  /** 初期の項目を外す前に、画面の真ん中の小窓で確かめる（足した物だけなら聞かない）。→ 外してよいか */
+  function confirmUnpin(ids) {
+    const ini = ids.map((id) => S.pins.find((p) => p.id === id)).filter((p) => p && isIni(p.id));
+    if (!ini.length) return Promise.resolve(true);
+    const names = ini.map((p) => `<span class="pw-chip">${esc(p.label || shortKey(p.key))}</span>`).join(" ");
+    const w = $("pinWarn");
+    w.innerHTML = `<div class="pw-dlg"><h3 id="pinWarnT">⚠ 初期の表示項目を外しますか</h3>
+      <p>${names} は${S.ini.source === "developer" ? esc(iniName()) + "の項目" : "アプリ（開発者）が決めた初期の項目"}です。外すと、この PC の「${esc(PLACE[ini[0].place] || ini[0].place)}」から消えます。</p>
+      <p class="sub">戻すときは「表示設定を初期化」か、データ項目で置き直します。</p>
+      <div class="pw-b"><button type="button" data-w="no">やめる</button><button type="button" class="pw-go" data-w="go">外す</button></div></div>`;
+    w.hidden = false; w.querySelector('[data-w="no"]').focus();
+    return new Promise((done) => {
+      const end = (ok) => { w.hidden = true; w.onclick = null; w.onkeydown = null; done(ok); };
+      w.onclick = (e) => { const b = e.target.closest("[data-w]"); if (b) end(b.dataset.w === "go"); else if (e.target === w) end(false); };
+      w.onkeydown = (e) => { if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); end(false); } };
+    });
+  }
+  /** いまの初期値（GET /api/pins/default）を読み、開発者のボタンを出し入れする */
+  async function loadIni() {
+    try { const d = await api("/api/pins/default"); S.ini = { ...d, ids: new Set((d.pins || []).map((p) => p.id)), developer: !!(d.me && d.me.developer) }; }
+    catch (_) { /* 読めなければ、どれも足した物として出す */ }
+    $("btnIniDev").hidden = !S.ini.developer;
+    $("btnReset").title = `表示項目を初期値（${iniName()}）に戻す`;
+  }
+  const iniName = () => (S.ini.source === "developer" ? `開発者${S.ini.setBy ? " " + S.ini.setBy : ""}が決めた初期値` : "アプリの初期値");
+
   function kv(k, v) { return `<tr><td class="k">${esc(k)}</td><td>${esc(v)}</td><td class="b"></td></tr>`; }
   const shortKey = (k) => k.split("/").slice(-2).join("/");
   function pinRow(p, place, num) {
     const movable = place !== "x";
-    return `<tr class="pinned"${movable ? ` draggable="true" data-pid="${esc(p.id)}" data-place="${place}"` : ""}><td class="k" title="ドラッグで並べ替え・移動／ダブルクリックで名前変更">${esc(p.label || "（無題）")}</td><td${num ? ' class="num"' : ""}>${esc(p.value || "—")}</td><td class="b">${movable ? `<button type="button" class="pb" data-unpin="${esc(p.id)}" title="表示から外す">×</button>` : ""}</td></tr>`;
+    return `<tr class="pinned ${pinKind(p.id)}"${movable ? ` draggable="true" data-pid="${esc(p.id)}" data-place="${place}"` : ""}><td class="k" title="ドラッグで並べ替え・移動／ダブルクリックで名前変更">${esc(p.label || "（無題）")}</td><td${num ? ' class="num"' : ""}>${esc(p.value || "—")}</td><td class="b">${movable ? `<button type="button" class="pb" data-unpin="${esc(p.id)}" title="表示から外す">×</button>` : ""}</td></tr>`;
   }
   const FMT = { time: [["hhmm", "hh:mm"], ["hhmmss", "hh:mm:ss"]], date: [["mmdd", "mm/dd"], ["yyyymmdd", "yyyy/mm/dd"]] };
   function chip(p, place, withVal) {
@@ -765,7 +807,7 @@
       const opts = FMT[full.key], cur = opts.find((o) => o[0] === full.fmt) || opts[0];
       fm = `<button type="button" class="fm" data-fmt="${esc(p.id)}" title="表示書式を切り替え">${esc(cur[1])}</button>`;
     }
-    return `<span class="chip" draggable="true" data-pid="${esc(p.id)}" data-place="${place}" title="ドラッグで並べ替え・移動／ダブルクリックで名前変更">${p.label ? `<span class="cl">${esc(p.label)}</span>` : ""}${fm}${withVal ? `<span class="cv">${esc(p.value || "—")}</span>` : ""}<button type="button" class="x" data-unpin="${esc(p.id)}" title="外す">×</button></span>`;
+    return `<span class="chip ${pinKind(p.id)}" draggable="true" data-pid="${esc(p.id)}" data-place="${place}" title="ドラッグで並べ替え・移動／ダブルクリックで名前変更">${p.label ? `<span class="cl">${esc(p.label)}</span>` : ""}${fm}${withVal ? `<span class="cv">${esc(p.value || "—")}</span>` : ""}<button type="button" class="x" data-unpin="${esc(p.id)}" title="外す">×</button></span>`;
   }
 
   // ================================================================ drag & drop (set / move / reorder)
@@ -873,6 +915,7 @@
     const un = e.target.closest("[data-unpin]");
     if (un) {
       e.stopPropagation();
+      if (!(await confirmUnpin([un.dataset.unpin]))) return;
       try { await api("/api/pins/" + encodeURIComponent(un.dataset.unpin), { method: "DELETE" }); await afterPins(); } catch (er) { status(er.message, true); }
       return;
     }
@@ -885,8 +928,34 @@
     await send("/api/pins/" + encodeURIComponent(p.id), { label: v.trim() }, "PATCH"); await afterPins();
   });
   $("btnReset").addEventListener("click", async () => {
-    if (!confirm("表示項目の設定を初期状態に戻しますか？")) return;
-    await send("/api/pins/reset", {}); await afterPins();
+    await loadIni();
+    if (!confirm(`この PC の表示項目を、${iniName()}に戻しますか？（足した物は消えます）`)) return;
+    await send("/api/pins/reset", {}); await afterPins(); status(`表示項目を${iniName()}に戻しました`);
+  });
+  // 開発者の小窓: いまの初期値・この PC の表示の数・いまの表示を初期値にする／アプリの初期値に戻す
+  function renderIniWin() {
+    const d = S.ini, nIni = S.pins.filter((p) => isIni(p.id)).length, nAdd = S.pins.length - nIni;
+    const who = d.source === "developer" ? `${esc(d.setBy || "開発者")}${d.setAt ? "・" + esc(String(d.setAt).replace("T", " ").slice(0, 16)) : ""}` : "";
+    $("iniWin").innerHTML = `<h4 id="iniTitle">表示の初期値（開発者）<button type="button" class="mclose" data-ini="close" title="閉じる（Esc）" aria-label="閉じる">×</button></h4>
+      <div class="sub">新しい PC と「表示設定を初期化」が使う表示項目です。各 PC で変えた表示はそのまま残ります。</div>
+      <dl><dt>いまの初期値</dt><dd><b>${esc(iniName())}</b>（${(d.pins || []).length} 項目${who ? "・" + who : ""}）</dd><dt>この PC の表示</dt><dd>初期 ${nIni}・足した物 ${nAdd}</dd></dl>
+      ${d.problem ? `<div class="err">${esc(d.problem)}</div>` : ""}${d.shared ? "" : '<div class="err">配布の置き場に届きません。届く所で開くと決められます。</div>'}
+      <div class="ib"><button type="button" data-ini="clear"${d.source === "developer" && d.shared ? "" : " disabled"}>アプリの初期値に戻す</button>
+      <button type="button" class="primary" data-ini="set"${d.shared ? "" : " disabled"}>いまの表示を初期値にする</button></div>
+      <div class="note">決めた初期値は配布の置き場に置かれ、どの PC の「表示設定を初期化」にも使われます。</div>`;
+  }
+  $("btnIniDev").addEventListener("click", async () => {
+    if (!$("iniWin").hidden) { $("iniWin").hidden = true; return; }
+    await loadIni(); renderIniWin(); $("iniWin").hidden = false;
+  });
+  $("iniWin").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-ini]"); if (!b) return;
+    if (b.dataset.ini === "close") { $("iniWin").hidden = true; return; }
+    try {
+      await api("/api/pins/default", { method: b.dataset.ini === "set" ? "POST" : "DELETE" });
+      await loadIni(); renderIniWin(); renderPinZones(); renderLot(); renderImgInfo(); renderSources();
+      status(b.dataset.ini === "set" ? "いまの表示を初期値にしました（新しい PC と「表示設定を初期化」が使います）" : "初期値をアプリの初期値に戻しました");
+    } catch (er) { status(er.message, true); }
   });
   async function afterPins() {
     S.pins = await api("/api/pins");
@@ -1453,6 +1522,8 @@
   $("vNext").addEventListener("click", () => select(S.cur + 1));
 
   document.addEventListener("keydown", (e) => {
+    if (!$("pinWarn").hidden) return;   // 外す前の確かめの小窓が開いている間は、小窓だけ（Esc で閉じる）
+    if (e.key === "Escape" && !$("iniWin").hidden) { $("iniWin").hidden = true; e.preventDefault(); return; }
     // データ項目の窓が開いている間は、窓の中だけ（Esc で閉じる・Ctrl+F で探す欄へ）
     if (!$("srcModal").hidden) {
       if (e.key === "Escape") { if (!$("pinPop").hidden) $("pinPop").hidden = true; else closeSources(); e.preventDefault(); }
@@ -1500,7 +1571,7 @@
       onCount: (n) => { $("lotTableN").textContent = n == null ? "" : n.toLocaleString("ja-JP"); },
       onPick: (path) => { const li = document.querySelector(`#tree li[data-path="${CSS.escape(path)}"]`); if (li) { S.folder = li; setListScope(); } },
     });
-    try { S.pins = await api("/api/pins"); renderPinZones(); renderMapSide(); await loadEquipments(); status("設備を選択してください"); }
+    try { await loadIni(); S.pins = await api("/api/pins"); renderPinZones(); renderMapSide(); await loadEquipments(); status("設備を選択してください"); }
     catch (e) { status(e.message, true); }
     // 画面が開けた合図（入れ替えた直後の版は、これが来なければ前の版へ戻す）
     window.__dtReady = true;

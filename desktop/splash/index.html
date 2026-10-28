@@ -9,7 +9,9 @@
   ① アプリの中身を探す ② 新しい版を確かめる ③ 画面を開く。
   窓が splash.brand(name, subtitle)（名前は program/app/brand.json の1か所）/ splash.version(v) / splash.step(id, state, detail) /
   splash.fail(title, detail) を呼ぶ。state: wait（まだ）・now（いま）・ok（済んだ）・warn（注意しつつ進む）・bad（止まった）。
-  名乗り（アイコン・名前・版）を中央に大きく、そのすぐ下に進み具合を山の線で（段が 1 つ済むごとに山が描かれる。いまの段はゆっくり明滅）。
+  名乗り（アイコン・名前・版）を中央に大きく、そのすぐ下に進み具合を「流れる板と検査のカメラ」で見せる（2 回の案出しと採点で決めた:
+  program/tools/proposals/2026-10-27-splash*）。板を段ごとに 3 区間に分け、済んだ区間は検査済みの色と欠陥の印、いまの区間の上に
+  カメラが乗って光を落とし、板の上を走査線が走る。絵の下に段の名前（済んだ段に ✓・いまの段を太く）、その下に数と詳しい文。
   止まったら、同じ名乗りの下の白い面に「次にすること」を主に、理由は控えに（コピーできる）。地は画面の見出しと同じ藍。
   icon.png は作るとき build.rs が program/app/app_icon.py で描く（256px）。
 -->
@@ -29,27 +31,32 @@
  .logo{width:112px;height:112px;filter:drop-shadow(0 12px 28px rgba(0,0,0,.4));transition:width .3s,height .3s}
  h1{margin:22px 0 0;font:700 44px/1.15 "Segoe UI Variable Display","Segoe UI","Yu Gothic UI",sans-serif;letter-spacing:.01em}
  .sub{margin-top:4px;font-size:18px;opacity:.82}
- .ver{margin-top:12px;min-height:12px;font:600 11px/1 "Segoe UI",sans-serif;letter-spacing:.2em;opacity:.6}
+ .ver{margin-top:12px;min-height:12px;font:600 11px/1 "Segoe UI",sans-serif;letter-spacing:.2em;opacity:.78}
 
- /* 進み具合: 周期の山の線（8 つの山・段ごとに 2 つ）。まだ＝淡い線、済んだ＝青緑（注意で進んだ段はアンバー）、いま＝明滅、止まった＝珊瑚 */
- .run{width:560px;margin-top:40px}
- .seg{display:block;width:560px;height:70px;overflow:visible}
- .seg path{fill:none;stroke-width:3.5;stroke-linejoin:round;stroke-linecap:round}
- .seg .wait{stroke:rgba(127,211,201,.18)}
- .seg .ok{stroke:var(--mint);filter:drop-shadow(0 0 6px rgba(127,211,201,.5))}
- .seg .warn{stroke:var(--amber)}
- .seg .bad{stroke:var(--coral)}
- .seg .now{stroke:var(--mint);animation:breathe 1.4s ease-in-out infinite}
- @keyframes breathe{0%,100%{opacity:.25}50%{opacity:.85}}
- .step{display:flex;justify-content:space-between;gap:16px;margin-top:8px;font-size:14px;opacity:.92}
- /* 下に敷く同じ山の淡い模様（何も伝えない飾り。読む物の後ろには来ない） */
- .motif{position:fixed;left:-2%;bottom:0;width:104%;height:42vh;pointer-events:none}
- .motif path{fill:none;stroke:rgba(127,211,201,.07);stroke-width:3;vector-effect:non-scaling-stroke}
- .motif path + path{stroke:rgba(127,211,201,.04)}
+ /* 進み具合: 流れる板の 3 区間とカメラ。まだ＝淡い区間、済んだ＝青緑の区間と欠陥の印（注意で進んだ段はアンバー）、いま＝カメラと光と走査線、止まった＝珊瑚 */
+ .run{width:720px;margin-top:40px}
+ .seg{display:block;width:720px;height:140px;overflow:visible}
+ .seg .sec{fill:rgba(255,255,255,.06);stroke:rgba(255,255,255,.2);stroke-width:1}
+ .seg .dots,.seg .cam,.seg .lamp,.seg .cone,.seg .beam{opacity:0}
+ .seg .cam{fill:#3b5d7a;stroke:#bff3ec;stroke-width:1}.seg .lamp{fill:#bff3ec}.seg .cone{fill:rgba(127,211,201,.26)}.seg .beam{fill:#e8fffb}
+ .seg .ok .sec{fill:rgba(127,211,201,.2);stroke:var(--mint)}.seg .ok .dots{opacity:1}
+ .seg .warn .sec{fill:rgba(230,165,46,.18);stroke:var(--amber)}.seg .warn .dots{opacity:1}
+ .seg .bad .sec{fill:rgba(255,138,122,.14);stroke:var(--coral)}
+ .seg .now .sec{stroke:#bff3ec}.seg .now .cam,.seg .now .lamp,.seg .now .beam{opacity:1}
+ .seg .now .cone{opacity:1;animation:breathe 1.4s ease-in-out infinite}.seg .now .beam{animation:sweep 1.5s linear infinite}
+ @keyframes breathe{0%,100%{opacity:.4}50%{opacity:1}}
+ @keyframes sweep{from{transform:translateX(0)}to{transform:translateX(200px)}}
+ .legs{display:grid;grid-template-columns:repeat(3,1fr);margin-top:10px;font-size:13.5px;color:rgba(255,255,255,.72);text-align:center}
+ .legs .now{color:#fff;font-weight:700}.legs .ok{color:var(--mint)}.legs .ok::before{content:"✓ "}.legs .warn{color:var(--amber)}.legs .warn::before{content:"! "}
+ .legs .bad{color:var(--coral);font-weight:700}
+ .step{display:flex;justify-content:center;gap:10px;margin-top:12px;font-size:12.5px;opacity:.78;min-height:19px}
+ .count{font-variant-numeric:tabular-nums;white-space:nowrap}
+ .detail{max-width:640px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ /* 下に敷く板とローラーの淡い断面（何も伝えない飾り。読む物の後ろには来ない） */
+ .motif{position:fixed;left:0;bottom:0;width:100%;height:46vh;pointer-events:none}
+ .motif .strip{fill:rgba(127,211,201,.04)}.motif .roll{fill:none;stroke:rgba(127,211,201,.08);stroke-width:3}
  .hero{position:relative;z-index:1}
- .count{font-variant-numeric:tabular-nums;opacity:.7}
- .detail{margin-top:2px;min-height:19px;font-size:12px;text-align:left;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
- .elapsed{position:fixed;right:24px;bottom:18px;font:12px Consolas,monospace;opacity:.45}
+ .elapsed{position:fixed;right:24px;bottom:18px;font:12px Consolas,monospace;opacity:.6}
 
  /* 止まったとき: 名乗りを小さくし、白い面に「次にすること」（主）と理由（控え・コピーできる） */
  body.is-fail .run{display:none}
@@ -68,7 +75,7 @@
  .copy:hover{border-color:var(--teal);color:var(--teal)}
  .copy:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 
- @media (prefers-reduced-motion:reduce){.seg .now{animation:none;opacity:.6}.logo{transition:none}}
+ @media (prefers-reduced-motion:reduce){.seg .now .cone,.seg .now .beam{animation:none}.logo{transition:none}}
 </style>
 </head>
 <body>
@@ -79,9 +86,9 @@
   <div class="sub" id="subtitle"></div>
   <div class="ver" id="version"></div>
   <section class="run" aria-live="polite" aria-label="起動の進み具合">
-    <svg class="seg" id="seg" viewBox="0 0 560 70" aria-hidden="true"></svg>
-    <div class="step"><span id="stepTitle"></span><span class="count" id="count"></span></div>
-    <div class="detail" id="stepDetail"></div>
+    <svg class="seg" id="seg" viewBox="0 0 720 140" aria-hidden="true"></svg>
+    <div class="legs" id="legs"></div>
+    <div class="step"><span class="count" id="count"></span><span class="detail" id="stepDetail"></span></div>
   </section>
   <section class="panel" id="panel" role="alert" aria-labelledby="failTitle" hidden>
     <h2 id="failTitle"></h2>
@@ -111,27 +118,38 @@
     [/作業場所|書けません/, "この PC の作業場所（%LOCALAPPDATA%\\DefectTrace）に書けるか確かめてから開き直してください。"],
     [/配る版|取り込めません/, "配る置き場に届くか（共有フォルダ・同期の済み具合）を確かめてから開き直してください。"],
   ];
-  /** 周期の山の線（SVG のパス）。x0 から幅 w に n 個の山（底 base・頭 top）。頭の左右は山の間隔の 22% ずつ */
-  function peaks(x0, w, n, base, top) {
-    const step = w / n;
-    let d = `M${x0} ${base}`;
-    for (let i = 0; i < n; i++) {
-      const x = x0 + i * step + step / 2;
-      d += ` L${x - step * 0.22} ${base} L${x} ${top} L${x + step * 0.22} ${base}`;
-    }
-    return d + ` L${x0 + w} ${base}`;
+  /* 欠陥の印（画面の MAP と同じ: ● 穴 赤・▲ 汚れ 青・■ キズ 緑・★ 周期 橙） */
+  function mark(k, x, y, r) {
+    const c = ["#e0412c", "#4c8dff", "#2fbf71", "#e6a52e"][k];
+    if (k === 0) return `<circle cx="${x}" cy="${y}" r="${r}" fill="${c}"/>`;
+    if (k === 2) return `<rect x="${x - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" fill="${c}"/>`;
+    const pts = k === 1 ? [[0, -1], [1, 1], [-1, 1]]
+      : [...Array(10)].map((_, i) => { const a = -Math.PI / 2 + (i * Math.PI) / 5, m = i % 2 ? 0.45 : 1; return [Math.cos(a) * m, Math.sin(a) * m]; });
+    return `<path d="M${pts.map(([px, py]) => `${(x + px * r).toFixed(1)} ${(y + py * r).toFixed(1)}`).join("L")}Z" fill="${c}"/>`;
   }
-  /* 段ごとに 3 つの山（560px を段の数で分ける）。段の線は隣とつながる */
-  const PEAKS = 3, W = 560 / STEPS.length;
-  $("#seg").innerHTML = STEPS.map((_, i) => `<path d="${peaks(i * W, W, PEAKS, 64, 6)}"/>`).join("");
-  $("#motif").innerHTML = `<path d="${peaks(0, 1600, 9, 330, 120)}"/><path d="${peaks(0, 1600, 9, 380, 210)}"/>`;
+  /* 段ごとの区間: 板（済むと検査済みの色と欠陥の印）・その上のカメラと光・板の上を走る走査線。印の置き場は決まった乱数で毎回同じ */
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const W = 720 / STEPS.length, SY = 106;
+  $("#seg").innerHTML = STEPS.map((_, i) => {
+    const x = i * W, cx = x + W / 2;
+    let dots = "";
+    // 6 つの印を区間の 6 つの枠に 1 つずつ（触れ合わない）
+    for (let k = 0; k < 6; k++) dots += mark(k % 4, x + 20 + (k + 0.2 + rnd() * 0.6) * ((W - 40) / 6), SY + 7 + rnd() * 12, 4.2);
+    return `<g><path class="cone" d="M${cx - 7} 40 L${x + 14} ${SY} L${x + W - 14} ${SY} L${cx + 7} 40Z"/>`
+      + `<rect class="sec" x="${x + 6}" y="${SY}" width="${W - 12}" height="26" rx="2"/><g class="dots">${dots}</g>`
+      + `<rect class="beam" x="${x + 8}" y="${SY - 2}" width="3" height="30"/>`
+      + `<rect class="cam" x="${cx - 28}" y="10" width="56" height="30" rx="5"/><circle class="lamp" cx="${cx}" cy="25" r="6"/></g>`;
+  }).join("");
+  $("#legs").innerHTML = STEPS.map((s) => `<span>${s.title}</span>`).join("");
+  $("#motif").innerHTML = '<rect class="strip" x="0" y="330" width="1600" height="14"/>'
+    + [100, 420, 740, 1060, 1380].map((x) => `<circle class="roll" cx="${x}" cy="372" r="26"/>`).join("");
 
-  /** 段の状態を、山の線といまの 1 段に描く */
+  /** 段の状態を、板の区間・段の名前・いまの 1 段の文に描く */
   function paint() {
-    STEPS.forEach((s, i) => { $("#seg").children[i].setAttribute("class", s.state); });
+    STEPS.forEach((s, i) => { $("#seg").children[i].setAttribute("class", s.state); $("#legs").children[i].className = s.state; });
     const i = STEPS.findIndex((s) => CURRENT.includes(s.state));
     const cur = STEPS[i < 0 ? STEPS.length - 1 : i];
-    $("#stepTitle").textContent = cur.title;
     $("#stepDetail").textContent = cur.detail;
     $("#count").textContent = `${i < 0 ? STEPS.length : i + 1} / ${STEPS.length}`;
   }
@@ -158,7 +176,7 @@
       STEPS.forEach((s) => { if (s.state === "now") s.state = "bad"; });
       paint();
       $("#failTitle").textContent = title;
-      const hint = HINTS.find(([re]) => re.test(detail));
+      const hint = HINTS.find(([re]) => re.test(title + "\n" + detail));
       $("#next").hidden = !hint;
       $("#nextText").textContent = hint ? hint[1] : "";
       $("#why").textContent = detail;

@@ -4,6 +4,8 @@
 //
 // 案の定義（ES モジュール）は PROPOSALS = [{ key, name, css, ops }] と、任意で STATES = { 状態: "頁の中で動かす文" } を書き出す
 // （文が Promise を返せば〈return (async () => …)()〉、終わるまで待ってから撮る）。
+// SETUP = "頁の中で動かす文" を書き出すと、ロットを開く前に 1 度動かす（例: 表示項目を足す。続く開き直しで画面に出る）。
+// PAGE = "splash" を書き出すと、アプリの画面の代わりに起動画面（desktop/splash/index.html）を撮る（状態の文で splash.step などを呼ぶ）。
 // 今の画面に案ごとの CSS と DOM の組み替え（ops）を当て、ロットを開いた画面で、状態ごと・大きさごとに撮る（状態-幅-案.png）。
 // 状態ごとに全案を並べた一覧（sheet-状態-幅.png）も作る。一覧で全体を、1 枚ずつの画像で細部を見て採点する（ui_score.py）。
 //
@@ -16,7 +18,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { launch, measure, parseView, walk } from "./ui-harness.mjs";
+import { launch, launchSplash, measure, parseView, walk } from "./ui-harness.mjs";
 
 const [outArg, defsArg, ...rest] = process.argv.slice(2);
 if (!outArg || !defsArg) {
@@ -72,7 +74,8 @@ async function sheet(browser, state, view, metrics) {
   fs.rmSync(file);
 }
 
-const app = await launch();
+const SPLASH = defs.PAGE === "splash";
+const app = SPLASH ? await launchSplash() : await launch();
 const saved = path.join(OUT, "metrics.json");
 const metrics = fs.existsSync(saved) ? JSON.parse(fs.readFileSync(saved, "utf8")) : {};
 try {
@@ -80,7 +83,8 @@ try {
   for (const view of VIEWS) {
     for (const p of TAKE) {
       const page = await app.newPage(view);
-      await walk(page, async () => {}, ["lot"]);
+      if (defs.SETUP) await page.evaluate(async (js) => { await new Function(js)(); }, defs.SETUP);
+      if (!SPLASH) await walk(page, async () => {}, ["lot"]);
       await page.evaluate(({ css, ops, fn }) => {
         if (css) document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
         new Function("ops", `(${fn})(ops)`)(ops);
