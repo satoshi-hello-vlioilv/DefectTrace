@@ -135,7 +135,7 @@ tr.pinned .pb{visibility:visible}
 #vImg{image-rendering:pixelated;margin:auto}
 #vStage.fit #vImg{max-width:100%;max-height:100%;width:auto;height:100%;object-fit:contain}
 #vInfo{width:340px;background:var(--pane);color:var(--txt);overflow:auto;padding:8px}
-#pinPop{position:fixed;z-index:20;background:var(--pane);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:10px;width:280px;display:flex;flex-direction:column;gap:6px}
+#pinPop{position:fixed;z-index:60;background:var(--pane);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:10px;width:280px;display:flex;flex-direction:column;gap:6px}
 #pinPop[hidden]{display:none}
 #pinPop label{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--sub)}
 #pinPop label.chk{flex-direction:row;align-items:center;gap:6px}
@@ -277,9 +277,6 @@ button.lnk{border:none;background:none;color:var(--sub);text-decoration:underlin
 .mhead{display:flex;align-items:center;gap:8px;margin:-4px 0 8px}.mhead b{font-size:16px;margin-right:auto}
 .mclose{border:none;background:none;font-size:20px;line-height:20px;padding:2px 8px;color:var(--sub);border-radius:6px}.mclose:hover{background:var(--line2);color:var(--txt)}
 /* ===== 配布の窓（版 4.5.0。3 回の案出しと採点で R12 に決めた: program/tools/proposals/2026-10-27-release-modal*） */
-#relModal{align-items:center;padding-top:0}
-#relModal .mbox{width:min(1180px,92vw);max-height:88vh;padding:20px 24px;display:flex;flex-direction:column;gap:14px;font-size:14px}
-#relModal .mhead{margin:0}#relModal .mhead b{font-size:18px}
 .rl{display:flex;flex-direction:column;gap:14px}
 .rl-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .rl-path{flex:1;min-width:260px;font:13px Consolas,monospace;color:var(--txt);background:#f3f5f8;border:1px solid var(--line2);border-radius:4px;padding:4px 8px;overflow-wrap:anywhere}
@@ -481,12 +478,6 @@ table.kv tr.pinned.add td.k{box-shadow:inset 3px 0 0 #e0a83a}
 table.kv tr.pinsep td{font-size:11.5px;font-weight:700;color:#8a5a00;padding-top:5px;border-top:1.5px dashed #c9a24a;background:#fff}
 #srcRows .dpl.ini{background:#fff;border:1.5px solid #8ea3c2;color:#1e3a5f;border-radius:5px}
 #srcRows .dpl.add{background:var(--pinbg);border:1px solid #ecd9a8;color:#8a5a00;border-radius:10px}
-/* 開発者が表示の初期値を決める小窓（見出しの「初期値を決める（開発者）」から） */
-button.ghost.devbtn{border-color:#8a6d2e;color:#ffd27a}
-.iniwin{position:fixed;right:12px;top:40px;z-index:80;width:440px;background:var(--pane);border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 40px rgba(0,0,0,.25);padding:14px 16px;font-size:13px}
-.iniwin h4{margin:0 0 4px;font-size:14px;display:flex;align-items:center}.iniwin h4 .mclose{margin-left:auto}
-.iniwin dl{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;margin:10px 0;font-size:12.5px}.iniwin dt{color:var(--sub)}.iniwin dd{margin:0}
-.iniwin .ib{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}.iniwin .note{margin-top:8px;color:var(--sub);font-size:12px}.iniwin .err{margin-top:6px;font-size:12px}
 @media (prefers-color-scheme:dark){
  .chip.ini{background:transparent;border-color:#6d84a6;color:#c9d6ea}.chip.ini .cl{color:#c9d6ea}
  table.kv tr.pinned.ini td{background:transparent}table.kv tr.pinned.ini td.k{color:#c9d6ea;box-shadow:inset 3px 0 0 #6d84a6}
@@ -499,4 +490,48 @@ button.ghost.devbtn{border-color:#8a6d2e;color:#ffd27a}
 .pinwarn h3{margin:0 0 8px;font-size:15px}.pinwarn p{margin:6px 0;line-height:1.6}
 .pinwarn .pw-b{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}.pinwarn .pw-go{background:var(--ng);border-color:var(--ng);color:#fff}
 .pinwarn .pw-chip{display:inline-block;border:1.5px solid #8ea3c2;border-radius:5px;padding:0 8px;color:#1e3a5f;font-weight:700;background:#fff}
-.iniwin[hidden]{display:none}
+/* 設定の窓（N: program/tools/proposals/2026-10-28-settings*）。大きさは決め打ち: 頁を替えても窓は動かず、中だけが送られる */
+.setmodal{position:fixed;inset:0;background:rgba(15,25,40,.45);z-index:70;display:grid;place-items:center}.setmodal[hidden]{display:none}
+.set-win{width:min(1480px,96vw);height:min(920px,92vh);background:var(--pane);border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.35);display:grid;grid-template-rows:auto auto 1fr;overflow:hidden;font-size:13.5px}
+.set-head{display:flex;align-items:center;gap:8px;padding:14px 20px;border-bottom:1px solid var(--line)}.set-head b{font-size:17px}.set-me{margin-left:auto;display:flex;gap:6px}
+.set-tabs{display:flex;align-items:center;gap:4px;padding:0 20px;border-bottom:1px solid var(--line)}
+.set-tabs button{border:none;background:none;padding:10px 14px;border-bottom:3px solid transparent;border-radius:0;font-size:13.5px;display:inline-flex;align-items:center;gap:6px}
+.set-tabs button.on{border-bottom-color:var(--acc);color:var(--acc);font-weight:700}.set-tabs button:hover{color:var(--acc)}
+.set-grp{border-left:1px solid var(--line);margin-left:10px;padding-left:12px;font-size:12px;color:var(--sub)}
+.set-body{min-height:0;overflow:auto;padding:18px 22px}.set-body>section{display:flex;flex-direction:column;gap:14px}.set-body>section[hidden]{display:none}
+.setbadge{font-size:11.5px;border-radius:9px;padding:0 7px;line-height:18px;background:#fdecea;color:#9b2c1f;margin-left:6px;font-weight:700}.setbadge[hidden]{display:none}
+.set-sec{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.set-tag{display:inline-block;font-size:11.5px;border-radius:10px;padding:0 8px;line-height:19px;border:1px solid var(--line);white-space:nowrap;font-weight:400}
+.set-tag.behind{background:#fdecea;border-color:#f3b4ab;color:#9b2c1f}.set-tag.ok{background:#e6f4ea;border-color:#a8d5b5;color:#1e6b3a}
+.set-tag.dev{background:#f1f0fb;border-color:#cdc8ef;color:#4b3f9e}.set-tag.on{background:#e7effa;border-color:#b7cdee;color:#1e5aa8}.set-tag.me{background:#fff3d6;border-color:#ecd9a8;color:#8a5a00}
+.set-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.set-row{display:flex;gap:10px;align-items:center}.set-row input{width:80px}
+.set-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}.set-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.set-two.eq{align-items:stretch}
+.set-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;margin:4px 0 8px}.set-dl dt{color:var(--sub);white-space:nowrap}.set-dl dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.set-act{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin:6px 0}
+.set-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.set-kpi div{border:1px solid var(--line);border-radius:9px;padding:10px 14px}
+.set-kpi b{display:block;font-size:24px;font-variant-numeric:tabular-nums}.set-kpi span{color:var(--sub);font-size:12.5px}.set-kpi .warn b{color:#b3412f}
+.set-filter{display:inline-flex;align-self:flex-start;border:1px solid var(--line);border-radius:6px;overflow:hidden}.set-filter.wrap{flex-wrap:wrap}
+.set-filter button{border:none;border-right:1px solid var(--line);border-radius:0;padding:4px 12px}.set-filter button:last-child{border-right:none}.set-filter .on{background:var(--acc);color:#fff}
+table.set-t{width:100%;border-collapse:collapse}.set-t th{font-weight:400;color:var(--sub);font-size:12.5px;text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.set-t td{padding:8px 10px;border-bottom:1px solid var(--line2);vertical-align:middle;white-space:nowrap}.set-t .n{text-align:right;font-variant-numeric:tabular-nums}
+.set-t tr.behind td{background:#fff7f5}.set-v{font-family:Consolas,monospace;font-weight:700}
+.set-ops{text-align:right;width:1%}.set-ops button{margin-left:6px;font-size:12.5px;padding:3px 10px;min-width:5.5em}.set-ops .gap{visibility:hidden}
+.set-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#2e7d32;margin-right:5px}.set-dot.off{background:#b9c1ca}
+.set-bar{display:flex;height:14px;border-radius:4px;overflow:hidden;gap:2px}.set-bar i,.set-legend i{background:#2e7d5b}.set-bar i.behind,.set-legend i.behind{background:#c0563f}.set-bar i.dev,.set-legend i.dev{background:#6b5fc7}
+.set-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px}.set-legend>span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.set-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.set-days{display:grid;grid-template-columns:repeat(14,1fr);gap:6px;align-items:end;height:100px}.set-days div{display:grid;justify-items:center;gap:3px}
+.set-days span{font-size:12px;font-variant-numeric:tabular-nums}.set-days i{width:100%;background:var(--acc);opacity:.75;border-radius:2px;display:block}.set-days em{font-style:normal;font-size:11.5px;color:var(--sub)}
+.set-err{color:var(--ng)}.rl-t td.n,.rl-t th.n{text-align:right;font-variant-numeric:tabular-nums}
+.scbar.nudge{background:#fff4e5;border-bottom-color:#f0c98a;color:#7a4a00}
+@media (prefers-color-scheme:dark){
+ .set-t tr.behind td{background:#3a2420}.set-tag.behind{background:#3a2420;border-color:#7a3a30;color:#f3a99d}.set-tag.ok{background:#1d3325;border-color:#2e6b44;color:#8fd3a6}
+ .set-tag.dev{background:#262445;border-color:#4b4690;color:#b9b2f0}.set-tag.on{background:#1d2c44;border-color:#2f4f80;color:#9cc0f0}.set-tag.me{background:#3a3018;border-color:#6b5a28;color:#f0c060}
+ .scbar.nudge{background:#3a2c14;border-bottom-color:#6b5420;color:#f0c060}.setbadge{background:#3a2420;color:#f3a99d}
+}
+/* hidden を display の指定より先に効かせる（帯・設定の見出し） */
+.scbar[hidden],.set-tabs [hidden],.set-tabs button[hidden]{display:none}
+.set-ops button[data-set="nudge"]{width:7.5em}
+/* 設定の「この PC」の頁: 版・ショートカットの文は 1 行を使い、ボタンはその下の右（文の末尾の 1〜2 字だけが折れない） */
+#setPc .rl-row{flex-wrap:wrap;gap:6px 12px}#setPc .rl-row .grow{flex:1 1 100%}#setPc .rl-row .rl-btn{margin-left:auto}

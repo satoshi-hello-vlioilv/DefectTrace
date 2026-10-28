@@ -1,4 +1,5 @@
-// 版・更新・ショートカット・配布（窓〈desktop/src/main.rs・updater.rs〉の /__desktop/… に尋ねる）。
+// 版・更新・ショートカット・配布（窓〈desktop/src/main.rs・updater.rs〉の /__desktop/… に尋ねる）。配布の頁とこの PC の版・ショートカットは
+// 設定の窓（settings-view.js）の中に描く（window.dtDesk）。
 // 形は 2 回の案出しと別のエージェントの採点で決めた（F2: program/tools/proposals/2026-10-26-update-ui*.）:
 //   見出しの右に「版 4.0.0 → ↻ 4.0.1 に更新（主の橙）・推奨の理由（字だけ）」の 1 つの塊・配布の窓（× と Esc で閉じる）・
 //   ショートカットが無ければ見出しの下に細い帯（1 回だけ。作る は従の形）
@@ -33,7 +34,6 @@
     }
     $("verBox").innerHTML = h;
     $("verBox").hidden = false;
-    $("btnRelease").hidden = !info.installed && !(upd.source || "");
     const ap = $("verApply");
     if (ap) ap.addEventListener("click", async () => {
       ap.disabled = true; say(`${upd.ready} に入れ替えるため、開き直しています…`);
@@ -81,10 +81,11 @@
     try { await post("/__desktop/shortcut/decline"); $("scBar").hidden = true; } catch (e) { say(e.message, true); }
   });
 
-  // ---------------------------------------------------------------- 配布の窓
-  // 形は 3 回の案出しと別のエージェントの採点で決めた（R12: program/tools/proposals/2026-10-27-release-modal*）:
-  //   頭の段（置き場・読み直す・ZIP から版を置く）→ この PC（版・開き直して更新・ショートカット。置き場に届かなくても出す）→
-  //   手順の 1 行 → 版の表（状態を文で・操作は行だけ・配っている版を大きく緑で）→ 新しい PC へ（配る入口のアドレスとコピー）
+  // ---------------------------------------------------------------- 配布の頁（設定の窓の中）
+  // 形は 3 回の案出しと別のエージェントの採点で決めた（R12: program/tools/proposals/2026-10-27-release-modal*。設定の窓に移すとき N:
+  //   2026-10-28-settings*）: 頭の段（置き場・読み直す・ZIP から版を置く）→ 手順の 1 行 → 版の表（状態を文で・使っている PC の台数・
+  //   操作は行だけ・配っている版を大きく緑で）→ 新しい PC へ（配る入口のアドレスとコピー）→（settings-view.js が足す）行き渡り・促す相手。
+  //   この PC の版・更新・ショートカットは、設定の「この PC」の頁（pcRows）
   let lastView = null, pcState = { upd: {}, inst: {} };
   async function loadRelease(cached) {
     const body = $("relBody");
@@ -97,14 +98,14 @@
     if (cached && lastView.cached) loadRelease(false);   // 覚えた答えを先に出し、裏で確かめ直す
   }
   // この PC（版・更新・ショートカット）。ショートカットは、ここからいつでも何度でも作れる
-  function thisPc(v) {
-    const { upd, inst } = pcState, me = v.me || {};
-    const cur = upd.current || me.current || "", ready = upd.state === "ready" && upd.ready;
+  function thisPc() {
+    const { upd, inst } = pcState;
+    const cur = upd.current || "", ready = upd.state === "ready" && upd.ready;
     const links = (inst.shortcut && inst.shortcut.links) || [];
     const sc = !inst.installed ? "この PC へ写していない形で開いているので、作れません（共有・BOX の exe から一度開くと作れます）"
       : links.length ? "デスクトップ・スタートにあります（消したときも、ここから何度でも作れます）"
       : "ありません（作ると、次から共有の exe を探さずに開けます）";
-    return `<div class="rl-me"><h4>この PC</h4>
+    return `<div class="rl-me">
       <div class="rl-row"><span class="grow">版 <b>${esc(cur)}</b>${ready ? ` → <b>${esc(upd.ready)}</b> を取り込み済み（開き直すと入れ替わります）` : "（いまの版）"}</span>
         ${ready ? '<button type="button" class="rl-btn amber" data-act="apply">↻ 開き直して更新</button>' : ""}</div>
       <div class="rl-row"><span class="grow">ショートカット: <b>${links.length ? "デスクトップ・スタートにあります" : ""}</b>${links.length ? "（消したときも、ここから何度でも作れます）" : sc}</span>
@@ -117,7 +118,7 @@
       <button type="button" class="rl-btn" data-act="check" title="置き場を読み直して、版の一覧を新しくする">↻ 読み直す</button>
       ${me.canRelease ? '<button type="button" class="rl-btn bold" data-act="place">＋ ZIP から版を置く…</button>' : ""}</div>`;
     if (!v.reachable) {
-      $("relBody").innerHTML = `<div class="rl">${head}${thisPc(v)}<div class="rl-err">置き場（${esc(v.folder || "")}）に届きません: ${esc(v.why || "")}</div>
+      $("relBody").innerHTML = `<div class="rl">${head}<div class="rl-err">置き場（${esc(v.folder || "")}）に届きません: ${esc(v.why || "")}</div>
         <div class="rl-note">BOX が同期されているかを確かめてください。版は置き場の下の DefectTrace\\versions\\&lt;版&gt; に置きます。
           別の場所にするときは、この PC の作業場所の config.json の update_source に書きます（空なら既定の置き場。「;」で区切って複数）。</div></div>`;
       return;
@@ -131,14 +132,14 @@
       const acts = !me.canRelease ? "" : on
         ? `<button type="button" class="rl-btn" data-act="rec" data-v="${esc(r.version)}">${dist.recommended ? "推奨を外す" : "推奨の札を付ける"}</button>`
         : `<button type="button" class="rl-btn ${dist.version && newer(r.version, dist.version) ? "pri" : ""}" data-act="dist" data-v="${esc(r.version)}">${dist.version && !newer(r.version, dist.version) ? "この版に戻す" : "この版を配る"}</button><button type="button" class="rl-btn del" data-act="del" data-v="${esc(r.version)}">消す</button>`;
-      return `<tr class="${on ? "on" : ""}"><td class="v"><b>${esc(r.version)}</b><span>${esc(when(r.placedAt))} ${esc(r.placedBy || "")}${r.bytes ? " ・ " + mb(r.bytes) : ""}</span></td><td class="s">${st}</td><td class="acts">${acts}</td></tr>`;
-    }).join("") || '<tr><td colspan="3" class="rl-note">このアプリの版はまだ置いてありません。右上の「＋ ZIP から版を置く…」で置きます</td></tr>';
+      const n = (window.dtUsers || {})[r.version];
+      return `<tr class="${on ? "on" : ""}"><td class="v"><b>${esc(r.version)}</b><span>${esc(when(r.placedAt))} ${esc(r.placedBy || "")}${r.bytes ? " ・ " + mb(r.bytes) : ""}</span></td><td class="s">${st}</td><td class="n">${n ? n + " 台" : "—"}</td><td class="acts">${acts}</td></tr>`;
+    }).join("") || '<tr><td colspan="4" class="rl-note">このアプリの版はまだ置いてありません。右上の「＋ ZIP から版を置く…」で置きます</td></tr>';
     $("relBody").innerHTML = `<div class="rl">${head}
       <div class="rl-prog" id="relProg" hidden><div></div></div>
-      ${thisPc(v)}
-      <div class="rl-flow"><span><span class="n">1</span>ZIP から版を置く（右上）</span><span class="ar">→</span><span><span class="n">2</span>ZIP を展開した exe で試す</span><span class="ar">→</span>
-        <span><span class="n">3</span>表の「この版を配る」</span><span class="rl-note">各 PC は起動したとき・30 分ごとに取り込み、開き直すとその版になります</span></div>
-      <table class="rl-t"><thead><tr><th>版・置いた日時</th><th>状態</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="rl-flow"><span><span class="n">1</span>ZIP から置く</span><span class="ar">→</span><span><span class="n">2</span>展開した exe で試す</span><span class="ar">→</span>
+        <span><span class="n">3</span>「この版を配る」</span><span class="rl-note">（各 PC は起動時と 30 分ごとに取り込む）</span></div>
+      <table class="rl-t"><thead><tr><th>版・置いた日時</th><th>状態</th><th class="n">使っている PC</th><th></th></tr></thead><tbody>${rows}</tbody></table>
       ${v.entry && v.entry.path ? `<div class="rl-sec"><h4>新しい PC へ</h4><div class="rl-row"><span class="rl-path grow">${esc(v.entry.path)}</span><button type="button" class="rl-btn" data-act="copy">アドレスをコピー</button></div>
         <div class="rl-note">このアドレスの exe を開くだけで、配っている版がその PC に入ります</div></div>` : ""}
       ${(v.problems || []).length ? `<div class="rl-err">読めない物: ${esc(v.problems.join(" / "))}</div>` : ""}
@@ -160,6 +161,7 @@
         const r = await window.dtMakeShortcut();
         m.className = "rl-row " + (r.ok ? "rl-ok" : "rl-err"); m.textContent = r.ok ? `✓ ${r.msg}` : r.msg;
         if (r.ok) { $("scBar").hidden = true; const inst = await call("/__desktop/install").catch(() => null); if (inst) pcState.inst = inst; }
+        say(r.ok ? r.msg : `ショートカット: ${r.msg}`, !r.ok);   // 結果は押した所（頁は描き直さない: 描き直すと結果の文が消える）
         return;
       }
       if (kind === "copy") {
@@ -187,6 +189,7 @@
       }
       await loadRelease(false);
       showVersion();
+      if (window.dtDesk.onChange) window.dtDesk.onChange();
     } catch (e) { say(e.message, true); alert(e.message); }
   }
   $("relFile").addEventListener("change", async () => {
@@ -207,13 +210,21 @@
     clearInterval(timer);
     loadRelease(false);
   });
-  $("relBody").addEventListener("click", (e) => { const b = e.target.closest("button[data-act]"); if (b) act(b.dataset.act, b.dataset.v); });
-  const openRel = () => { $("relModal").hidden = false; loadRelease(true); $("relClose").focus(); };
-  const closeRel = () => { $("relModal").hidden = true; };
-  $("btnRelease").addEventListener("click", openRel);
-  $("relClose").addEventListener("click", closeRel);
-  $("relModal").addEventListener("click", (e) => { if (e.target === $("relModal")) closeRel(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("relModal").hidden) { closeRel(); e.stopPropagation(); } }, true);
+  // 配布の頁とこの PC の頁のボタン（data-act）
+  for (const id of ["relBody", "setPc"]) $(id).addEventListener("click", (e) => { const b = e.target.closest("button[data-act]"); if (b) act(b.dataset.act, b.dataset.v); });
+  window.dtDesk = {
+    /** 配布の頁を描く（覚えた答えを先に出し、裏で確かめ直す） */
+    release: () => loadRelease(true),
+    /** この PC の版・更新・ショートカットの行（HTML） */
+    async pcRows() {
+      const [upd, inst] = await Promise.all([call("/__desktop/update").catch(() => ({})), call("/__desktop/install").catch(() => ({}))]);
+      pcState = { upd, inst };
+      return { html: thisPc(), upd, inst };
+    },
+    /** 配っている版（配布の答えを覚えていれば） */
+    distributed: () => ((lastView || {}).distributed || {}).version || null,
+    onChange: null,
+  };
 
   showVersion();
   showShortcut();

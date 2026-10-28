@@ -135,6 +135,27 @@ fn id(v: &Value) -> &str {
     v["id"].as_str().unwrap_or("")
 }
 
+/// 繰り返しの番号を [*] にそろえたキー（comment[3] と comment[*] は同じ項目の決まりを使う）。
+fn wild(k: &str) -> String {
+    let mut out = String::with_capacity(k.len());
+    let mut it = k.chars().peekable();
+    while let Some(c) = it.next() {
+        out.push(c);
+        if c == '[' && it.peek().is_some_and(|d| d.is_ascii_digit() || *d == '*') {
+            while it.peek().is_some_and(|d| d.is_ascii_digit() || *d == '*') {
+                it.next();
+            }
+            out.push('*');
+        }
+    }
+    out
+}
+
+/// 同じデータ項目か（同じファイル・同じキー。繰り返しの番号は問わない）。
+fn same_item(a: &Value, b: &Value) -> bool {
+    a["file"] == b["file"] && wild(a["key"].as_str().unwrap_or("")) == wild(b["key"].as_str().unwrap_or(""))
+}
+
 impl Pins {
     /// 読む（無ければ first: 表示の初期値。新しい PC だけ呼ぶ）。新しい版の既定を 1 度だけ足し、書き戻す。
     pub fn load(dir: &Path, first: impl FnOnce() -> Vec<Value>) -> Pins {
@@ -170,11 +191,15 @@ impl Pins {
                     }
                     pins.insert(pos, d.clone());
                 }
-                // 既定の項目の単位の倍率が消えていれば戻す
+                // 既定の項目の単位の倍率が消えていれば戻す。同じ項目（file・key）を倍率なしで足した物（版 4.6.0 まで、データ項目の窓から
+                // 置くと元の名前・倍率なしになっていた）も、既定の名前と倍率にそろえる（値の単位が変わるので、名前も単位の付いた既定の物に）
                 for x in pins.iter_mut() {
-                    if let Some(d) = defs.iter().find(|d| id(d) == id(x)) {
+                    if let Some(d) = defs.iter().find(|d| id(d) == id(x) || same_item(d, x)) {
                         if d.get("scale").is_some() && x.get("scale").is_none() && x["key"] == d["key"] {
                             x["scale"] = d["scale"].clone();
+                            if id(d) != id(x) {
+                                x["label"] = d["label"].clone();
+                            }
                         }
                     }
                 }
@@ -199,8 +224,10 @@ impl Pins {
         self.list.lock().unwrap().clone()
     }
 
-    /// 足す（POST /api/pins）。
-    pub fn add(&self, b: &Value, new_id: String) -> Result<Vec<Value>, String> {
+    /// 足す（POST /api/pins）。同じ項目（file・key）の決まり（名前・単位の倍率・書式）を、いまの表示項目 → initial（表示の初期値）→
+    /// アプリの初期値 の順に探して引き継ぐ（どこに置いても同じ名前・同じ単位で出す）。名前は、利用者が付けた物（named）なら
+    /// それ、決まりが無ければ送られた名前（データの元の名前）。
+    pub fn add(&self, b: &Value, new_id: String, initial: &[Value]) -> Result<Vec<Value>, String> {
         let (scope, place) = (b["scope"].as_str().unwrap_or(""), b["place"].as_str().unwrap_or(""));
         if !compatible(scope, place) {
             return Err("この表示先には設定できない項目です".into());
@@ -218,8 +245,17 @@ impl Pins {
                 }
             })
             .flatten();
-        let item = p(&new_id, scope, place, b["label"].as_str().unwrap_or(""), file, key, None, fmt);
         let mut l = self.list.lock().unwrap();
+        let want = json!({"file": file, "key": key});
+        let defs = defaults();
+        let def = l.iter().chain(initial).chain(&defs).find(|d| same_item(d, &want)).cloned();
+        let label = match (&def, b["named"].as_bool().unwrap_or(false)) {
+            (Some(d), false) => d["label"].as_str().unwrap_or(""),
+            _ => b["label"].as_str().unwrap_or(""),
+        };
+        let scale = def.as_ref().and_then(|d| d["scale"].as_f64());
+        let fmt = def.as_ref().and_then(|d| d["fmt"].as_str()).or(fmt);
+        let item = p(&new_id, scope, place, label, file, key, scale, fmt);
         if single(place) {
             l.retain(|x| x["place"] != place);
         }
@@ -450,6 +486,44 @@ mod tests {
         let v = Initial { home: &d.join("home"), shared: Some(&d) }.get();
         assert_eq!(v["source"], "builtin");
         assert!(v["problem"].as_str().unwrap().contains("形が違います"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn the_same_item_keeps_one_name_and_one_unit_wherever_it_is_placed() {
+        let d = tmp("same");
+        let pins = Pins::load(&d, defaults);
+        // データ項目の窓から（元の名前「検査停止測長」で）置いても、既定の「検査長(m)」と同じ名前・倍率になる
+        let b = json!({"scope": "lot", "place": "list", "file": I, "key": "insp_end_y", "label": "検査停止測長"});
+        let l = pins.add(&b, "p_1".into(), &[]).unwrap();
+        let x = l.iter().find(|x| id(x) == "p_1").unwrap();
+        assert_eq!((x["label"].as_str(), x["scale"].as_f64()), (Some("検査長(m)"), Some(0.001)));
+        // 利用者が名前を付けたときは名前だけその物、単位は同じ
+        let b = json!({"scope": "lot", "place": "lot", "file": I, "key": "insp_end_y", "label": "停止まで", "named": true});
+        let l = pins.add(&b, "p_2".into(), &[]).unwrap();
+        let x = l.iter().find(|x| id(x) == "p_2").unwrap();
+        assert_eq!((x["label"].as_str(), x["scale"].as_f64()), (Some("停止まで"), Some(0.001)));
+        // 決まりの無い項目は送られた名前のまま・倍率なし
+        let b = json!({"scope": "lot", "place": "lot", "file": I, "key": "cycle_status", "label": "周期発生状態"});
+        let l = pins.add(&b, "p_3".into(), &[]).unwrap();
+        let x = l.iter().find(|x| id(x) == "p_3").unwrap();
+        assert_eq!((x["label"].as_str(), x.get("scale")), (Some("周期発生状態"), None));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn items_added_without_the_unit_before_4_6_1_get_the_default_name_and_unit_back() {
+        let d = tmp("migrate");
+        let old = json!([
+            p("p_old", "lot", "list", "検査停止測長", I, "insp_end_y", None, None),
+            p("p_mine", "lot", "lot", "周期", I, "cycle_status", None, None)
+        ]);
+        std::fs::write(d.join("pins.json"), old.to_string()).unwrap();
+        let l = Pins::load(&d, || unreachable!()).snapshot();
+        let x = l.iter().find(|x| id(x) == "p_old").unwrap();
+        assert_eq!((x["label"].as_str(), x["scale"].as_f64()), (Some("検査長(m)"), Some(0.001)));
+        assert_eq!(l.iter().find(|x| id(x) == "p_mine").unwrap()["label"], "周期");
+        assert_eq!(wild("a/comment[12]@value"), "a/comment[*]@value");
         let _ = std::fs::remove_dir_all(&d);
     }
 }

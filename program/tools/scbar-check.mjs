@@ -57,18 +57,18 @@ for (const c of cases) {
         await page.context().close();
       }
     }
-    // 配布の窓の「この PC」からも、いつでも何度でも作れる（帯を閉じた後・「今後たずねない」の後も）
+    // 設定の窓の「この PC」からも、いつでも何度でも作れる（帯を閉じた後・「今後たずねない」の後も）
     if (c.name !== "答えが返らない") {
       const page = await h.newPage(parseView("1728x1152"));
-      await page.click("#btnRelease");
-      await page.waitForSelector('#relBody [data-act="shortcut"]', { timeout: 10000 });
+      await page.click("#btnSettings");
+      await page.waitForSelector('#setPc [data-act="shortcut"]', { timeout: 10000 });
       for (let n = 1; n <= 2; n++) {
-        await page.click('#relBody [data-act="shortcut"]');
+        await page.click('#setPc [data-act="shortcut"]');
         await page.waitForTimeout(800);
         const msg = await page.evaluate(() => { const m = document.getElementById("relScMsg"); return m && !m.hidden ? m.textContent : ""; });
         const ok = c.name === "作れた" ? /^✓/.test(msg) : msg.includes("アクセスが拒否");
         if (!ok) bad++;
-        console.log(`${ok ? "OK  " : "NG  "} ${c.name} 配布の窓から ${n} 回目: 「${msg}」`);
+        console.log(`${ok ? "OK  " : "NG  "} ${c.name} 設定の窓から ${n} 回目: 「${msg}」`);
       }
       await page.screenshot({ path: path.join(out, `scbar-${c.name}-release.png`) });
       await page.context().close();

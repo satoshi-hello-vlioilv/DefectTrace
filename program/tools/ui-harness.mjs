@@ -49,6 +49,7 @@ export async function launch(fake = FAKE, more = [], { home } = {}) {
   // DT_UI_CFG: 設定に足す物（JSON。例: 共有のフィルタの置き場 filters_shared_dir・開発者 release_users）
   fs.writeFileSync(cfg, JSON.stringify({ equipments: [{ name: "LS3", path: path.join(fx, "LS3") }, { name: "DL2", path: path.join(fx, "DL2") }, ...more],
     filters_shared_dir: path.join(work, "shared"), ...JSON.parse(process.env.DT_UI_CFG || "{}") }));
+  seedPresence(path.join(work, "shared", "presence"));
   const exe = path.join(REPO, "desktop/target/release/examples/serve");
   if (!fs.existsSync(exe)) execFileSync("cargo", ["build", "--release", "--example", "serve"], { cwd: path.join(REPO, "desktop"), stdio: "inherit" });
   const port = 5600 + Math.floor(Math.random() * 300);
@@ -77,6 +78,26 @@ export async function launch(fake = FAKE, more = [], { home } = {}) {
   };
 }
 
+/** 使用状況の見本: 6 台の PC（要更新 2・開発者 1・使っていない PC を含む）の記録を置く（形は desktop/src/presence.rs）。
+    「いま」の印は撮る間だけ使用中に見えるよう、今の時刻で書く */
+function seedPresence(dir) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const ts = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const now = Date.now(), at = (minAgo) => ts(new Date(now - minAgo * 60000));
+  const PCS = [["検査PC-03", "tanaka", "4.5.0", 2880, false], ["仕上PC-11", "suzuki", "4.5.0", 0, false], ["開発PC", "maint", "4.7.0", 0, true],
+    ["検査PC-01", "ito", "4.6.0", 0, false], ["事務PC-02", "kato", "4.6.0", 180, false], ["検査PC-05", "yamada", "4.6.0", 7200, false]];
+  const w = (f, v) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify(v)); };
+  PCS.forEach(([pc, login, version, minAgo, developer], i) => {
+    const key = `${pc}@${login}`, last = at(minAgo);
+    if (!minAgo) w(path.join(dir, "now", key + ".json"), { key, login, pc, version, developer, since: at(40), at: last, left: false });
+    w(path.join(dir, "history", key + ".json"), { key, login, pc, firstAt: at(60 * 24 * 20), lastAt: last, sessions: 5 + i * 4, totalSec: 3600 * (2 + i * 5), version, versions: { [version]: last }, developer });
+    const ss = [...Array(6)].map((_, d) => { const st = new Date(now - (minAgo + d * 1440 + 50) * 60000); return { start: ts(st), end: ts(new Date(st.getTime() + 2400000)), sec: 2400 + d * 300, version: d > 2 && !developer ? "4.4.1" : version }; });
+    const m = ss[0].start.slice(0, 7);
+    w(path.join(dir, "sessions", key, m + ".json"), { key, login, pc, sessions: ss.filter((s) => s.start.startsWith(m)) });
+  });
+  w(path.join(dir, "nudge", "検査PC-03@tanaka.json"), { key: "検査PC-03@tanaka", version: "4.6.0", by: "maint", at: at(30) });
+}
+
 /** 起動画面（desktop/splash/index.html。窓が splash.brand などを呼ぶ）を開く。名前と版は窓と同じく brand.json・version.py から */
 export async function launchSplash() {
   const brand = JSON.parse(fs.readFileSync(path.join(REPO, "program/app/brand.json"), "utf8"));
@@ -97,7 +118,7 @@ export async function launchSplash() {
 }
 
 /** 状態をたどって撮る。each(名前) を状態ごとに呼ぶ */
-export const STATE_NAMES = ["start", "lot", "info", "release"];
+export const STATE_NAMES = ["start", "lot", "info", "settings", "fleet", "release"];
 export async function walk(page, each, states = STATE_NAMES) {
   if (states.includes("start")) await each("start");
   // 前に開いたロット（lastLot）を開き直す画面の仕組みで、22:03 のロットを開く（木もそこまで開く）
@@ -116,12 +137,19 @@ export async function walk(page, each, states = STATE_NAMES) {
     await each("info");
     await page.keyboard.press("Escape");
   }
-  if (states.includes("release") && await page.locator("#btnRelease").isVisible()) {
-    await page.click("#btnRelease");
-    await page.waitForTimeout(500);
-    await each("release");
+  // 設定の窓（この PC の頁・配布の頁・使用状況の頁）
+  const settings = async (name, pg) => {
+    if (!states.includes(name) || !await page.locator("#btnSettings").isVisible()) return;
+    await page.click("#btnSettings");
+    await page.waitForSelector("#setModal:not([hidden])");
+    if (pg !== "pc") await page.click(`#setTabs [data-page="${pg}"]`);
+    await page.waitForTimeout(600);
+    await each(name);
     await page.keyboard.press("Escape");
-  }
+  };
+  await settings("settings", "pc");
+  await settings("fleet", "fleet");
+  await settings("release", "release");
 }
 
 /** 迷いやすさに関わる量（頁の中で動かす） */
@@ -136,4 +164,20 @@ export function measure() {
     if (el.childNodes.length && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && fs < 11) small++;
   }
   return { cut, small, hscroll: document.documentElement.scrollWidth > vw, vh };
+}
+
+// 人の手のように少しずつ動かしてドラッグする（Playwright の dragAndDrop は 2・3 回しか動かさず、PC が重いとブラウザがドラッグを
+// 始めないことがある）。始まったか（dragstart）・落としたか（drop）を控えて返す
+export async function dragTo(page, from, to) {
+  await page.evaluate(() => { window.__drag = []; for (const t of ["dragstart", "drop", "dragend"]) document.addEventListener(t, () => window.__drag.push(t), { capture: true, once: true }); });
+  // 表示先の欄は、裏の読み直しで描き直されることがある。位置が取れるまで待つ
+  const box = async (s) => { for (let i = 0; i < 50; i++) { const r = await page.locator(s).first().boundingBox().catch(() => null); if (r) return r; await page.waitForTimeout(50); } throw new Error(`見つからない: ${s}`); };
+  const a = await box(from), b = await box(to);
+  const [x0, y0, x1, y1] = [a.x + 40, a.y + a.height / 2, b.x + b.width / 2, b.y + b.height / 2];
+  await page.mouse.move(x0, y0);
+  await page.mouse.down();
+  for (let i = 1; i <= 12; i++) await page.mouse.move(x0 + ((x1 - x0) * i) / 12, y0 + ((y1 - y0) * i) / 12);
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  return page.evaluate(() => window.__drag.join("→") || "（始まらない）");
 }

@@ -15,11 +15,11 @@
   <nav id="crumb" class="crumb"></nav>
   <span class="spacer"></span>
   <span id="verBox" class="vgrp" hidden></span>
-  <button type="button" id="btnRelease" class="ghost" hidden title="版を置く・配る版を選ぶ・推奨の札・この PC の版とショートカット">配布</button>
   <button type="button" id="btnSources" class="ghost dopen" title="表示する項目を探して、表示先へ置く">☰ データ項目</button>
-  <button type="button" id="btnIniDev" class="ghost devbtn" hidden title="新しい PC と「表示設定を初期化」が使う表示項目を決める（開発者だけに出ます）">初期値を決める（開発者）</button>
+  <button type="button" id="btnSettings" class="ghost" title="この PC・使用状況・配布・使用の履歴">⚙ 設定<span id="setBadge" class="setbadge" hidden></span></button>
   <button type="button" id="btnReset" class="ghost" title="表示項目を初期値に戻す">表示設定を初期化</button>
 </header>
+<div id="nudgeBar" class="scbar nudge" role="alert" hidden></div>
 <div id="scBar" class="scbar" hidden>
   <b aria-hidden="true">⌂</b><span id="scAsk">デスクトップとスタートにショートカットを作りますか（次から共有の exe を探さずに開けます）</span>
   <span id="scWhy" class="scwhy" role="alert" hidden></span>
@@ -186,14 +186,27 @@
     <div class="f-body"><div id="fLib" class="f-lib"></div><div id="fEd" class="f-ed"></div></div>
   </div>
 </div>
-<div id="relModal" class="modal" hidden>
-  <div class="mbox" role="dialog" aria-modal="true" aria-labelledby="relTitle">
-    <div class="mhead"><b id="relTitle">配布</b><span class="sub">版を置く・配る版を選ぶ・推奨の札・この PC のショートカット</span>
-      <button type="button" id="relClose" class="mclose" title="閉じる（Esc）" aria-label="閉じる">×</button></div>
-    <div id="relBody"></div>
+<!-- 設定の窓（3 回の案出しと別のエージェントの採点で N に決めた: program/tools/proposals/2026-10-28-settings*）。
+     大きさは決め打ち（頁を替えても変わらず、中だけが送られる）。上の横の見出しで「この PC ｜ 管理（開発者）: 使用状況・配布・使用の履歴」 -->
+<div id="setModal" class="setmodal" hidden>
+  <div class="set-win" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="set-head"><b id="setTitle">設定</b><span id="setMe" class="set-me"></span>
+      <button type="button" id="setClose" class="mclose" title="閉じる（Esc）" aria-label="閉じる">×</button></div>
+    <nav class="set-tabs" id="setTabs">
+      <button type="button" data-page="pc" class="on">この PC</button>
+      <span class="set-grp" data-dev>管理（開発者）</span>
+      <button type="button" data-page="fleet" data-dev>使用状況<span class="setbadge" id="setTabN" hidden></span></button>
+      <button type="button" data-page="release" data-dev>配布</button>
+      <button type="button" data-page="history" data-dev>使用の履歴</button>
+    </nav>
+    <div class="set-body" id="setBody">
+      <section data-page="pc" id="setPc"></section>
+      <section data-page="fleet" id="setFleet" hidden></section>
+      <section data-page="release" hidden><div id="relBody"></div><div id="relMore"></div></section>
+      <section data-page="history" id="setHist" hidden></section>
+    </div>
   </div>
 </div>
-<div id="iniWin" class="iniwin" role="dialog" aria-labelledby="iniTitle" hidden></div>
 <div id="pinWarn" class="pinwarn" role="alertdialog" aria-labelledby="pinWarnT" hidden></div>
 <div id="srcModal" class="dmodal" hidden>
   <div class="dbox" role="dialog" aria-modal="true" aria-labelledby="srcTitle">
@@ -222,5 +235,6 @@
 <script src="/static/app.js?v={{v}}"></script>
 <script src="/static/filters-view.js?v={{v}}"></script>
 <script src="/static/desktop.js?v={{v}}"></script>
+<script src="/static/settings-view.js?v={{v}}"></script>
 </body>
 </html>
