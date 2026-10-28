@@ -364,9 +364,9 @@ def make_ls3(root: Path, name: str, n_cab: int, per_cab: int, w: int, h: int, fm
     return lot
 
 
-def make_dl2(root: Path, name: str) -> Path:
-    """画像なし・表裏が逆・COND は wavedata/cond だけ・欠陥数上限オーバー"""
-    lot = lot_dir(root, "DL2", name)
+def make_dl2(root: Path, name: str, eq: str = "DL2", max_status: int = 1) -> Path:
+    """画像なし・表裏が逆・COND は wavedata/cond だけ・欠陥数上限オーバー（max_status=0 で上限なし。画面の確かめ noimage-check が別の設備 eq に作る）"""
+    lot = lot_dir(root, eq, name)
     ref = datetime.strptime(name, "%Y_%m_%d_%H_%M_%S")
     wc = lot / "wavedata" / "cond"
     wc.mkdir(parents=True, exist_ok=True)
@@ -381,7 +381,7 @@ def make_dl2(root: Path, name: str) -> Path:
     write_dat(lot / "DETECT_INFO.dat", "DETECT_INFO", recs)
     insp = {"start_time": ticks(ref + timedelta(minutes=25)), "end_time": ticks(ref + timedelta(minutes=40)),
             "insp_end_y": 1800000.0, "detect_total_cnt": len(recs), "image_total_cnt": 0, "insp_area_st": 0.0, "insp_area_ed": 1250.0,
-            "classification_count": [0] * 8, "error_count": 0, "detect_max_status": 1, "insp_state": 2, "ok": False,
+            "classification_count": [0] * 8, "error_count": 0, "detect_max_status": max_status, "insp_state": 2, "ok": False,
             "product": "DL", "note": ""}
     write_dat(lot / "INSP_INFO.DAT", "INSP_INFO", [insp], rec_size=fixed_size(fields_of("INSP_INFO")) + 8)
     return lot

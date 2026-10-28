@@ -50,11 +50,14 @@ fn c(i: usize) -> String {
     C.replace("{}", &i.to_string())
 }
 
-/// 既定の表示項目（版 3.8 と同じ）。
+/// 既定の表示項目（版 3.8 と同じ。版 4.8.0 で一覧に材質と欠陥数を足した: desktop/tests/golden.rs の V48_ADDED）。
 pub fn defaults() -> Vec<Value> {
     vec![
         p("d_list_lot", "lot", "list", "ロットNo", "cond/COND*.xml", &c(0), None, None),
         p("d_list_time", "lot", "list", "時刻", "@lot", "time", None, Some("hhmm")),
+        // 版 4.8.0: 一覧にも材質と欠陥数（サマリと同じ項目・同じ名前）
+        p("d_list_mat", "lot", "list", "材質", "cond/COND*.xml", &c(4), None, None),
+        p("d_list_dc", "lot", "list", "欠陥数", I, "detect_total_cnt", None, None),
         p("d_s_lot", "lot", "summary", "ロットNo", "cond/COND*.xml", &c(0), None, None),
         p("d_s_mat", "lot", "summary", "材質", "cond/COND*.xml", &c(4), None, None),
         p("d_s_tmp", "lot", "summary", "調質", "cond/COND*.xml", &c(5), None, None),

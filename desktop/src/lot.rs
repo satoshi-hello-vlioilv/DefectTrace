@@ -773,9 +773,14 @@ pub fn lot_flags(res: &LotRes) -> Value {
     let insp = res.dat("INSP_INFO");
     let g = |k: &str| insp.first().and_then(|r| insp.get(r, k)).map(V::to_json).unwrap_or(Value::Null);
     let tc = time_check(res, true);
+    // 画像なし（良品などで検出画像を残していないロット。確かめる画像が無い）: INSP_INFO の画像総数が 0。INSP_INFO が無ければ画像の CAB が無い
+    let no_image = match g("image_total_cnt").as_i64() {
+        Some(n) => n == 0,
+        None => crate::images::image_groups(&res.lot).is_empty(),
+    };
     json!({"overload": ov["count"], "overload_defined": ov["defined"], "overload_names": ov["names"],
            "insp_state": g("insp_state"), "error_count": g("error_count"), "detect_max_status": g("detect_max_status"),
-           "time_warn": tc["warn"], "time_max_diff": tc["max_diff"]})
+           "time_warn": tc["warn"], "time_max_diff": tc["max_diff"], "no_image": no_image})
 }
 
 fn parse_dt(s: &str) -> Option<dat::DateTime> {
