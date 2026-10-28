@@ -471,3 +471,32 @@ body.mode-list #summary,body.mode-list #center>.toolbar,body.mode-list #infoPane
 .mk-l{display:inline-block;min-width:3.3em}
 .cabsep[hidden]{display:none}
 .mk-sl{display:flex;flex-direction:column;gap:4px;padding-right:10px;border-right:2px solid var(--line2)}
+
+/* 表示項目の見分け: 初期の項目＝角の少し丸い白地に藍の輪郭、この PC で足した物＝丸い黄の札。表の行は左の線の色で同じ差。
+   どの置き場でも初期を先に並べ、足した物の前に「足した物」の区切り（色だけに頼らない: 形・置き場・言葉でも分ける） */
+.chip.ini{background:#fff;border:1.5px solid #8ea3c2;border-radius:5px;color:#1e3a5f}.chip.ini .cl{color:#1e3a5f}
+table.kv tr.pinned.ini td{background:#fff}table.kv tr.pinned.ini td.k{color:#1e3a5f;box-shadow:inset 3px 0 0 #8ea3c2}
+table.kv tr.pinned.add td.k{box-shadow:inset 3px 0 0 #e0a83a}
+.pinsep{display:inline-flex;align-items:center;color:#8a5a00;font-size:11.5px;font-weight:700;border-left:1.5px dashed #c9a24a;padding-left:7px;margin-left:3px;white-space:nowrap}
+table.kv tr.pinsep td{font-size:11.5px;font-weight:700;color:#8a5a00;padding-top:5px;border-top:1.5px dashed #c9a24a;background:#fff}
+#srcRows .dpl.ini{background:#fff;border:1.5px solid #8ea3c2;color:#1e3a5f;border-radius:5px}
+#srcRows .dpl.add{background:var(--pinbg);border:1px solid #ecd9a8;color:#8a5a00;border-radius:10px}
+/* 開発者が表示の初期値を決める小窓（見出しの「初期値を決める（開発者）」から） */
+button.ghost.devbtn{border-color:#8a6d2e;color:#ffd27a}
+.iniwin{position:fixed;right:12px;top:40px;z-index:80;width:440px;background:var(--pane);border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 40px rgba(0,0,0,.25);padding:14px 16px;font-size:13px}
+.iniwin h4{margin:0 0 4px;font-size:14px;display:flex;align-items:center}.iniwin h4 .mclose{margin-left:auto}
+.iniwin dl{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;margin:10px 0;font-size:12.5px}.iniwin dt{color:var(--sub)}.iniwin dd{margin:0}
+.iniwin .ib{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}.iniwin .note{margin-top:8px;color:var(--sub);font-size:12px}.iniwin .err{margin-top:6px;font-size:12px}
+@media (prefers-color-scheme:dark){
+ .chip.ini{background:transparent;border-color:#6d84a6;color:#c9d6ea}.chip.ini .cl{color:#c9d6ea}
+ table.kv tr.pinned.ini td{background:transparent}table.kv tr.pinned.ini td.k{color:#c9d6ea;box-shadow:inset 3px 0 0 #6d84a6}
+ .pinsep,table.kv tr.pinsep td{color:#f0c060}table.kv tr.pinsep td{background:transparent}
+ #srcRows .dpl.ini{background:transparent;border-color:#6d84a6;color:#c9d6ea}
+}
+/* 初期の表示項目を外す前の確かめ（画面の真ん中の小窓。3 回目の案出しで R3 に決めた） */
+.pinwarn{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:95;display:grid;place-items:center}.pinwarn[hidden]{display:none}
+.pinwarn .pw-dlg{width:460px;background:var(--pane);border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.3);padding:18px 20px;font-size:13px}
+.pinwarn h3{margin:0 0 8px;font-size:15px}.pinwarn p{margin:6px 0;line-height:1.6}
+.pinwarn .pw-b{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}.pinwarn .pw-go{background:var(--ng);border-color:var(--ng);color:#fff}
+.pinwarn .pw-chip{display:inline-block;border:1.5px solid #8ea3c2;border-radius:5px;padding:0 8px;color:#1e3a5f;font-weight:700;background:#fff}
+.iniwin[hidden]{display:none}

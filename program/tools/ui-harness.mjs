@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -73,6 +74,25 @@ export async function launch(fake = FAKE, more = [], { home } = {}) {
       return page;
     },
     async close() { await browser.close(); proc.kill(); fs.rmSync(work, { recursive: true, force: true }); },
+  };
+}
+
+/** 起動画面（desktop/splash/index.html。窓が splash.brand などを呼ぶ）を開く。名前と版は窓と同じく brand.json・version.py から */
+export async function launchSplash() {
+  const brand = JSON.parse(fs.readFileSync(path.join(REPO, "program/app/brand.json"), "utf8"));
+  const ver = /APP_VERSION\s*=\s*"([^"]+)"/.exec(fs.readFileSync(path.join(REPO, "program/app/version.py"), "utf8"))[1];
+  // アイコン（desktop/splash/icon.png）は窓を作るとき build.rs が描く
+  const browser = await chromium.launch();
+  return {
+    browser,
+    async newPage(view) {
+      const ctx = await browser.newContext({ viewport: view, deviceScaleFactor: 1.25, locale: "ja-JP" });
+      const page = await ctx.newPage();
+      await page.goto(pathToFileURL(path.join(REPO, "desktop/splash/index.html")).href);
+      await page.evaluate(([n, s, v]) => { window.splash.brand(n, s); window.splash.version(v); }, [brand.name, brand.subtitle, ver]);
+      return page;
+    },
+    async close() { await browser.close(); },
   };
 }
 

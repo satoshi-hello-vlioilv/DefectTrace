@@ -166,11 +166,25 @@ fn os_err(e: &std::io::Error) -> String {
     }
 }
 
+/// 共有の置き場: 設定の filters_shared_dir、無ければ 更新の置き場のアプリのフォルダ\shared。届かなければ None。
+fn shared_dir_of(cfg: &Config) -> Option<PathBuf> {
+    match cfg.str("filters_shared_dir") {
+        s if !s.trim().is_empty() => Some(PathBuf::from(s.trim())),
+        _ => crate::release::locate_source(&cfg.update_source()).ok().map(|(found, _)| {
+            let name = &crate::brand::brand().name;
+            let app =
+                if found.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name)) { found } else { found.join(name) };
+            app.join("shared")
+        }),
+    }
+}
+
 impl App {
     pub fn new(cfg: Config, program: Option<PathBuf>) -> Arc<App> {
         let cfg = Arc::new(cfg);
         let lot_re = Regex::new(&cfg.str("lot_regex")).unwrap_or_else(|_| Regex::new(r"^\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}$").unwrap());
-        let pins = Pins::load(&cfg.home);
+        // 新しい PC（pins.json が無い）だけ、表示の初期値を共有の置き場まで見に行く
+        let pins = Pins::load(&cfg.home, || crate::pins::Initial { home: &cfg.home, shared: shared_dir_of(&cfg).as_deref() }.pins());
         let images = Images::new(cfg.clone());
         // 値の作り方の印: アプリの版と設定（時差・多量の名前・時刻の差の許容などで値が変わる）。設備の一覧は値に関わらないので外す
         let mut how = cfg.v.clone();
@@ -192,7 +206,7 @@ impl App {
         })
     }
 
-    /// 共有の置き場（既定・共有のフィルタ）: 設定の filters_shared_dir、無ければ 更新の置き場のアプリのフォルダ\shared。届かなければ None。
+    /// 共有の置き場（既定・共有のフィルタ・表示の初期値）。探すのは 60 秒に 1 度（shared_dir_of）。
     fn shared_dir(&self) -> Option<PathBuf> {
         let mut m = self.shared_dir.lock().unwrap();
         if let Some((at, d)) = m.as_ref() {
@@ -200,18 +214,7 @@ impl App {
                 return d.clone();
             }
         }
-        let d = match self.cfg.str("filters_shared_dir") {
-            s if !s.trim().is_empty() => Some(PathBuf::from(s.trim())),
-            _ => crate::release::locate_source(&self.cfg.update_source()).ok().map(|(found, _)| {
-                let name = &crate::brand::brand().name;
-                let app = if found.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name)) {
-                    found
-                } else {
-                    found.join(name)
-                };
-                app.join("shared")
-            }),
-        };
+        let d = shared_dir_of(&self.cfg);
         *m = Some((std::time::Instant::now(), d.clone()));
         d
     }
@@ -302,7 +305,11 @@ impl App {
             ("GET", "/thumb") => self.image(&a, true),
             ("GET", "/api/pins") => Ok(Reply::json(&json!(self.pins.snapshot()))),
             ("POST", "/api/pins") => self.pins_changed(self.pins.add(&b, images::new_id("p_")).map_err(|e| (400, e))),
-            ("POST", "/api/pins/reset") => self.pins_changed(Ok(self.pins.reset())),
+            ("POST", "/api/pins/reset") => {
+                let shared = self.shared_dir();
+                self.pins_changed(Ok(self.pins.reset(crate::pins::Initial { home: &self.cfg.home, shared: shared.as_deref() }.pins())))
+            }
+            (m, "/api/pins/default") => self.pins_default(m),
             (m, p) if p.starts_with("/api/pins/") => {
                 let pid = unquote(&p["/api/pins/".len()..]);
                 match m {
@@ -314,6 +321,24 @@ impl App {
             _ => return None,
         };
         Some(r.unwrap_or_else(|e| e))
+    }
+
+    /// 表示の初期値: 見る（GET）・いまの表示を開発者の初期値にする（POST）・やめてアプリの物に戻す（DELETE）。
+    fn pins_default(&self, method: &str) -> R {
+        let who = self.cfg.who();
+        let shared = self.shared_dir();
+        let ini = crate::pins::Initial { home: &self.cfg.home, shared: shared.as_deref() };
+        let r = match method {
+            "GET" => Ok(ini.get()),
+            "POST" => ini.set(&self.pins.snapshot(), &who.login, who.developer),
+            "DELETE" => ini.clear(who.developer),
+            _ => return Err(Reply::error(405, "method")),
+        };
+        r.map(|mut v| {
+            v["me"] = json!({"login": who.login, "developer": who.developer});
+            Reply::json(&v)
+        })
+        .map_err(|e| Reply::error(400, &e))
     }
 
     fn pins_changed(&self, r: Result<Vec<Value>, (u16, String)>) -> R {

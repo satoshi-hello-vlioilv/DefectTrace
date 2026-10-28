@@ -314,6 +314,9 @@ fn window(app: &AppHandle, label: &str, url: WebviewUrl, splash: Arc<Splash>) ->
         .min_inner_size(1100.0, 700.0)
         .maximized(label == "main")
         .background_color(tauri::window::Color(0x1c, 0x35, 0x50, 0xff))
+        // 窓のファイルのドロップ受けを外す。Windows（WebView2）では、これがあると画面の中の HTML5 のドラッグ＆ドロップ
+        // （データ項目を表示先へ置く・並べ替え）が届かない。ファイルのドロップは使っていない
+        .disable_drag_drop_handler()
         .on_navigation(move |u| {
             let inside = is_app_url(u) || is_splash(u) || matches!(u.scheme(), "about" | "blob" | "data");
             if !inside {
@@ -669,5 +672,14 @@ mod tests {
         assert!(!is_app_url(&Url::parse("http://example.com/").unwrap()));
         assert!(!is_app_url(&Url::parse("file://dt.localhost/x").unwrap()), "file: はアプリの中ではない");
         assert!(is_splash(&Url::parse("tauri://localhost/index.html").unwrap()));
+    }
+
+    /// Windows の窓では、ファイルのドロップ受けがあると画面の中のドラッグ＆ドロップが届かない（版 4.5.0 までの不具合）。
+    /// 窓の作り方（Windows でしか確かめられない）から外れていないかを、作り方の文で確かめる
+    #[test]
+    fn the_window_leaves_drag_and_drop_to_the_page() {
+        let src = include_str!("main.rs");
+        let body = &src[src.find("fn window(").unwrap()..src.find("fn open_outside(").unwrap()];
+        assert!(body.contains(".disable_drag_drop_handler()"));
     }
 }

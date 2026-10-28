@@ -1,5 +1,9 @@
 //! 表示項目（ピン）: どのデータの項目を、画面のどこ（ロット一覧・サマリ・ロット情報・画像表示・画像情報・MAP の軸）に出すか。
 //! 置き場は作業場所の pins.json（版を入れ替えても残る）。新しい版で既定の項目が増えたら、1 度だけ足す（pins_meta.json の seen_defaults）。
+//!
+//! 表示の初期値（新しい PC の始めと「表示設定を初期化」で使う物）は、開発者が共有の置き場に決めた物（pins-default.json）があればそれ、
+//! 無ければアプリに入った物（defaults）。各 PC の pins.json がいつも先（初期値を変えても、各 PC の表示は変わらない）。
+//! 共有の置き場に届かない PC のために、最後に読めた開発者の初期値をこの PC の作業場所にも写しておく。
 
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -132,15 +136,15 @@ fn id(v: &Value) -> &str {
 }
 
 impl Pins {
-    /// 読む（無ければ既定）。新しい版の既定を 1 度だけ足し、書き戻す。
-    pub fn load(dir: &Path) -> Pins {
+    /// 読む（無ければ first: 表示の初期値。新しい PC だけ呼ぶ）。新しい版の既定を 1 度だけ足し、書き戻す。
+    pub fn load(dir: &Path, first: impl FnOnce() -> Vec<Value>) -> Pins {
         let (path, meta) = (dir.join("pins.json"), dir.join("pins_meta.json"));
         let defs = defaults();
         let read = |p: &Path| {
             std::fs::read(p).ok().and_then(|b| serde_json::from_slice::<Value>(b.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&b)).ok())
         };
         let mut pins: Vec<Value> = match read(&path) {
-            None if !path.exists() => defs.clone(),
+            None if !path.exists() => first(),
             None => {
                 eprintln!("[WARN] pins.json を読めません");
                 return Pins { list: Mutex::new(defs), path, meta };
@@ -267,10 +271,185 @@ impl Pins {
         l.clone()
     }
 
-    pub fn reset(&self) -> Vec<Value> {
+    /// 初期値に戻す（initial の pins）。
+    pub fn reset(&self, initial: Vec<Value>) -> Vec<Value> {
         let mut l = self.list.lock().unwrap();
-        *l = defaults();
+        *l = initial;
         self.save(&l);
         l.clone()
+    }
+}
+
+/// 開発者の初期値のファイルの名前（共有の置き場と、この PC の写し）。
+const INITIAL_FILE: &str = "pins-default.json";
+
+/// 初期値のファイルを読む: Ok(None)＝無い、Err＝読めない・形が違う。
+fn read_initial(f: &Path) -> Result<Option<Value>, String> {
+    let b = match std::fs::read(f) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: 読めません（{e}）", f.display())),
+    };
+    let v: Value = serde_json::from_slice(b.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&b))
+        .map_err(|e| format!("{}: 形が違います（{e}）", f.display()))?;
+    let pins = checked(v["pins"].as_array().map(Vec::as_slice).unwrap_or_default());
+    if pins.is_empty() {
+        return Err(format!("{}: 表示項目がありません", f.display()));
+    }
+    Ok(Some(json!({"pins": pins, "setBy": v["setBy"], "setAt": v["setAt"], "version": v["version"]})))
+}
+
+/// 表示先に置ける物だけ（id・表示先・種類がそろい、id が重ならない）。
+fn checked(pins: &[Value]) -> Vec<Value> {
+    let mut seen = std::collections::HashSet::new();
+    pins.iter()
+        .filter(|p| {
+            let ok = !id(p).is_empty() && compatible(p["scope"].as_str().unwrap_or(""), p["place"].as_str().unwrap_or(""));
+            ok && seen.insert(id(p).to_string())
+        })
+        .cloned()
+        .collect()
+}
+
+fn write_atomic(f: &Path, v: &Value) -> Result<(), String> {
+    let dir = f.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dir).map_err(|e| format!("{} を作れません: {e}", dir.display()))?;
+    let tmp = f.with_extension(format!("json.{}.tmp", std::process::id()));
+    std::fs::write(&tmp, serde_json::to_vec_pretty(v).unwrap_or_default()).map_err(|e| format!("{} に書けません: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, f).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("{} を置き換えられません: {e}", f.display())
+    })
+}
+
+/// 表示の初期値の置き場: home＝この PC の作業場所（写し）、shared＝共有の置き場（届かなければ None）。
+pub struct Initial<'a> {
+    pub home: &'a Path,
+    pub shared: Option<&'a Path>,
+}
+
+impl Initial<'_> {
+    /// いまの初期値: {source: developer（開発者が決めた）| builtin（アプリに入った）, pins, setBy, setAt, version,
+    /// shared（共有の置き場に届くか）, copy（届かず、この PC の写しを使った）, problem（読めなかった理由）}。
+    /// 共有の置き場に届けば、写しをそろえる（開発者が消したら写しも消す）。
+    pub fn get(&self) -> Value {
+        let copy = self.home.join(INITIAL_FILE);
+        let builtin = |problem: Option<String>| json!({"source": "builtin", "pins": defaults(), "problem": problem});
+        let mut out = match self.shared.map(|d| read_initial(&d.join(INITIAL_FILE))) {
+            Some(Ok(Some(mut v))) => {
+                if read_initial(&copy).ok().flatten().as_ref() != Some(&v) {
+                    let _ = write_atomic(&copy, &v);
+                }
+                v["source"] = json!("developer");
+                v["copy"] = json!(false);
+                v
+            }
+            Some(Ok(None)) => {
+                let _ = std::fs::remove_file(&copy);
+                builtin(None)
+            }
+            Some(Err(e)) => builtin(Some(e)),
+            None => match read_initial(&copy) {
+                Ok(Some(mut v)) => {
+                    v["source"] = json!("developer");
+                    v["copy"] = json!(true);
+                    v
+                }
+                _ => builtin(None),
+            },
+        };
+        out["shared"] = json!(self.shared.is_some());
+        out
+    }
+
+    /// 初期値の表示項目だけ（新しい PC の始め・初期化）。
+    pub fn pins(&self) -> Vec<Value> {
+        self.get()["pins"].as_array().cloned().unwrap_or_else(defaults)
+    }
+
+    /// いまの表示（pins）を開発者の初期値にする。開発者だけ。→ いまの初期値
+    pub fn set(&self, pins: &[Value], by: &str, developer: bool) -> Result<Value, String> {
+        if !developer {
+            return Err("表示の初期値を決められるのは開発者だけです".into());
+        }
+        let dir = self.shared.ok_or("共有の置き場に届きません（表示の初期値は、更新の置き場〈BOX〉に置きます）")?;
+        let pins = checked(pins);
+        if pins.is_empty() {
+            return Err("表示項目が 1 つもありません".into());
+        }
+        let v = json!({"schema": 1, "pins": pins, "setBy": by, "setAt": chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
+                       "version": env!("CARGO_PKG_VERSION")});
+        write_atomic(&dir.join(INITIAL_FILE), &v)?;
+        Ok(self.get())
+    }
+
+    /// 開発者の初期値をやめ、アプリに入った物に戻す。開発者だけ。→ いまの初期値
+    pub fn clear(&self, developer: bool) -> Result<Value, String> {
+        if !developer {
+            return Err("表示の初期値を決められるのは開発者だけです".into());
+        }
+        let dir = self.shared.ok_or("共有の置き場に届きません")?;
+        match std::fs::remove_file(dir.join(INITIAL_FILE)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("{}: 消せません（{e}）", dir.join(INITIAL_FILE).display())),
+        }
+        Ok(self.get())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("dt-pins-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn the_initial_value_is_the_developers_when_set_else_the_built_in_one() {
+        let d = tmp("initial");
+        let (home, shared) = (d.join("home"), d.join("shared"));
+        let ini = Initial { home: &home, shared: Some(&shared) };
+        assert_eq!(ini.get()["source"], "builtin");
+        assert_eq!(ini.pins(), defaults());
+        let mine = vec![defaults()[0].clone(), p("p_1", "image", "card", "幅", D, "w", None, None)];
+        assert!(ini.set(&mine, "dev", false).is_err(), "開発者でなければ決められない");
+        let v = ini.set(&mine, "dev", true).unwrap();
+        assert_eq!((v["source"].as_str(), v["setBy"].as_str()), (Some("developer"), Some("dev")));
+        assert_eq!(ini.pins(), mine);
+        // 共有の置き場に届かない PC は、この PC の写しを使う
+        let off = Initial { home: &home, shared: None };
+        assert_eq!((off.get()["copy"].as_bool(), off.pins()), (Some(true), mine.clone()));
+        // 開発者がやめたら、写しも消えてアプリに入った物に戻る
+        assert_eq!(ini.clear(true).unwrap()["source"], "builtin");
+        assert_eq!(off.pins(), defaults());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_new_pc_starts_from_the_initial_value_and_its_own_pins_come_first() {
+        let d = tmp("load");
+        let mine = vec![p("p_1", "image", "card", "幅", D, "w", None, None)];
+        let pins = Pins::load(&d, || mine.clone());
+        assert_eq!(pins.snapshot(), mine, "新しい PC は初期値で始まる");
+        pins.delete("p_1");
+        let again = Pins::load(&d, || panic!("この PC の表示があれば初期値は見ない"));
+        assert!(again.snapshot().is_empty());
+        assert_eq!(again.reset(defaults()), defaults());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_broken_initial_file_falls_back_to_the_built_in_one_and_says_why() {
+        let d = tmp("broken");
+        std::fs::write(d.join(INITIAL_FILE), "{").unwrap();
+        let v = Initial { home: &d.join("home"), shared: Some(&d) }.get();
+        assert_eq!(v["source"], "builtin");
+        assert!(v["problem"].as_str().unwrap().contains("形が違います"));
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

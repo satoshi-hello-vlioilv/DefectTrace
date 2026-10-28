@@ -17,7 +17,8 @@
   <span id="verBox" class="vgrp" hidden></span>
   <button type="button" id="btnRelease" class="ghost" hidden title="版を置く・配る版を選ぶ・推奨の札・この PC の版とショートカット">配布</button>
   <button type="button" id="btnSources" class="ghost dopen" title="表示する項目を探して、表示先へ置く">☰ データ項目</button>
-  <button type="button" id="btnReset" class="ghost" title="表示項目の設定を初期状態に戻す">表示設定を初期化</button>
+  <button type="button" id="btnIniDev" class="ghost devbtn" hidden title="新しい PC と「表示設定を初期化」が使う表示項目を決める（開発者だけに出ます）">初期値を決める（開発者）</button>
+  <button type="button" id="btnReset" class="ghost" title="表示項目を初期値に戻す">表示設定を初期化</button>
 </header>
 <div id="scBar" class="scbar" hidden>
   <b aria-hidden="true">⌂</b><span id="scAsk">デスクトップとスタートにショートカットを作りますか（次から共有の exe を探さずに開けます）</span>
@@ -192,6 +193,8 @@
     <div id="relBody"></div>
   </div>
 </div>
+<div id="iniWin" class="iniwin" role="dialog" aria-labelledby="iniTitle" hidden></div>
+<div id="pinWarn" class="pinwarn" role="alertdialog" aria-labelledby="pinWarnT" hidden></div>
 <div id="srcModal" class="dmodal" hidden>
   <div class="dbox" role="dialog" aria-modal="true" aria-labelledby="srcTitle">
     <div class="dhead"><b id="srcTitle">データ項目</b><span class="sub">探して、右の表示先へドラッグ／行を押すと置く先のボタン</span><span class="spacer"></span>
