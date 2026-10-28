@@ -1,0 +1,361 @@
+{
+ "title": "ロット一覧の「画像なし」の札（版 4.8.0。一覧の既定に材質・欠陥数を足した上で）",
+ "rule": "2026-10-17",
+ "evaluator": "採点者（案を作っていない別のエージェント）。DT_UI_LOT=DL2/2026/2026_10/2026_10_23/2026_10_23_21_27_46 で ui-variants.mjs を流し、案は /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-nb/props、今の画面は STATES を写して案を NOW 1 つにした /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-nb/now.mjs で /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-nb/now に撮った。tree-1280・tree-1728 の 7 枚を左の木（幅 400px 分）だけ PIL で切り出して 2 倍・1.6 倍に拡大して並べて見た。F は 1280 の全体、G は 1280 の全体と 1728 の中央（列の数の切り替え）も見た。札の字の大きさは app.css の .fl（700 10px）で確かめた。 2 回目: 1 回目とは別の採点者（案を作っていない）。同じ DT_UI_LOT で ui-variants.mjs を流し、案は /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-nb2/props、今の画面は STATES を写して案を NOW 1 つにした /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-nb2/now.mjs で /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-nb2/now に撮った。tree-1280・tree-1728 の左の木を PIL で切り出して拡大し並べて見た。1280 は木の下（DL2 の行）も切り出し、S は 1280 の画像一覧の「列」（1〜4 が残る）も見た。",
+ "rounds": [
+  {
+   "name": "1 回目",
+   "images": "DT_UI_LOT=DL2/2026/2026_10/2026_10_23/2026_10_23_21_27_46 node program/tools/ui-variants.mjs <出力> program/tools/proposals/2026-10-28-noimage-badge.mjs（tree × 1728・1536・1280）",
+   "self_check": "案を作った者が tree-1728・tree-1280 の 6 案を左の木だけ切り出して並べて見た。1 度目の撮影で、一覧の行に材質・欠陥数を足した上に札が並ぶと、300px の木では材質が「A !」と切れ、DL2 の行の札も右で切れるのが分かった（札の形の問題ではなく行の組み方の問題）。そこで、木を 380px に広げる G と、行を 2 段にする H を足した（G・H は 1280 でも材質・欠陥数・札が切れない）。A・D・F は 300px のままなので、画像なしの行で材質が切れる（案の作りのまま）。C は ∅ で幅を取らないが材質は「A5…」と切れる。日の行の「画像なし n」は D・G・H・F・C に出る。",
+   "proposals": {
+    "A 行の右に灰の札": {
+     "score": {
+      "order": 7,
+      "chunk": 6,
+      "hierarchy": 7,
+      "visual": 7,
+      "steps": 8,
+      "effortless": 7,
+      "intuitive": 8,
+      "form": 7,
+      "place": 6,
+      "layout": 5,
+      "tone": 7
+     },
+     "minus": [
+      {
+       "kind": "cut",
+       "where": "tree-1280-A・1728-A: LS3 08:15 の行の材質が「A !」と切れる"
+      },
+      {
+       "kind": "cut",
+       "where": "tree-1280-A・1728-A: DL2 21:27 の行の欠陥数 53 が消え、「画像なし」の札が右の端で切れる"
+      },
+      {
+       "kind": "unreadable",
+       "where": "全幅: 新しい札「画像なし」が 10px（.fl）"
+      }
+     ],
+     "seen": "灰の札は赤の多量と色・形が分かれ、落ち着いて『確かめなくてよい』寄りに読める。ただ日の行には数が出ず、開くまで分からない（困りごと 2 が残る）。300px の木では札が並ぶと材質・欠陥数が切れ、依頼の『材質・欠陥数を一覧で見たい』を損なう。"
+    },
+    "C 記号 ∅ と日の数": {
+     "score": {
+      "order": 7,
+      "chunk": 7,
+      "hierarchy": 7,
+      "visual": 7,
+      "steps": 8,
+      "effortless": 4,
+      "intuitive": 5,
+      "form": 6,
+      "place": 6,
+      "layout": 6,
+      "tone": 7
+     },
+     "minus": [
+      {
+       "kind": "cut",
+       "where": "tree-1280-C・1728-C: LS3 08:15 の行の材質「A5…」・欠陥数「5.」が省略で切れる"
+      },
+      {
+       "kind": "unreadable",
+       "where": "全幅: 日の行の「画像なし 1」が 10px"
+      }
+     ],
+     "seen": "∅ は幅を取らず DL2 の行は 53 まで読めるが、∅ が『画像なし』と読めるかは推測させる（押さえないと説明が出ない）。日の行は「画像なし 1」と字で出るので、行の ∅ と言葉がそろわない。08:15 の行は材質・欠陥数が切れる。"
+    },
+    "D 札＋日の行の数": {
+     "score": {
+      "order": 8,
+      "chunk": 7,
+      "hierarchy": 7,
+      "visual": 8,
+      "steps": 9,
+      "effortless": 8,
+      "intuitive": 8,
+      "form": 8,
+      "place": 8,
+      "layout": 5,
+      "tone": 7
+     },
+     "minus": [
+      {
+       "kind": "cut",
+       "where": "tree-1280-D・1728-D: LS3 08:15 の行の材質が「A !」と切れる"
+      },
+      {
+       "kind": "cut",
+       "where": "tree-1280-D・1728-D: DL2 21:27 の行の欠陥数 53 が消え、札が右の端で切れる"
+      },
+      {
+       "kind": "unreadable",
+       "where": "全幅: 札「画像なし」・日の行「画像なし 1」が 10px"
+      }
+     ],
+     "seen": "日の行に「多量2 画像なし1」と並び、開かずに日ごとに分かる。行と日で同じ言葉・同じ灰の形でそろう。ただ木が 300px のままなので材質・欠陥数と札がぶつかって切れる。"
+    },
+    "G 札＋日の数＋木を 380px": {
+     "score": {
+      "order": 8,
+      "chunk": 8,
+      "hierarchy": 8,
+      "visual": 8,
+      "steps": 9,
+      "effortless": 8,
+      "intuitive": 9,
+      "form": 8,
+      "place": 9,
+      "layout": 8,
+      "tone": 8
+     },
+     "minus": [
+      {
+       "kind": "lost",
+       "where": "tree-1280-G: 画像一覧が 80px 狭まり、列の切り替えが 1〜3 になって 4 列が選べなくなる（今は 1〜4）"
+      },
+      {
+       "kind": "unreadable",
+       "where": "全幅: 札「画像なし」・日の行「画像なし 1」が 10px"
+      }
+     ],
+     "seen": "木の中は材質 A5182・欠陥数 58・53・多量・画像なしが 1 行に切れずに収まり、右端の札の列もそろう。日の行も多量と画像なしが並び、一目で分かる。代わりに 1280 では中央の一覧が狭まり 4 列が無くなる（1728 では変わらず）。"
+    },
+    "H 札＋日の数＋行を 2 段": {
+     "score": {
+      "order": 8,
+      "chunk": 8,
+      "hierarchy": 8,
+      "visual": 8,
+      "steps": 8,
+      "effortless": 8,
+      "intuitive": 7,
+      "form": 8,
+      "place": 8,
+      "layout": 7,
+      "tone": 8
+     },
+     "minus": [
+      {
+       "kind": "unreadable",
+       "where": "全幅: 札「画像なし」・日の行「画像なし 1」が 10px"
+      }
+     ],
+     "seen": "木の幅も中央も今のまま、材質・欠陥数を 2 段目の灰の字にして切れが無い。ロット No・時刻・札が 1 段目で読みやすい。ただロット 1 つが 2 行になり、1280 では DL2 の行が下の端に寄る（ロットが多い日は縦に倍のスクロール）。2 段目の字下げが時刻の位置とそろわず、他の行と組み方が違う。"
+    },
+    "F 薄く＋日の数＋隠す切り替え": {
+     "score": {
+      "order": 7,
+      "chunk": 7,
+      "hierarchy": 7,
+      "visual": 8,
+      "steps": 8,
+      "effortless": 7,
+      "intuitive": 7,
+      "form": 6,
+      "place": 6,
+      "layout": 4,
+      "tone": 5
+     },
+     "minus": [
+      {
+       "kind": "cut",
+       "where": "tree-1280-F・1728-F: LS3 08:15 の行の材質が「A !」と切れる"
+      },
+      {
+       "kind": "cut",
+       "where": "tree-1280-F: DL2 21:27 の行の札が右の端で切れ、欠陥数 53 が消える"
+      },
+      {
+       "kind": "cut",
+       "where": "tree-1280-F: 絞込の欄が「絞込（ロットNo」で切れる（切り替えに押される）"
+      },
+      {
+       "kind": "unreadable",
+       "where": "tree-1280-F・1728-F: 薄くした行の字（#8b95a1）が白地でコントラスト 3 程度"
+      },
+      {
+       "kind": "unreadable",
+       "where": "全幅: 札が 10px"
+      }
+     ],
+     "seen": "薄くした行は『見なくてよい』と読めるが、多量 5 の赤まで薄くなり、多量なのに薄いという矛盾した見え方になる。隠す切り替えは手を減らせるが、上の欄が詰まり絞込の字が切れる。"
+    }
+   },
+   "baseline": {
+    "今": {
+     "score": {
+      "order": 7,
+      "chunk": 7,
+      "hierarchy": 7,
+      "visual": 5,
+      "steps": 6,
+      "effortless": 4,
+      "intuitive": 8,
+      "form": 8,
+      "place": 7,
+      "layout": 7,
+      "tone": 7
+     },
+     "minus": [
+      {
+       "kind": "hidden_state",
+       "where": "tree-1280-NOW・1728-NOW: DL2 21:27 の画像なしのロット・LS3 08:15 のロットが、開くまで画像なしと分からない（日の行にも出ない）"
+      },
+      {
+       "kind": "unreadable",
+       "where": "全幅: 多量の札が 10px"
+      }
+     ],
+     "seen": "材質・欠陥数は 300px でも切れずに読める（札が多量だけのため）。画像なしの印が無く、依頼の『画像なしを一覧で見たい』に応えていない。"
+    }
+   }
+  },
+  {
+   "name": "2 回目",
+   "images": "DT_UI_LOT=DL2/2026/2026_10/2026_10_23/2026_10_23_21_27_46 node program/tools/ui-variants.mjs <出力> program/tools/proposals/2026-10-28-noimage-badge-2.mjs（tree × 1728・1536・1280）",
+   "self_check": "案を作った者が tree-1280 の 5 案を左の木だけ切り出して並べ、S は 1280 の全体も見た。P は画像なしの行の左の縁が灰の破線になり、札を行に置かないので 08:15（多量＋画像なし）の行でも材質・欠陥数が切れない。Q は 2 段目を時刻の位置にそろえた。S（340px）は 1280 でも画像一覧の列 1〜4 が残るが、多量と画像なしの両方が付く行では材質が「A51…」と切れる。T は 1 度目、札の段の前に空きができた（行の並びの基準が字の下端だった）→ 行の中を上下中央にそろえて撮り直した。U（画像 0）は札が短いが、両方の札が付く行では材質が切れる。札はみな 11px にした。",
+   "proposals": {
+    "P 左の縁を灰の破線": {
+     "score": {
+      "order": 8,
+      "chunk": 8,
+      "hierarchy": 8,
+      "visual": 7,
+      "steps": 9,
+      "effortless": 6,
+      "intuitive": 6,
+      "form": 7,
+      "place": 7,
+      "layout": 8,
+      "tone": 8
+     },
+     "minus": [
+      {
+       "kind": "hidden_state",
+       "where": "tree-1280-P・1728-P: 選んでいる DL2 21:27 の行の左の青い線（選択の印）が灰の破線に置き換わり、どの行を開いているかが背景の薄い青だけになる"
+      }
+     ],
+     "seen": "材質・欠陥数は 08:15（多量＋画像なし）の行でも切れず、今と同じ 1 行で読める。日の行に「多量2 画像なし 1」と字で出る。ただ行の印は 3px の灰の破線だけで細く薄く、意味（画像なし・確かめなくてよい）は日の行の札の見本と結び付けないと分からない（推測させる）。拡大しないと破線と実線の差も見えにくい。選んでいる行では選択の青い縁を潰す。"
+    },
+    "Q 行を 2 段（全行）": {
+     "score": {
+      "order": 7,
+      "chunk": 6,
+      "hierarchy": 7,
+      "visual": 8,
+      "steps": 8,
+      "effortless": 8,
+      "intuitive": 7,
+      "form": 8,
+      "place": 6,
+      "layout": 5,
+      "tone": 8
+     },
+     "minus": [
+      {
+       "kind": "wrap",
+       "where": "tree-1280-Q: DL2 21:27 の行が 3 段になる（1 段目 ― 21:27 上限 ⏱、2 段目に札「画像なし」だけ、3 段目に 53）"
+      }
+     ],
+     "seen": "札は 1 段目の右にそろい、多量（赤）と画像なし（灰の札）が並んで区別できる。材質・欠陥数は灰の字で切れない。ただ全部のロットが 2 段になり縦に倍伸びる。2 段目は時刻ではなくロット No の頭にそろって見え、自己確認の『時刻の位置にそろえた』と違う。札と上限・⏱ が多い行では 3 段に崩れる。"
+    },
+    "S 木を 340px": {
+     "score": {
+      "order": 8,
+      "chunk": 8,
+      "hierarchy": 8,
+      "visual": 8,
+      "steps": 9,
+      "effortless": 8,
+      "intuitive": 9,
+      "form": 8,
+      "place": 9,
+      "layout": 7,
+      "tone": 8
+     },
+     "minus": [
+      {
+       "kind": "cut",
+       "where": "tree-1280-S・1728-S: LS3 08:15（多量＋画像なし）の行で材質が「A51…」、欠陥数が「5..」と省略で切れる"
+      }
+     ],
+     "seen": "1 段のまま、札が右の端に縦にそろい、多量（赤地白字）と画像なし（灰地灰字・枠）が色と言葉の両方で分かれ、灰で『確かめなくてよい』寄りに読める。日の行も「多量2 画像なし 1」。1280 でも画像一覧の列 1〜4 が残る（S-cols で確かめた）。DL2 の行は 53・上限・⏱・画像なしまで切れずに入る。札が 2 つ付く行だけ材質・欠陥数が切れる（依頼の材質・欠陥数が一番要る『多量』の行で欠ける）。"
+    },
+    "T 札のある行だけ 2 段": {
+     "score": {
+      "order": 8,
+      "chunk": 8,
+      "hierarchy": 7,
+      "visual": 8,
+      "steps": 9,
+      "effortless": 8,
+      "intuitive": 8,
+      "form": 8,
+      "place": 7,
+      "layout": 6,
+      "tone": 8
+     },
+     "minus": [],
+     "seen": "1 段目は今と同じロット No・時刻・材質・欠陥数で、どの行も切れない（1280・1728 とも）。札は 2 段目の右で、多量と画像なしが並んで区別できる。ただ札の無い行は 1 段・ある行は 2 段で行の高さがそろわず、札の置き場も行によって変わる。多量のロットはどれも 2 段になるので、多量の多い日は縦に伸びる。2 段目は札だけで左が大きく空く。"
+    },
+    "U 短い札「画像 0」": {
+     "score": {
+      "order": 8,
+      "chunk": 8,
+      "hierarchy": 8,
+      "visual": 8,
+      "steps": 9,
+      "effortless": 6,
+      "intuitive": 7,
+      "form": 8,
+      "place": 8,
+      "layout": 6,
+      "tone": 8
+     },
+     "minus": [
+      {
+       "kind": "cut",
+       "where": "tree-1280-U・1728-U: LS3 08:15 の行で材質が「A..」、欠陥数が「5」の半分で切れる"
+      }
+     ],
+     "seen": "札は短くなったが、それでも 2 つ付く行は材質・欠陥数が S より強く切れる。「画像 0」は欠陥数 58 のすぐ横に並び『欠陥 58 なのに画像 0』と読み比べが要る。日の行の「画像 0: 1」は記号が多く、一目では『画像なしのロットが 1』と読みにくい（推測させる）。"
+    }
+   },
+   "baseline": {
+    "今": {
+     "score": {
+      "order": 7,
+      "chunk": 7,
+      "hierarchy": 7,
+      "visual": 5,
+      "steps": 6,
+      "effortless": 4,
+      "intuitive": 8,
+      "form": 8,
+      "place": 7,
+      "layout": 7,
+      "tone": 7
+     },
+     "minus": [
+      {
+       "kind": "hidden_state",
+       "where": "tree-1280-NOW・1728-NOW: DL2 21:27・LS3 08:15 の画像なしのロットが、開くまで画像なしと分からない（日の行にも出ない）"
+      },
+      {
+       "kind": "unreadable",
+       "where": "全幅: 多量の札が 10px（ui-variants の small 15。案は 11px にして 9）"
+      }
+     ],
+     "seen": "材質・欠陥数は 300px でも切れずに読める（札が多量だけのため）。画像なしの印が無く、依頼に応えていない。"
+    }
+   }
+  },
+  {
+   "name": "3 回目",
+   "images": "DT_UI_LOT=DL2/2026/2026_10/2026_10_23/2026_10_23_21_27_46 node program/tools/ui-variants.mjs <出力> program/tools/proposals/2026-10-28-noimage-badge-3.mjs（tree × 1728・1536・1280）",
+   "self_check": "案を作った者が tree-1280 の 5 案を左の木と木の下まで切り出して並べて見た。意味の直し（多量のロットには画像なしを付けない）で、LS3 08:15 は多量だけになり、10/25 の日の行の「画像なし」も消え、2 つの札で材質が切れる行は無くなった。V・Y（340px）は 1280 でも DL2 の行（53・上限・⏱・画像なし）が 1 行に収まる。W（300px で余白を詰める）は DL2 の行で欠陥数 53 が「!」に切れる（案の作りのまま）。X・Z は収まらない DL2 の行だけ札が 2 段目の右へ下がる。Y・Z の札の見本は 1 度目に言葉が長く 2 段に折れた → 短くして 1 つずつ折り返さないようにして撮り直した。",
+   "proposals": {},
+   "baseline": {}
+  }
+ ]
+}

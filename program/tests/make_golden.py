@@ -4,6 +4,8 @@
     python program/tests/make_golden.py desktop/tests/golden.json
 
 Rust の答えとの突き合わせは desktop/tests/golden.rs。版 3.8 と違ってよいと決めたことは、ここ（下の「直したこと」）と golden.rs に書く。
+版 4.8.0 で足した物（既定の表示項目の一覧の 材質・欠陥数、ロット一覧の印 no_image〈画像なし〉）は版 3.8 に無い機能なので、
+正解データは版 3.8 の答えのまま作り、golden.rs が比べる前に除く（golden.rs の V48_ADDED と no_image）。
 """
 import hashlib
 import importlib

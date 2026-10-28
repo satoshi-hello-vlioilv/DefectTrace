@@ -5,12 +5,34 @@
 //! - /api/status: 縮小画像の進み（thumbs など）を足した。elapsed は比べない
 //!   （版 4.0.1: 開くは名前を待たずに返る。golden の流れは finished まで待ってから問うので、答えは変わらない。brief=1 は別の試験）
 //! - 画像の読み込み方を変えた（作業場所に原寸を書かない）ので、/img は中身の指紋で比べる
+//! 違ってよいと決めたこと（版 4.8.0。利用者の依頼）:
+//! - 既定の表示項目の一覧（list）に材質（d_list_mat）と欠陥数（d_list_dc）を足した（V48_ADDED）。/api/pins の答えと
+//!   ロットの情報・一覧の items など、答えのどこに出ても、この 2 つを除いて比べる
+//! - ロット一覧の印（flags）に no_image（画像なし: 画像総数が 0）を足した。除いて比べる
 
 use dt_core::app::App;
 use dt_core::config::Config;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// 版 4.8.0 で既定の表示項目に足した物（版 3.8 には無い）
+const V48_ADDED: [&str; 2] = ["d_list_mat", "d_list_dc"];
+
+/// 答えの木から、版 4.8.0 で足した物（V48_ADDED の表示項目・no_image の印）を除く。
+fn without_v48(v: &mut Value) {
+    match v {
+        Value::Array(a) => {
+            a.retain(|x| !V48_ADDED.contains(&x["id"].as_str().unwrap_or("")));
+            a.iter_mut().for_each(without_v48);
+        }
+        Value::Object(o) => {
+            o.remove("no_image");
+            o.values_mut().for_each(without_v48);
+        }
+        _ => {}
+    }
+}
 
 fn fixture(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("dt-golden-{name}-{}", std::process::id()));
@@ -171,6 +193,8 @@ fn answers_match_the_python_version() {
                 }
             }
         }
+        // 版 4.8.0 で足した物（上の「違ってよいと決めたこと」）
+        without_v48(&mut got);
         let mut d = vec![];
         diff("", &got, &want, &mut d);
         if !d.is_empty() {

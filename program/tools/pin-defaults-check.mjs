@@ -2,7 +2,7 @@
 //   初期の札・行は ini（輪郭）、足した物は add（黄）で、初期が先・足した物の前に区切り「足した物」→ 足した物の × は聞かずに外す
 //   → 初期の × は真ん中の小窓で確かめる（やめる＝残る・Esc＝残る・外す＝消える）→ データ項目の窓の「置く先」で初期を外すときも確かめる
 //   → 開発者には見出しに「初期値を決める（開発者）」→ いまの表示を初期値にする（共有の置き場の pins-default.json）→ 足した物が初期に変わる
-//   → 表示を変えて「表示設定を初期化」→ 開発者の初期値に戻る → 「アプリの初期値に戻す」→ 初期化でアプリの初期値（34 項目）
+//   → 表示を変えて「表示設定を初期化」→ 開発者の初期値に戻る → 「アプリの初期値に戻す」→ 初期化でアプリの初期値（36 項目）
 //   → 開発者でない人には「初期値を決める」が出ない
 //   node program/tools/pin-defaults-check.mjs [出力のフォルダ]
 import fs from "node:fs";
@@ -114,13 +114,13 @@ for (const dev of [true, false]) {
     await page.click("#btnSettings");
     await page.waitForSelector('#setIni [data-ini="clear"]:not([disabled])');
     await page.click('#setIni [data-ini="clear"]');
-    await page.waitForFunction(() => /アプリの初期値（34 項目/.test(document.getElementById("setIni").textContent));
+    await page.waitForFunction(() => /アプリの初期値（36 項目/.test(document.getElementById("setIni").textContent));
     check(!fs.existsSync(shared), "「アプリの初期値に戻す」で共有の初期値を消す");
     await page.keyboard.press("Escape");
     await page.click("#btnReset");
     await page.waitForFunction(() => /^表示項目をアプリの初期値に戻しました/.test(document.getElementById("status").textContent));
     const back = await pins(page);
-    check(back.length === 34 && back.every((p) => p.id.startsWith("d_")), `初期化でアプリの初期値（${back.length} 項目・${back.filter((p) => !p.id.startsWith("d_")).map((p) => p.id)}）`);
+    check(back.length === 36 && back.every((p) => p.id.startsWith("d_")), `初期化でアプリの初期値（${back.length} 項目・${back.filter((p) => !p.id.startsWith("d_")).map((p) => p.id)}）`);
     check(!errs.length, `画面のエラーなし ${errs.join(" / ")}`);
   } finally {
     await h.close();
