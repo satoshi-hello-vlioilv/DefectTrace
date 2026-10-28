@@ -40,8 +40,11 @@ pub fn defaults() -> Value {
 /// だれか（Config::who）。
 #[derive(Debug, Clone, Default)]
 pub struct Who {
+    /// ログイン名（権限の見分けに使う。設定では変えられない）
     pub login: String,
+    /// PC の名前（設定の pc_name で上書きできる）と、どこから取ったか
     pub pc: String,
+    pub pc_source: &'static str,
     /// 開発者か（release_users に名前がある・release_users が空）
     pub developer: bool,
     pub users: Vec<String>,
@@ -125,13 +128,27 @@ impl Config {
 
     /// だれか（Windows のログイン名・PC の名前）と、開発者か（版を置く・配る・既定のフィルタを決める）。
     /// 開発者は設定の release_users に名前がある人。release_users が空なら、だれでも（置き場へ書ける人）。
+    /// だれが・どの PC で使っているか。ログイン名は USERNAME → USER → LOGNAME の順、PC の名前は 設定の pc_name →
+    /// COMPUTERNAME → HOSTNAME → /etc/hostname の順に、使える最初の物（localhost・unknown などは飛ばす。80 字まで）。
     pub fn who(&self) -> Who {
-        let env = |k: &str| std::env::var(k).unwrap_or_default();
-        let login = if cfg!(windows) { env("USERNAME") } else { env("USER") };
-        let pc = if cfg!(windows) { env("COMPUTERNAME") } else { env("HOSTNAME") };
+        let env = |k: &str| std::env::var(k).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        let login = ["USERNAME", "USER", "LOGNAME"].iter().find_map(|k| env(k)).unwrap_or_default();
+        let usable = |s: &str| {
+            !s.is_empty() && !["localhost", "127.0.0.1", "unknown", "localhost.localdomain"].contains(&s.to_ascii_lowercase().as_str())
+        };
+        let hostfile = || std::fs::read_to_string("/etc/hostname").ok().map(|s| s.trim().to_string());
+        let (pc, pc_source) = [
+            (Some(self.str("pc_name").trim().to_string()), "設定"),
+            (env("COMPUTERNAME"), "COMPUTERNAME"),
+            (env("HOSTNAME"), "HOSTNAME"),
+            (hostfile(), "/etc/hostname"),
+        ]
+        .into_iter()
+        .find_map(|(v, src)| v.filter(|v| usable(v)).map(|v| (v.chars().take(80).collect::<String>(), src)))
+        .unwrap_or_default();
         let users = self.strs("release_users");
         let developer = users.is_empty() || users.iter().any(|u| u.eq_ignore_ascii_case(&login));
-        Who { login, pc, developer, users }
+        Who { login, pc, pc_source, developer, users }
     }
 
     /// 更新の置き場（設定が空なら既定の置き場）。

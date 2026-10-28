@@ -63,6 +63,8 @@ pub struct App {
     lot_re: Regex,
     /// 共有のフィルタの置き場（たどるのは遅い〈BOX〉ので 1 分覚える）
     shared_dir: std::sync::Mutex<Option<(std::time::Instant, Option<PathBuf>)>>,
+    /// この PC の使い始め（使用状況の心拍）
+    session: crate::presence::Session,
 }
 
 /// 画像 → 欠陥の対応（"cab/name" → DETECT_INFO の番号）。
@@ -203,6 +205,7 @@ impl App {
             imgmap: Lru::new(IMGMAP_BYTES),
             lot_re,
             shared_dir: Default::default(),
+            session: Default::default(),
         })
     }
 
@@ -291,6 +294,7 @@ impl App {
             ("POST", "/api/lotrows") => Ok(self.lot_rows(&b)),
             // LotScope から持ち込んだ部品（shared.js）が画面の設定の控えを送る先。DefectTrace は設定を窓の保存（localStorage）にだけ置くので、受けて返すだけ
             ("POST", "/api/ui-state") => Ok(Reply::json(&json!({"rev": 0}))),
+            (m, p) if p == "/api/me" || p == "/api/heartbeat" || p.starts_with("/api/presence") => self.presence_api(m, p, &a, &b),
             ("POST", "/api/open") => self.open(&b),
             ("GET", "/api/status") => self.status(&a),
             ("GET", "/api/info") => a.req("lot").and_then(|l| self.lot_info(l)).map(|v| Reply::json(&v)),
@@ -304,7 +308,11 @@ impl App {
             ("GET", "/img") => self.image(&a, false),
             ("GET", "/thumb") => self.image(&a, true),
             ("GET", "/api/pins") => Ok(Reply::json(&json!(self.pins.snapshot()))),
-            ("POST", "/api/pins") => self.pins_changed(self.pins.add(&b, images::new_id("p_")).map_err(|e| (400, e))),
+            ("POST", "/api/pins") => {
+                let shared = self.shared_dir();
+                let initial = crate::pins::Initial { home: &self.cfg.home, shared: shared.as_deref() }.pins();
+                self.pins_changed(self.pins.add(&b, images::new_id("p_"), &initial).map_err(|e| (400, e)))
+            }
             ("POST", "/api/pins/reset") => {
                 let shared = self.shared_dir();
                 self.pins_changed(Ok(self.pins.reset(crate::pins::Initial { home: &self.cfg.home, shared: shared.as_deref() }.pins())))
@@ -321,6 +329,72 @@ impl App {
             _ => return None,
         };
         Some(r.unwrap_or_else(|e| e))
+    }
+
+    /// だれが・どの PC で・どの版か（GET /api/me）、心拍（POST /api/heartbeat {left}）、使用状況（GET /api/presence）、
+    /// 使用の履歴（GET /api/presence/sessions?key&limit）、管理（開発者だけ: POST /api/presence/{forget {key}|retention {days}|prune}）。
+    /// 置き場は共有の置き場の presence（program/docs/APP-MANAGEMENT.md）。届かなければ shared: false で答え、何も書かない。
+    fn presence_api(&self, method: &str, path: &str, a: &Args, b: &Value) -> R {
+        use crate::presence as pr;
+        let who = self.cfg.who();
+        let version = env!("CARGO_PKG_VERSION");
+        let shared = self.shared_dir();
+        let dir = shared.as_deref().map(pr::dir_of);
+        let me = json!({"login": who.login, "pc": who.pc, "pcSource": who.pc_source, "developer": who.developer, "version": version,
+                        "key": pr::key(&who.login, &who.pc), "shared": dir.is_some()});
+        let fail = |e: String| Reply::error(400, &e);
+        let need_dev =
+            || if who.developer { Ok(()) } else { Err(Reply::error(403, "使用状況の記録を消せるのは開発者だけです")) };
+        let Some(dir) = dir else {
+            return match (method, path) {
+                ("GET", "/api/me") | ("POST", "/api/heartbeat") => Ok(Reply::json(&json!({"me": me}))),
+                _ => Err(Reply::error(
+                    503,
+                    "共有の置き場に届きません（使用状況は、配布の置き場の DefectTrace\\shared\\presence に記録します）",
+                )),
+            };
+        };
+        let t = pr::now();
+        match (method, path) {
+            ("GET", "/api/me") => Ok(Reply::json(&json!({"me": me}))),
+            ("POST", "/api/heartbeat") => {
+                let m = pr::Me { login: &who.login, pc: &who.pc, version, developer: who.developer };
+                let k = self.session.beat(&dir, &m, t, b["left"].as_bool().unwrap_or(false)).map_err(fail)?;
+                Ok(Reply::json(&json!({"me": me, "nudge": pr::my_nudge(&dir, &k, version)})))
+            }
+            ("GET", "/api/presence") => {
+                let mut v = pr::fleet(&dir, shared.as_deref().and_then(pr::distributed).as_deref(), t);
+                v["me"] = me;
+                Ok(Reply::json(&v))
+            }
+            ("GET", "/api/presence/sessions") => {
+                let limit = a.get("limit").and_then(|s| s.parse().ok()).unwrap_or(300usize).min(5000);
+                Ok(Reply::json(&json!({"sessions": pr::sessions(&dir, a.get("key"), limit), "historyDays": pr::history_days(&dir)})))
+            }
+            ("POST", "/api/presence/forget") => {
+                need_dev()?;
+                pr::forget(&dir, b["key"].as_str().unwrap_or(""), t).map(|_| Reply::json(&json!({"ok": true}))).map_err(fail)
+            }
+            ("POST", "/api/presence/retention") => {
+                need_dev()?;
+                pr::set_history_days(&dir, b["days"].as_i64().unwrap_or(0), &who.login)
+                    .map(|d| Reply::json(&json!({"historyDays": d})))
+                    .map_err(fail)
+            }
+            ("POST", "/api/presence/nudge") => {
+                need_dev()?;
+                let want =
+                    shared.as_deref().and_then(pr::distributed).or_else(|| pr::fleet(&dir, None, t)["latest"].as_str().map(str::to_string));
+                pr::nudge(&dir, b["key"].as_str().unwrap_or(""), want.as_deref().unwrap_or(""), &who.login, t)
+                    .map(|v| Reply::json(&v))
+                    .map_err(fail)
+            }
+            ("POST", "/api/presence/prune") => {
+                need_dev()?;
+                Ok(Reply::json(&json!({"removed": pr::prune_all(&dir, t)})))
+            }
+            _ => Err(Reply::error(404, "not found")),
+        }
     }
 
     /// 表示の初期値: 見る（GET）・いまの表示を開発者の初期値にする（POST）・やめてアプリの物に戻す（DELETE）。

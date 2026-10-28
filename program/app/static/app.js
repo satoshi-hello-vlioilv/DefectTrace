@@ -664,12 +664,17 @@
   const wildKey = (k) => k.replace(/\[\d+\]/g, "[*]");
   // その行（file・key）を出している表示項目（[*] でまとめた物も）
   const pinsOf = (file, key) => S.pins.filter((p) => p.file === file && (p.key === key || p.key === wildKey(key)));
+  /** 同じ項目（file・key）の決まり（名前・単位の倍率）: いまの表示項目 → 表示の初期値（サーバーの Pins::add と同じ順） */
+  const itemDef = (file, key) => pinsOf(file, key)[0] || (S.ini.pins || []).find((p) => p.file === file && (p.key === key || wildKey(p.key) === wildKey(key)));
+  /** 倍率を掛けた値（サーバーの fmt_num と同じ: 小数 2 桁）。数でなければそのまま */
+  const scaled = (v, scale) => { const n = Number(v); return scale && v !== "" && v != null && Number.isFinite(n) ? (n * scale).toFixed(2) : v; };
   function srcGroups() {
     const gs = [];
+    // 行の名前と値は、同じ項目の決まり（いまの表示項目 → 表示の初期値 の名前・単位の倍率）にそろえる。置いたときも同じ決まりで置かれる
     const add = (src, name, scope, file, items, info = "", order = file) =>
       gs.push({ src, name, scope, file, info, rows: applySrcOrder(order, items).map(([k, v, l]) => {
-        const pin = pinsOf(file, k)[0];
-        return { key: k, val: v, l: l || "", label: pin?.label || l || shortKey(k) };
+        const def = itemDef(file, k);
+        return { key: k, val: scaled(v, def?.scale), raw: v, scale: def?.scale, l: l || "", label: def?.label || l || shortKey(k) };
       }) });
     if (S.img && S.img.detect.length) add("画像", "DETECT_INFO（選んだ画像）", "image", "dat:DETECT_INFO", S.img.detect);
     if (S.img) for (const x of S.img.xml) add("画像", x.name, "image", "@image", x.items);
@@ -707,9 +712,9 @@
         const mine = (pl) => pinsOf(g.file, r.key).some((p) => p.place === pl && !isIni(p.id));
         const tags = placed.slice(0, 2).map((p) => `<span class="dpl ${mine(p) ? "add" : "ini"}" title="${esc(PLACE[p])}（${mine(p) ? "足した物" : "初期の項目"}）">${esc(PLACE_SHORT[p])}</span>`).join("") + (placed.length > 2 ? `<span class="dpl more">+${placed.length - 2}</span>` : "");
         const picked = SRC.pick && SRC.pick.file === g.file && SRC.pick.key === r.key;
-        const row = `<tr class="src drow${picked ? " picked" : ""}" draggable="true" data-scope="${g.scope}" data-file="${esc(g.file)}" data-key="${esc(r.key)}" data-val="${esc(r.val)}" data-label="${esc(r.l)}" title="ドラッグで表示先へ／押すと置く先のボタン">
-          <td class="dl1"><span class="grip" aria-hidden="true">⠿</span><b>${hl(r.label)}</b><small>${hl(r.key)} ${scopeTag(g.scope)}</small></td>
-          <td class="dv" title="${esc(r.val)}">${hl(r.val || "—")}</td><td class="dps">${tags}<span class="dgo">${picked ? "▴" : "置く先 ▾"}</span></td></tr>`;
+        const row = `<tr class="src drow${picked ? " picked" : ""}" draggable="true" data-scope="${g.scope}" data-file="${esc(g.file)}" data-key="${esc(r.key)}" data-val="${esc(r.val)}" data-label="${esc(r.l)}" data-name="${esc(r.label)}" title="ドラッグで表示先へ／押すと置く先のボタン">
+          <td class="dl1"><span class="grip" aria-hidden="true">⠿</span><b>${hl(r.label)}</b><small>${hl(r.key)}${r.l && r.l !== r.label ? "・" + hl(r.l) : ""} ${scopeTag(g.scope)}</small></td>
+          <td class="dv" title="${esc(r.scale ? `元の値 ${r.raw}（×${r.scale}）` : r.val)}">${hl(r.val || "—")}</td><td class="dps">${tags}<span class="dgo">${picked ? "▴" : "置く先 ▾"}</span></td></tr>`;
         if (!picked) return row;
         const btns = Object.keys(PLACE).filter((pl) => ok(g.scope, pl)).map((pl) => { const on = placed.includes(pl);
           return `<button type="button" class="mb${on ? " on" : ""}" data-toggle="${pl}" aria-pressed="${on}" title="${on ? "押すと外す" : "押すと置く"}">${ico(pl)}${esc(PLACE[pl])}${on ? " ✓" : ""}</button>`; }).join("");
@@ -788,7 +793,6 @@
   async function loadIni() {
     try { const d = await api("/api/pins/default"); S.ini = { ...d, ids: new Set((d.pins || []).map((p) => p.id)), developer: !!(d.me && d.me.developer) }; }
     catch (_) { /* 読めなければ、どれも足した物として出す */ }
-    $("btnIniDev").hidden = !S.ini.developer;
     $("btnReset").title = `表示項目を初期値（${iniName()}）に戻す`;
   }
   const iniName = () => (S.ini.source === "developer" ? `開発者${S.ini.setBy ? " " + S.ini.setBy : ""}が決めた初期値` : "アプリの初期値");
@@ -887,7 +891,7 @@
   function openPop(tr, btn) {
     POP = { scope: tr.dataset.scope, file: tr.dataset.file, key: tr.dataset.key };
     $("pinKey").textContent = `${POP.file} : ${POP.key}\n= ${tr.dataset.val}`;
-    $("pinLabel").value = tr.dataset.label || autoLabel(POP.key);
+    $("pinLabel").value = tr.dataset.name || tr.dataset.label || autoLabel(POP.key);
     $("pinPlace").innerHTML = Object.keys(PLACE).filter((pl) => ok(POP.scope, pl)).map((pl) => `<option value="${pl}">${PLACE[pl]}</option>`).join("");
     $("pinAllWrap").hidden = !/\[\d+\]/.test(POP.key); $("pinAll").checked = false;
     const r = btn.getBoundingClientRect(), pop = $("pinPop");
@@ -899,7 +903,7 @@
   $("pinPop").addEventListener("submit", async (e) => {
     e.preventDefault(); if (!POP) return;
     let k = POP.key; if ($("pinAll").checked) k = k.replace(/\[\d+\]/g, "[*]");
-    try { await send("/api/pins", { ...POP, key: k, label: $("pinLabel").value.trim(), place: $("pinPlace").value }); $("pinPop").hidden = true; await afterPins(); }
+    try { await send("/api/pins", { ...POP, key: k, label: $("pinLabel").value.trim(), named: true, place: $("pinPlace").value }); $("pinPop").hidden = true; await afterPins(); }
     catch (er) { status(er.message, true); }
   });
   $("pinCancel").addEventListener("click", () => { $("pinPop").hidden = true; });
@@ -927,36 +931,40 @@
     const v = prompt("表示名", p.label); if (v == null) return;
     await send("/api/pins/" + encodeURIComponent(p.id), { label: v.trim() }, "PATCH"); await afterPins();
   });
-  $("btnReset").addEventListener("click", async () => {
+  // 表示設定を初期化（見出しのボタンと、設定の「この PC」の頁の札の両方から）
+  async function resetPins() {
     await loadIni();
     if (!confirm(`この PC の表示項目を、${iniName()}に戻しますか？（足した物は消えます）`)) return;
     await send("/api/pins/reset", {}); await afterPins(); status(`表示項目を${iniName()}に戻しました`);
-  });
-  // 開発者の小窓: いまの初期値・この PC の表示の数・いまの表示を初期値にする／アプリの初期値に戻す
-  function renderIniWin() {
+  }
+  $("btnReset").addEventListener("click", resetPins);
+  // 表示の初期値の札（設定の窓の「この PC」の頁に描く: settings-view.js）: いまの初期値・この PC の表示の数・
+  // （開発者だけ）いまの表示を初期値にする／アプリの初期値に戻す
+  function iniCard() {
     const d = S.ini, nIni = S.pins.filter((p) => isIni(p.id)).length, nAdd = S.pins.length - nIni;
     const who = d.source === "developer" ? `${esc(d.setBy || "開発者")}${d.setAt ? "・" + esc(String(d.setAt).replace("T", " ").slice(0, 16)) : ""}` : "";
-    $("iniWin").innerHTML = `<h4 id="iniTitle">表示の初期値（開発者）<button type="button" class="mclose" data-ini="close" title="閉じる（Esc）" aria-label="閉じる">×</button></h4>
+    return `<div class="set-sec">表示の初期値${d.developer ? ' <span class="set-tag dev">開発者</span>' : ""}</div>
       <div class="sub">新しい PC と「表示設定を初期化」が使う表示項目です。各 PC で変えた表示はそのまま残ります。</div>
-      <dl><dt>いまの初期値</dt><dd><b>${esc(iniName())}</b>（${(d.pins || []).length} 項目${who ? "・" + who : ""}）</dd><dt>この PC の表示</dt><dd>初期 ${nIni}・足した物 ${nAdd}</dd></dl>
-      ${d.problem ? `<div class="err">${esc(d.problem)}</div>` : ""}${d.shared ? "" : '<div class="err">配布の置き場に届きません。届く所で開くと決められます。</div>'}
-      <div class="ib"><button type="button" data-ini="clear"${d.source === "developer" && d.shared ? "" : " disabled"}>アプリの初期値に戻す</button>
-      <button type="button" class="primary" data-ini="set"${d.shared ? "" : " disabled"}>いまの表示を初期値にする</button></div>
-      <div class="note">決めた初期値は配布の置き場に置かれ、どの PC の「表示設定を初期化」にも使われます。</div>`;
+      <dl class="set-dl"><dt>いまの初期値</dt><dd><b>${esc(iniName())}</b>（${(d.pins || []).length} 項目${who ? "・" + who : ""}）</dd><dt>この PC の表示</dt><dd>初期 ${nIni}・足した物 ${nAdd}</dd></dl>
+      ${d.problem ? `<div class="err">${esc(d.problem)}</div>` : ""}
+      <div class="set-act"><button type="button" data-ini="reset">表示設定を初期化</button>${!d.developer ? "" : `
+        <button type="button" data-ini="clear"${d.source === "developer" && d.shared ? "" : " disabled"}>アプリの初期値に戻す</button>
+        <button type="button" class="primary" data-ini="set"${d.shared ? "" : " disabled"} title="${d.shared ? "" : "配布の置き場に届きません"}">いまの表示を初期値にする</button>`}</div>
+      ${d.developer ? `<div class="sub">決めた初期値は配布の置き場に置かれ、どの PC の「表示設定を初期化」にも使われます。${d.shared ? "" : "<b>いまは配布の置き場に届きません。</b>"}</div>` : ""}`;
   }
-  $("btnIniDev").addEventListener("click", async () => {
-    if (!$("iniWin").hidden) { $("iniWin").hidden = true; return; }
-    await loadIni(); renderIniWin(); $("iniWin").hidden = false;
-  });
-  $("iniWin").addEventListener("click", async (e) => {
-    const b = e.target.closest("[data-ini]"); if (!b) return;
-    if (b.dataset.ini === "close") { $("iniWin").hidden = true; return; }
-    try {
-      await api("/api/pins/default", { method: b.dataset.ini === "set" ? "POST" : "DELETE" });
-      await loadIni(); renderIniWin(); renderPinZones(); renderLot(); renderImgInfo(); renderSources();
-      status(b.dataset.ini === "set" ? "いまの表示を初期値にしました（新しい PC と「表示設定を初期化」が使います）" : "初期値をアプリの初期値に戻しました");
-    } catch (er) { status(er.message, true); }
-  });
+  window.dtPins = {
+    card: async () => { await loadIni(); return iniCard(); },
+    /** 札のボタン（data-ini: reset・set・clear）。→ 描き直した札 */
+    async act(kind) {
+      try {
+        if (kind === "reset") { await resetPins(); return iniCard(); }
+        await api("/api/pins/default", { method: kind === "set" ? "POST" : "DELETE" });
+        await loadIni(); renderPinZones(); renderLot(); renderImgInfo(); renderSources();
+        status(kind === "set" ? "いまの表示を初期値にしました（新しい PC と「表示設定を初期化」が使います）" : "初期値をアプリの初期値に戻しました");
+      } catch (er) { status(er.message, true); }
+      return iniCard();
+    },
+  };
   async function afterPins() {
     S.pins = await api("/api/pins");
     renderPinZones(); renderSources();
@@ -1523,7 +1531,6 @@
 
   document.addEventListener("keydown", (e) => {
     if (!$("pinWarn").hidden) return;   // 外す前の確かめの小窓が開いている間は、小窓だけ（Esc で閉じる）
-    if (e.key === "Escape" && !$("iniWin").hidden) { $("iniWin").hidden = true; e.preventDefault(); return; }
     // データ項目の窓が開いている間は、窓の中だけ（Esc で閉じる・Ctrl+F で探す欄へ）
     if (!$("srcModal").hidden) {
       if (e.key === "Escape") { if (!$("pinPop").hidden) $("pinPop").hidden = true; else closeSources(); e.preventDefault(); }

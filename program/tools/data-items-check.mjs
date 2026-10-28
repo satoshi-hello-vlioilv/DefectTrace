@@ -7,27 +7,12 @@
 // どれかが違えば、終了コード 1 で止まる。
 import fs from "node:fs";
 import path from "node:path";
-import { launch, walk } from "./ui-harness.mjs";
+import { dragTo, launch, walk } from "./ui-harness.mjs";
 
 const OUT = path.resolve(process.argv[2] ?? "data-items-check");
 fs.mkdirSync(OUT, { recursive: true });
 const app = await launch();
 const bad = [];
-// 人の手のように少しずつ動かしてドラッグする（Playwright の dragAndDrop は 2・3 回しか動かさず、PC が重いとブラウザがドラッグを
-// 始めないことがある）。始まったか（dragstart）・落としたか（drop）を控えて返す
-async function dragTo(page, from, to) {
-  await page.evaluate(() => { window.__drag = []; for (const t of ["dragstart", "drop", "dragend"]) document.addEventListener(t, () => window.__drag.push(t), { capture: true, once: true }); });
-  // 表示先の欄は、裏の読み直しで描き直されることがある。位置が取れるまで待つ
-  const box = async (s) => { for (let i = 0; i < 50; i++) { const r = await page.locator(s).first().boundingBox().catch(() => null); if (r) return r; await page.waitForTimeout(50); } throw new Error(`見つからない: ${s}`); };
-  const a = await box(from), b = await box(to);
-  const [x0, y0, x1, y1] = [a.x + 40, a.y + a.height / 2, b.x + b.width / 2, b.y + b.height / 2];
-  await page.mouse.move(x0, y0);
-  await page.mouse.down();
-  for (let i = 1; i <= 12; i++) await page.mouse.move(x0 + ((x1 - x0) * i) / 12, y0 + ((y1 - y0) * i) / 12);
-  await page.mouse.up();
-  await page.waitForTimeout(100);
-  return page.evaluate(() => window.__drag.join("→") || "（始まらない）");
-}
 const check = (ok, what) => { console.log((ok ? "OK  " : "NG  ") + what); if (!ok) bad.push(what); };
 try {
   for (const view of [{ width: 1728, height: 1152 }, { width: 1280, height: 720 }]) {

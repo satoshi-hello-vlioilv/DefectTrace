@@ -31,7 +31,11 @@ for (const dev of [true, false]) {
     page.on("dialog", (d) => d.accept());   // 「表示設定を初期化」の確かめ（confirm）は受ける
     if (!dev) {
       await openLot(page);
-      check(await page.locator("#btnIniDev").isHidden(), "開発者でない人には「初期値を決める（開発者）」が出ない");
+      await page.click("#btnSettings");
+      await page.waitForSelector("#setIni [data-ini]");
+      check(await page.locator('#setIni [data-ini="set"]').count() === 0 && await page.locator('#setTabs [data-page="release"]').isHidden(),
+        "開発者でない人には、設定に「いまの表示を初期値にする」と管理の頁が出ない");
+      await page.keyboard.press("Escape");
       const r = await page.evaluate(() => fetch("/api/pins/default", { method: "POST" }).then((r) => r.status));
       check(r === 400, `開発者でない人は初期値を決められない（POST → ${r}）`);
       check(!errs.length, `画面のエラーなし ${errs.join(" / ")}`);
@@ -50,7 +54,7 @@ for (const dev of [true, false]) {
     check(/^i+\|a$/.test(s.sum), `サマリ: 初期が先・区切り・足した物（${s.sum}）`);
     check(/^i+\|a$/.test(s.rows), `画像情報の表: 初期が先・区切り・足した物（${s.rows}）`);
     check(s.iniLook.ib !== s.iniLook.ab && s.iniLook.ir !== s.iniLook.ar, `初期と足した物は地の色と角の形が違う（${JSON.stringify(s.iniLook)}）`);
-    check(await page.locator("#btnIniDev").isVisible(), "開発者には見出しに「初期値を決める（開発者）」が出る");
+    check(await page.locator("#btnSettings").isVisible(), "見出しに「⚙ 設定」が出る");
     await page.screenshot({ path: path.join(out, "lot-1728.png") });
 
     // 足した物は聞かずに外す
@@ -88,12 +92,12 @@ for (const dev of [true, false]) {
     await page.keyboard.press("Escape");
 
     // 開発者がいまの表示を初期値にする
-    await page.click("#btnIniDev");
-    await page.waitForSelector("#iniWin:not([hidden])");
-    check(/アプリの初期値/.test(await page.textContent("#iniWin")), "小窓に、いまの初期値（アプリの初期値）が出る");
+    await page.click("#btnSettings");
+    await page.waitForSelector('#setIni [data-ini="set"]');
+    check(/アプリの初期値/.test(await page.textContent("#setIni")), "設定の「この PC」の頁に、いまの初期値（アプリの初期値）と開発者のボタンが出る");
     await page.screenshot({ path: path.join(out, "dev-1728.png") });
-    await page.click('#iniWin [data-ini="set"]');
-    await page.waitForFunction(() => /開発者/.test(document.getElementById("iniWin").textContent));
+    await page.click('#setIni [data-ini="set"]');
+    await page.waitForFunction(() => /開発者 \S*が決めた初期値|開発者が決めた初期値/.test(document.getElementById("setIni").textContent));
     const shared = path.join(h.fx, "..", "shared", "pins-default.json");
     const saved = fs.existsSync(shared) ? JSON.parse(fs.readFileSync(shared, "utf8")) : null;
     const now = await pins(page);
@@ -107,9 +111,10 @@ for (const dev of [true, false]) {
     await page.waitForFunction(() => /開発者.*初期値に戻しました/.test(document.getElementById("status").textContent));
     check(JSON.stringify((await pins(page)).map((p) => p.id)) === JSON.stringify(saved.pins.map((p) => p.id)), "「表示設定を初期化」で開発者の初期値に戻る");
     // 開発者の初期値をやめる → 初期化でアプリの初期値
-    await page.click("#btnIniDev");
-    await page.click('#iniWin [data-ini="clear"]');
-    await page.waitForFunction(() => /アプリの初期値（34 項目/.test(document.getElementById("iniWin").textContent));
+    await page.click("#btnSettings");
+    await page.waitForSelector('#setIni [data-ini="clear"]:not([disabled])');
+    await page.click('#setIni [data-ini="clear"]');
+    await page.waitForFunction(() => /アプリの初期値（34 項目/.test(document.getElementById("setIni").textContent));
     check(!fs.existsSync(shared), "「アプリの初期値に戻す」で共有の初期値を消す");
     await page.keyboard.press("Escape");
     await page.click("#btnReset");

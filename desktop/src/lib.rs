@@ -17,6 +17,7 @@ pub mod lotlist;
 pub mod lotstore;
 pub mod pins;
 pub mod pool;
+pub mod presence;
 pub mod pyfmt;
 pub mod release;
 pub mod thumb;
