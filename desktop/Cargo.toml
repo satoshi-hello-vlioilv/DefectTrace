@@ -1,6 +1,6 @@
 [package]
 name = "defecttrace-desktop"
-version = "4.7.0"
+version = "4.8.0"
 description = "DefectTrace（検査計画像ビュワー）デスクトップ版"
 edition = "2021"
 rust-version = "1.90"

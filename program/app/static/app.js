@@ -132,13 +132,17 @@
         li.insertAdjacentHTML("beforeend", flagHtml(s.flags));
         const f = s.flags || {};
         li.dataset.ovl = f.overload > 0 ? f.overload : "";
-        li.dataset.search = (s.time + " " + s.items.map((x) => x.value).join(" ") + (f.overload > 0 ? " 多量" : "") + (f.time_warn ? " 時刻" : "")).toLowerCase();
+        li.dataset.nimg = noImage(f) ? "1" : "";
+        li.dataset.search = (s.time + " " + s.items.map((x) => x.value).join(" ") + (f.overload > 0 ? " 多量" : "") + (f.time_warn ? " 時刻" : "") + (noImage(f) ? " 画像なし" : "")).toLowerCase();
         li.title = `${s.date} ${s.time}\n` + s.items.map((x) => `${x.label || "値"}: ${x.value}`).join("\n") + "\n" + flagText(f) + p;
       }
       applyFilter();
     }
     markDayOverload(paths);
   }
+  // 画像なし: 検出画像が 0 件（良品などで残していない）＝確かめる画像が無い。
+  // 多量・上限（HDD）のロットには付けない（記録落ちで画像を残せなかった可能性があり、確かめなくてよいとは言えない。赤い札のまま）
+  function noImage(f) { return !!(f && f.no_image && !(f.overload > 0) && !(f.detect_max_status > 0)); }
   function flagHtml(f) {
     if (!f) return "";
     let h = "";
@@ -147,6 +151,7 @@
     else if (f.overload_defined && f.overload === 0) h += `<span class="fl ovl0" title="${esc(nm)} 0件">✓</span>`;
     if (f.detect_max_status > 0) h += `<span class="fl ovl" title="${f.detect_max_status === 2 ? "HDD容量オーバー" : "欠陥最大数オーバー"}（INSP_INFO.detect_max_status=${f.detect_max_status}）：以降の欠陥が記録されていない可能性">${f.detect_max_status === 2 ? "HDD" : "上限"}</span>`;
     if (f.time_warn) h += `<span class="fl twarn" title="フォルダ名の時刻と検査開始/終了時刻が一致しません（差 ${f.time_max_diff ?? "?"} 分）">⏱</span>`;
+    if (noImage(f)) h += `<span class="fl nb" title="画像なし: 検出画像が 0 件（良品などで画像を残していない）。確かめる画像はありません。多量・上限のロットには付けません（画像を残せなかった可能性があるため）">画像なし</span>`;
     return h;
   }
   function flagText(f) {
@@ -154,14 +159,16 @@
     let t = f.overload_defined ? `多量: ${f.overload ?? "不明"}件\n` : "多量: 判定データなし\n";
     if (f.detect_max_status > 0) t += `欠陥数上限: ${f.detect_max_status === 2 ? "HDD容量オーバー" : "最大数オーバー"}\n`;
     if (f.time_warn) t += `時刻の不一致: 差 ${f.time_max_diff} 分\n`;
+    if (noImage(f)) t += "画像なし（確かめる画像なし）\n";
     return t;
   }
   function markDayOverload(paths) {
     const parents = new Set(paths.map((p) => document.querySelector(`.lot[data-path="${CSS.escape(p)}"]`)?.parentElement).filter(Boolean));
     for (const ul of parents) {
       const cnt = ul.parentElement?.querySelector(":scope>.row .cnt"); if (!cnt) continue;
-      const lots = [...ul.querySelectorAll(":scope>.lot")], n = lots.filter((x) => x.dataset.ovl).length;
-      cnt.innerHTML = `${lots.length}ロット${n ? ` <span class="fl ovl" title="多量ありのロット数">多量${n}</span>` : ""}`;
+      const lots = [...ul.querySelectorAll(":scope>.lot")], n = lots.filter((x) => x.dataset.ovl).length, ni = lots.filter((x) => x.dataset.nimg).length;
+      cnt.innerHTML = `${lots.length}ロット${n ? ` <span class="fl ovl" title="多量ありのロット数">多量 ${n}</span>` : ""}`
+        + (ni ? ` <span class="fl nb" title="画像なしのロット数（確かめる画像なし）">画像なし ${ni}</span>` : "");
     }
   }
   // ロットの木の行は li.lot（データ項目の窓の札〈span.dsc.lot〉も lot を持つので、li に限る）

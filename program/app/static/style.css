@@ -17,7 +17,7 @@ header{display:flex;gap:14px;align-items:center;padding:5px 12px;background:#1f2
 .crumb b{color:#fff}
 main{flex:1;display:flex;min-height:0}
 aside{background:var(--pane);display:flex;flex-direction:column;min-height:0;flex:0 0 auto}
-#treePane{width:300px;min-width:180px}
+#treePane{width:340px;min-width:180px}
 #infoPane{width:360px;min-width:240px;overflow:auto;padding:6px 8px;gap:6px}
 .split{flex:0 0 5px;cursor:col-resize;background:var(--line)}
 .split:hover,.split.on{background:var(--acc)}
@@ -241,18 +241,23 @@ body.dragging .listzone{outline:2px dashed var(--acc);outline-offset:-2px}
 .chip .fm:hover{border-color:var(--pin)}
 
 /* ---------- v3.7 : lot checks ---------- */
-.fl{font:700 10px "Yu Gothic UI",sans-serif;border-radius:3px;padding:0 4px;line-height:15px;align-self:center}
+.fl{font:700 11px "Yu Gothic UI",sans-serif;border-radius:3px;padding:0 4px;line-height:16px;align-self:center}
 .lot>.fl{margin-left:auto}
 .lot>.fl+.fl{margin-left:2px}
 .ovl{background:#c62828;color:#fff}
 .ovl0{color:var(--ok);font-weight:400;padding:0 2px}
 .twarn{background:#fff3cd;color:#8a5a00}
+/* 画像なし（確かめる画像なし）: 落ち着いた灰の枠。赤の多量（要確認）と色と言葉で分ける。木の下に札の見本 */
+.fl.nb{background:#eef1f4;color:#4b5563;border:1px solid #cfd6de;line-height:14px}
+.nb-leg{padding:6px 10px;border-top:1px solid var(--line);font-size:12px;color:var(--sub);display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+.nb-leg>span{white-space:nowrap}
+.nb-leg .fl+.fl{margin-left:4px}
 .row .cnt .fl{margin-left:4px}
 table.kv tr.ovlrow td{background:#fdecea}
 table.kv tr.ovlrow b{color:var(--ng)}
 table.kv.tcheck tr.warn td{background:#fff3cd}
 table.kv.tcheck td.num{width:56px;white-space:nowrap}
-@media (prefers-color-scheme:dark){table.kv tr.ovlrow td{background:#3a1d1d}table.kv.tcheck tr.warn td{background:#3a3218}.twarn{background:#3a3218;color:#f0c060}}
+@media (prefers-color-scheme:dark){table.kv tr.ovlrow td{background:#3a1d1d}table.kv.tcheck tr.warn td{background:#3a3218}.twarn{background:#3a3218;color:#f0c060}.fl.nb{background:#2a3038;color:#c3cad3;border-color:#465060}}
 /* ---------- v3.8 ---------- */
 .legend i{display:inline-block;width:9px;height:9px;margin-right:3px;vertical-align:-1px}
 table.kv.tcheck td{word-break:normal;white-space:nowrap;font-size:11px}
