@@ -1,24 +1,25 @@
 # 配り方と更新の仕組み
 
-LotScope の仕組みに倣った。使う PC には exe だけを入れる（Python・Flask は要らない）。
+LotScope の仕組みに倣った。使う PC には exe だけを入れる（Python・Flask は要らない）。作る・配る道具も Rust（`cd desktop && cargo xtask`）。
 
 ## 版のつくり方
 
 1. プログラムを直す
-2. 版を上げる: `program/app/version.py` の `APP_VERSION` と `CHANGELOG` の先頭（1 件足す）、`desktop/Cargo.toml` と `desktop/tauri.conf.json` の `version`
+2. 版を上げる: `program/app/version.json` の `version` と `changelog` の先頭（1 件足す。利用者に見せる言葉で）、`desktop/Cargo.toml` と `desktop/tauri.conf.json` の `version`
    （直した・足した: 小、画面や使い方が変わる: 中、作り直し: 大）
-3. `cd program && python app_build.py --release`（配る物の中身の要約を `RELEASE` に書く。版を上げ忘れると `tests/test_version.py` が止める）
+3. `cd desktop && cargo xtask release`（配る物の中身の要約を `release` に書く。版を上げ忘れると `xtask/tests/repo.rs` が止める）
 4. main に入ると、GitHub Actions（`.github/workflows/desktop.yml`）が Windows で exe を作り、本物の WebView2 で自己診断と更新の通しを流し、
    配る ZIP（`DefectTrace-<版>-windows.zip`・`release.json`・`.sha256`）を Releases に版の札 `v<版>` で載せる
 
-手元で作るとき: `cd desktop && cargo build --release` → `python desktop/bundle/bundle.py build --exe desktop/target/release/DefectTrace.exe --out out`
+手元で作るとき: `cd desktop && cargo build --release` → `cargo xtask bundle --exe target/release/DefectTrace.exe --out out`
 
 配る ZIP の中身:
 
 ```text
 DefectTrace/
   DefectTrace.exe          窓・検査データ・画像・解析（全部 exe の中）
-  program/app/             画面（static）・名前（brand.json）・版（version.py）
+  program/app/             画面（static）・名前（brand.json）・版と更新履歴（version.json）
+                           ＋ 版 4.8.0 までの窓が版を確かめる写し（version.py。version.json から作る。外すと古い PC が更新できない）
   program/config/          設定の既定（config.json）
   README.md
 ```
@@ -65,5 +66,5 @@ app\DefectTrace.exe（ショートカット）──→ desktop\<印>\DefectTrac
 
 ショートカット: 無ければ画面が「作りますか」と尋ねる（「今後たずねない」もできる）。共有の exe を指すショートカットは、次の起動でこの PC の app\ を指すように直す。
 
-確かめ方: `desktop/bundle/verify.py update`（共有から写る → 裏で取り込む → 次の起動で入れ替わる → 閉じている間に置いた版に 1 回の起動で入れ替わる →
+確かめ方: `cargo xtask verify-update`（`desktop/xtask/src/verify.rs`。共有から写る → 裏で取り込む → 次の起動で入れ替わる → 閉じている間に置いた版に 1 回の起動で入れ替わる →
 開けない版は控えへ戻す → 配る版を戻す → 配る入口から新しい PC。CI が Linux と Windows の本物の窓で流す）。

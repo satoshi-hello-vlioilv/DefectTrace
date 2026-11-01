@@ -6,16 +6,14 @@
 //   node program/tools/noimage-check.mjs [出力のフォルダ]
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import os from "node:os";
-import { launch, walk, REPO } from "./ui-harness.mjs";
+import { launch, walk, fixture } from "./ui-harness.mjs";
 
 const out = path.resolve(process.argv[2] || "noimage-check");
 fs.mkdirSync(out, { recursive: true });
 // 上限の無い画像なしのロットを、別の設備 DL3 に作って足す（試験のロットは正解データと同じに保つ）
 const extra = fs.mkdtempSync(path.join(os.tmpdir(), "dt-nimg-"));
-execFileSync("python3", ["-c", "import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); import fixture_lot as f; f.make_dl2(Path(sys.argv[2]), '2026_10_24_09_00_00', eq='DL3', max_status=0)",
-  path.join(REPO, "program/tests"), extra]);
+fixture([extra, "--dl2", "2026_10_24_09_00_00", "--eq", "DL3", "--max-status", "0"]);
 process.env.DT_UI_MORE = JSON.stringify([{ name: "DL3", path: path.join(extra, "DL3") }]);
 process.env.DT_UI_LOT = path.join(extra, "DL3/2026/2026_10/2026_10_24/2026_10_24_09_00_00");
 let bad = 0;

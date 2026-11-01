@@ -1,7 +1,7 @@
 //! アプリの名前（`program/app/brand.json` の1か所の定義を、作るときに取り込む）。
 //!
 //! 名前（`name`・`subtitle`・`exe`）は窓の題名・起動画面・記録に使う。`app_id`・`data_dir` は変えない目印
-//! （Tauri の identifier・この PC の作業場所のフォルダ名）。配る ZIP を作る道具（desktop/bundle/bundle.py）も同じファイルを読む。
+//! （Tauri の identifier・この PC の作業場所のフォルダ名）。配る ZIP を作る道具（desktop/xtask/src/bundle.rs）も同じファイルを読む。
 
 use serde::Deserialize;
 use std::sync::OnceLock;

@@ -1,6 +1,6 @@
 // 大きなロットを開いたときの「待ち」を、画面（本物の app.js）で測る（読み込みの速さと進捗の見え方の評価関数）。
 //
-//   python program/tests/fixture_lot.py <置き場> --bench 200 256 200      # CAB 200 個 × 100 枚 = 2 万枚のロット
+//   (cd desktop && cargo xtask fixture <置き場> --bench 200 256 200)      # CAB 200 個 × 100 枚 = 2 万枚のロット
 //   node program/tools/open-check.mjs <ロット> [出力フォルダ] [--runs 2] [--images 20000] [--shots 1,3] [--slow-ms 0] [--view 1728x1152]
 //
 // 試しの入口（serve）を、そのロットだけの設備で起こし、前に開いたロット（lastLot）として開き直させて、開いた瞬間からの秒を測る:

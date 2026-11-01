@@ -13,7 +13,7 @@
 
 ## 版 3.8 と同じ答えか
 
-`program/tests/fixture_lot.py` が検査計の形（`.dat`・Shift_JIS の XML・MSZIP の CAB・8 ビットの BMP）を真似た試験のロットを毎回同じに作り、
+作業用の道具（`cargo xtask fixture`。`desktop/xtask/src/fixture.rs`。版 4.8.0 までは Python の `fixture_lot.py` で、同じバイトを作る）が検査計の形（`.dat`・Shift_JIS の XML・MSZIP の CAB・8 ビットの BMP）を真似た試験のロットを毎回同じに作り、
 `program/tests/make_golden.py` が版 3.8 の Flask 版（git の履歴から取り出す）に 106 の問い合わせをして正解データ（`desktop/tests/golden.json`）を作った。
 `desktop/tests/golden.rs` が Rust の答えと突き合わせる（数は 1e-9 の差まで）。違えたのは次の 2 つだけ:
 - COND*.xml が `wavedata/cond` の下だけにあるロットでも分類名を読む（版 3.6 の README の約束。版 3.8 は読めていなかった）

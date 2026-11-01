@@ -1,5 +1,5 @@
 // 画面を撮る道具の共通部分（ui-check.mjs・ui-variants.mjs が使う）。
-// 試しの入口（desktop/examples/serve.rs）を試験のロット（program/tests/fixture_lot.py）で起こし、本物と同じ画面を
+// 試しの入口（desktop/examples/serve.rs）を試験のロット（cargo xtask fixture。desktop/xtask/src/fixture.rs）で起こし、本物と同じ画面を
 // 利用者の PC と同じ大きさ（2160×1440・表示倍率 125% → 1728×1152）で開く。窓だけが答えること（更新・配布・ショートカット）は
 // 作り物の答え（FAKE）で返す。
 import { spawn, execFileSync } from "node:child_process";
@@ -12,6 +12,11 @@ import { pathToFileURL } from "node:url";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 export const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+
+/** 試験のロットを作る（作業用の道具 cargo xtask fixture <場所> [--dl2 名前 …]。Python は要らない） */
+export function fixture(args) {
+  execFileSync("cargo", ["xtask", "fixture", ...args], { cwd: path.join(REPO, "desktop"), stdio: ["ignore", "ignore", "inherit"] });
+}
 
 /** "1536x864" → {width, height}（省くと 1728×1152） */
 export function parseView(s) {
@@ -43,7 +48,7 @@ export const FAKE = {
 export async function launch(fake = FAKE, more = [], { home } = {}) {
   more = [...more, ...JSON.parse(process.env.DT_UI_MORE || "[]")];
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "dt-ui-"));
-  execFileSync("python3", [path.join(REPO, "program/tests/fixture_lot.py"), path.join(work, "fx")]);
+  fixture([path.join(work, "fx")]);
   const fx = path.join(work, "fx");
   const cfg = path.join(work, "config.json");
   // DT_UI_CFG: 設定に足す物（JSON。例: 共有のフィルタの置き場 filters_shared_dir・開発者 release_users）
@@ -98,11 +103,11 @@ function seedPresence(dir) {
   w(path.join(dir, "nudge", "検査PC-03@tanaka.json"), { key: "検査PC-03@tanaka", version: "4.6.0", by: "maint", at: at(30) });
 }
 
-/** 起動画面（desktop/splash/index.html。窓が splash.brand などを呼ぶ）を開く。名前と版は窓と同じく brand.json・version.py から */
+/** 起動画面（desktop/splash/index.html。窓が splash.brand などを呼ぶ）を開く。名前と版は窓と同じく brand.json・version.json から */
 export async function launchSplash() {
   const brand = JSON.parse(fs.readFileSync(path.join(REPO, "program/app/brand.json"), "utf8"));
-  const ver = /APP_VERSION\s*=\s*"([^"]+)"/.exec(fs.readFileSync(path.join(REPO, "program/app/version.py"), "utf8"))[1];
-  // アイコン（desktop/splash/icon.png）は窓を作るとき build.rs が描く
+  const ver = JSON.parse(fs.readFileSync(path.join(REPO, "program/app/version.json"), "utf8")).version;
+  // アイコン（desktop/splash/icon.png）は窓を作るとき build.rs が描く（desktop/xtask/src/icon.rs）
   const browser = await chromium.launch();
   return {
     browser,
