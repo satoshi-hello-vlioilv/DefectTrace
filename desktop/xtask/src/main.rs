@@ -51,6 +51,10 @@ fn run(args: &[String]) -> Result<bool, String> {
                     (1..=3).map(|k| args.get(i + k).ok_or(HELP.to_string()).and_then(|s| num(s))).collect::<Result<_, _>>()?;
                 vec![fixture::bench_lot(&root, n[0], n[1], n[2])]
             } else if let Some(name) = opt(args, "--dl2") {
+                // ロットの名前は検査開始の日時（年_月_日_時_分_秒）。違う形は、作る前に言葉で断る
+                if !fixture::is_lot_name(&name) {
+                    return Err(format!("--dl2 のロットの名前は 年_月_日_時_分_秒 の形で（例: 2026_10_24_09_00_00）: {name}"));
+                }
                 let eq = opt(args, "--eq").unwrap_or_else(|| "DL2".into());
                 let max = opt(args, "--max-status").map(|s| num(&s)).transpose()?.unwrap_or(1);
                 vec![fixture::make_dl2(&root, &name, &eq, max as i64)]

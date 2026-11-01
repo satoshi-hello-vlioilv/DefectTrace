@@ -43,7 +43,9 @@ jobs:
         run: |
           Push-Location desktop
           cargo xtask fixture "$env:RUNNER_TEMP\fx"
+          if ($LASTEXITCODE -ne 0) { Write-Host "試験のロットを作れません"; exit 1 }
           cargo xtask selftest-config "$env:RUNNER_TEMP\fx" "$env:RUNNER_TEMP\root"
+          if ($LASTEXITCODE -ne 0) { Write-Host "自己診断の設定を書けません"; exit 1 }
           Pop-Location
           $env:DT_LOCAL_ROOT = "$env:RUNNER_TEMP\root"
           $env:DT_SELFTEST = "$env:RUNNER_TEMP\selftest.json"

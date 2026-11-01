@@ -451,6 +451,11 @@ const LS3_KINDS: &[(&str, &str, &str)] = &[
 ];
 const COMMENTS: &[&str] = &["L2610-0042", "3", "C-12", "缶材", "A5182", "H19", "0.245", "1650", "K-88", "1", "標準", "飲料缶"];
 
+/// ロットの名前の形か（検査開始の日時: 年_月_日_時_分_秒）
+pub fn is_lot_name(name: &str) -> bool {
+    NaiveDateTime::parse_from_str(name, "%Y_%m_%d_%H_%M_%S").is_ok() && name.len() == 19
+}
+
 fn lot_dir(root: &Path, eq: &str, name: &str) -> PathBuf {
     let (y, mo, d) = (&name[..4], &name[5..7], &name[8..10]);
     let p = root.join(eq).join(y).join(format!("{y}_{mo}")).join(format!("{y}_{mo}_{d}")).join(name);
@@ -717,6 +722,14 @@ mod tests {
     }
 
     /// 毎回同じ物（正解データと突き合わせるため）で、検査計の形（.dat の頭・CAB の MSZIP）になっている
+    #[test]
+    fn lot_names_are_dates() {
+        assert!(is_lot_name("2026_10_24_09_00_00"));
+        for bad in ["x", "2026_10_24", "2026_13_24_09_00_00", "2026-10-24_09_00_00", "2026_10_24_09_00_00_1"] {
+            assert!(!is_lot_name(bad), "{bad}");
+        }
+    }
+
     #[test]
     fn same_every_time_and_well_formed() {
         let base = std::env::temp_dir().join(format!("dt-fixture-{}", std::process::id()));
