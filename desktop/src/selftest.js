@@ -108,7 +108,7 @@
   } catch (e) {
     ok("自己診断が最後まで流れる", false, e && (e.stack || e.message || e));
   }
-  // 更新の係が置き場を確かめ終える（取り込み中なら済むまで）のを待ってから、その状態を添える（更新の通し verify.py が読む）
+  // 更新の係が置き場を確かめ終える（取り込み中なら済むまで）のを待ってから、その状態を添える（更新の通し cargo xtask verify-update が読む）
   for (let i = 0; i < 300; i++) {
     try { update = (await json("/__desktop/update")).j; } catch (_) { break; }
     if (!update || !["idle", "checking", "staging"].includes(update.state)) break;

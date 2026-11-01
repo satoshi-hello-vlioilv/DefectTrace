@@ -1,5 +1,6 @@
 //! 正解データとの突き合わせ（評価関数）: 版 3.8 の Python 版（Flask）が、同じ試験のロットに返した答え（golden.json）と、
-//! Rust の答えが同じか。試験のロットは program/tests/fixture_lot.py が毎回同じ物を作る。正解データの作り方は program/tests/make_golden.py。
+//! Rust の答えが同じか。試験のロットは作業用の道具（xtask/src/fixture.rs）が毎回同じ物を作る（版 4.8.0 までの Python の fixture_lot.py と
+//! 同じバイト。乱数も Python と同じ）。正解データの作り方は program/tests/make_golden.py。
 //!
 //! 同じとみなすこと: 数は 1e-9 の差まで・無い鍵と null。違ってよいと決めたこと（版 4.0.0）:
 //! - /api/status: 縮小画像の進み（thumbs など）を足した。elapsed は比べない
@@ -15,7 +16,6 @@ use dt_core::app::App;
 use dt_core::config::Config;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// 版 4.8.0 で既定の表示項目に足した物（版 3.8 には無い）
 const V48_ADDED: [&str; 2] = ["d_list_mat", "d_list_dc"];
@@ -38,14 +38,7 @@ fn without_v48(v: &mut Value) {
 fn fixture(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("dt-golden-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let py = std::env::var("DT_PYTHON").unwrap_or_else(|_| if cfg!(windows) { "python".into() } else { "python3".into() });
-    let st = Command::new(py)
-        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../program/tests/fixture_lot.py"))
-        .arg(&root)
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .output()
-        .expect("python で試験のロットを作れません（DT_PYTHON）");
-    assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
+    xtask::fixture::golden_tree(&root);
     root
 }
 

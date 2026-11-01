@@ -1,0 +1,3 @@
+# 作業用の道具の入口: cargo xtask <仕事>（desktop/xtask。仕事の一覧は cargo xtask だけで出る）
+[alias]
+xtask = "run --quiet --package xtask --"

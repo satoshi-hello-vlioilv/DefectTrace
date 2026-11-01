@@ -1,0 +1,26 @@
+# 作る・配る・試すための作業用の道具（cargo xtask <仕事>。使い方は src/main.rs）。配る exe には入らない。
+# 窓（Tauri）に依らないので、WebKitGTK の無い所でも速く作れる。desktop/build.rs（アイコン）と試験（tests/golden.rs）も使う。
+[package]
+name = "xtask"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[features]
+# アイコンを描く所（icon）のほかの道具。build.rs はアイコンだけを使う（作る前の準備を軽く保つ）
+default = ["tools"]
+tools = ["dep:zip", "dep:sha2", "dep:serde", "dep:serde_json", "dep:chrono", "dep:encoding_rs"]
+
+[dependencies]
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+zip = { version = "9", default-features = false, features = ["deflate"], optional = true }
+sha2 = { version = "0.10", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"], optional = true }
+encoding_rs = { version = "0.8", optional = true }
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+required-features = ["tools"]

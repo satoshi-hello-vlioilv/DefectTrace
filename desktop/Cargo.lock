@@ -708,7 +708,7 @@ dependencies = [
 
 [[package]]
 name = "defecttrace-desktop"
-version = "4.8.0"
+version = "4.9.0"
 dependencies = [
  "cab",
  "chrono",
@@ -728,6 +728,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tiny_http",
  "windows",
+ "xtask",
  "zip",
 ]
 
@@ -4927,6 +4928,19 @@ dependencies = [
  "libc",
  "once_cell",
  "pkg-config",
+]
+
+[[package]]
+name = "xtask"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "encoding_rs",
+ "flate2",
+ "serde",
+ "serde_json",
+ "sha2",
+ "zip",
 ]
 
 [[package]]

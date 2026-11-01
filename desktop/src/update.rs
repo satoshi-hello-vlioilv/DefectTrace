@@ -90,9 +90,14 @@ pub fn write_json(p: &Path, v: &Value) -> Result<(), String> {
     })
 }
 
-/// アプリの版（program/app/version.py の `APP_VERSION = "X.Y.Z"`）。読めなければ None。
+/// アプリの版（program/app/version.json の version）。版 4.8.0 までの配る形は version.json を持たないので、
+/// version.py の `APP_VERSION = "X.Y.Z"` を字として読む（置き場の古い版へ戻す・古い版から入れ替えるときに要る）。読めなければ None。
 pub fn program_version(program: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(program.join("app").join("version.py")).ok()?;
+    let app = program.join("app");
+    if let Some(v) = read_json(&app.join("version.json")) {
+        return v["version"].as_str().filter(|v| parse_version(v).is_some()).map(str::to_string);
+    }
+    let text = std::fs::read_to_string(app.join("version.py")).ok()?;
     text.lines().find_map(|l| {
         let rest = l.strip_prefix("APP_VERSION")?.trim_start().strip_prefix('=')?.trim();
         let q = rest.chars().next().filter(|c| *c == '\'' || *c == '"')?;
@@ -119,7 +124,7 @@ pub fn validate_dist(dir: &Path, exe: &str, app_id: &str, expect: Option<&str>) 
     if dist_app_id(&program).as_deref() != Some(app_id) {
         return Err("このアプリの物ではありません（program\\app\\brand.json の app_id が違います）".into());
     }
-    let v = program_version(&program).ok_or("program\\app\\version.py の版を読めません")?;
+    let v = program_version(&program).ok_or("program\\app\\version.json の版を読めません")?;
     if let Some(want) = expect {
         if v != want {
             return Err(format!("中身の版（{v}）が置き場の版（{want}）と違います"));
@@ -578,7 +583,7 @@ mod tests {
         d
     }
 
-    /// 配る形を作る（exe・program の画面・brand.json・version.py）。
+    /// 配る形を作る（exe・program の画面・brand.json・version.json）。
     pub fn dist(dir: &Path, version: &str, exe_body: &str) {
         let app = dir.join("program").join("app");
         std::fs::create_dir_all(&app).unwrap();
@@ -586,7 +591,7 @@ mod tests {
         std::fs::create_dir_all(app.join("static")).unwrap();
         std::fs::write(app.join("static").join("index.html"), "<!doctype html>").unwrap();
         std::fs::write(app.join("brand.json"), format!(r#"{{"app_id":"{ID}"}}"#)).unwrap();
-        std::fs::write(app.join("version.py"), format!("APP_VERSION = \"{version}\"\n")).unwrap();
+        std::fs::write(app.join("version.json"), format!(r#"{{"version": "{version}"}}"#)).unwrap();
     }
 
     fn zip_of(dir: &Path, top: &str, out: &Path) -> String {
@@ -627,13 +632,29 @@ mod tests {
     }
 
     #[test]
-    fn version_py_is_read() {
+    fn version_is_read() {
         let d = tmp("ver");
         dist(&d, "3.9.0", "x");
         assert_eq!(program_version(&d.join("program")).as_deref(), Some("3.9.0"));
         assert_eq!(validate_dist(&d, EXE, ID, Some("3.9.0")), Ok("3.9.0".into()));
         assert!(validate_dist(&d, EXE, "other", None).is_err(), "ほかのアプリは断る");
         assert!(validate_dist(&d, EXE, ID, Some("3.9.1")).unwrap_err().contains("違います"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// 版 4.8.0 までの配る形（version.py だけ）も読む。配る ZIP は両方を持ち、version.json を先に読む
+    #[test]
+    fn version_py_of_old_dist_is_read() {
+        let d = tmp("ver-old");
+        dist(&d, "3.9.0", "x");
+        let app = d.join("program").join("app");
+        std::fs::remove_file(app.join("version.json")).unwrap();
+        std::fs::write(app.join("version.py"), "# 注釈\nAPP_VERSION = \"4.8.0\"\nCHANGELOG = []\n").unwrap();
+        assert_eq!(program_version(&d.join("program")).as_deref(), Some("4.8.0"));
+        std::fs::write(app.join("version.json"), r#"{"version": "4.9.0"}"#).unwrap();
+        assert_eq!(program_version(&d.join("program")).as_deref(), Some("4.9.0"), "version.json を先に");
+        std::fs::write(app.join("version.json"), r#"{"version": "x"}"#).unwrap();
+        assert_eq!(program_version(&d.join("program")), None, "形の違う版は読まない");
         let _ = std::fs::remove_dir_all(&d);
     }
 

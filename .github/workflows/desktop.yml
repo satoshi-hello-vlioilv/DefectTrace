@@ -1,5 +1,5 @@
 # デスクトップ版（desktop/・Tauri）を Windows で本番の作り方（--release）で作り、本物の WebView2 で自己診断する。
-# 更新の通し（verify.py）を流し、通った exe・配る ZIP（release.json・.sha256 つき）・自己診断の結果を Artifacts に置く。
+# 更新の通し（cargo xtask verify-update）を流し、通った exe・配る ZIP（release.json・.sha256 つき）・自己診断の結果を Artifacts に置く。
 # main に入ったとき（と手で動かしたとき）は、確かめ終えた配る ZIP を GitHub の Releases にも版の札（v<版>）で載せる（release）。
 name: desktop
 
@@ -22,15 +22,10 @@ jobs:
       run:
         shell: pwsh
     env:
-      PYTHONIOENCODING: utf-8
-      DT_PYTHON: python
       # exe が名乗る「作ったコミット」（/__desktop/info の commit）
       DT_BUILD_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -46,8 +41,12 @@ jobs:
         run: '"EXE=" + (Get-Content program/app/brand.json -Raw -Encoding utf8 | ConvertFrom-Json).exe | Out-File -Append -Encoding utf8 $env:GITHUB_ENV'
       - name: 自己診断（本物の WebView2・ポートなし）
         run: |
-          python program\tests\fixture_lot.py "$env:RUNNER_TEMP\fx"
-          python program\tests\selftest_config.py "$env:RUNNER_TEMP\fx" "$env:RUNNER_TEMP\root"
+          Push-Location desktop
+          cargo xtask fixture "$env:RUNNER_TEMP\fx"
+          if ($LASTEXITCODE -ne 0) { Write-Host "試験のロットを作れません"; exit 1 }
+          cargo xtask selftest-config "$env:RUNNER_TEMP\fx" "$env:RUNNER_TEMP\root"
+          if ($LASTEXITCODE -ne 0) { Write-Host "自己診断の設定を書けません"; exit 1 }
+          Pop-Location
           $env:DT_LOCAL_ROOT = "$env:RUNNER_TEMP\root"
           $env:DT_SELFTEST = "$env:RUNNER_TEMP\selftest.json"
           Start-Process -FilePath "desktop\target\release\$env:EXE" -WorkingDirectory $env:RUNNER_TEMP
@@ -60,11 +59,18 @@ jobs:
           $r.results | ForEach-Object { Write-Host ("{0}: {1} -- {2}" -f ($(if ($_.ok) { "PASS" } else { "FAIL" })), $_.name, $_.info) }
           if ($r.error) { Write-Host "ERROR: $($r.error)" }
           if (-not $r.ok) { exit 1 }
-      # 更新の通し（desktop/bundle/verify.py）: 共有から写る → 裏で取り込む → 次の起動で入れ替わる → 閉じている間に置いた版に 1 回の起動で入れ替わる → 開けない版は控えへ戻す → 配る版を戻す → 配る入口から新しい PC
+      # 更新の通し（desktop/xtask/src/verify.rs）: 共有から写る → 裏で取り込む → 次の起動で入れ替わる → 閉じている間に置いた版に 1 回の起動で入れ替わる → 開けない版は控えへ戻す → 配る版を戻す → 配る入口から新しい PC
       - name: 更新の通し（本物の WebView2）
-        run: python desktop\bundle\verify.py update --exe "desktop\target\release\$env:EXE" --work "$env:RUNNER_TEMP\verify"
+        working-directory: desktop
+        run: cargo xtask verify-update --exe "target\release\$env:EXE" --work "$env:RUNNER_TEMP\verify"
+      # 配る ZIP と、GitHub Releases の説明（その版の更新履歴。release の職が使う）
       - name: 配る ZIP を作る
-        run: python desktop\bundle\bundle.py build --exe "desktop\target\release\$env:EXE" --out "$env:RUNNER_TEMP\release"
+        working-directory: desktop
+        run: |
+          cargo xtask bundle --exe "target\release\$env:EXE" --out "$env:RUNNER_TEMP\release"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cargo xtask notes --release "$env:RUNNER_TEMP\release\release.json" --out "$env:RUNNER_TEMP\release\notes.md"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: 成果物をまとめる
         if: always()
         run: |
@@ -80,7 +86,7 @@ jobs:
           path: ${{ runner.temp }}/out/
           if-no-files-found: warn
 
-  # 確かめ終えた配る ZIP を GitHub の Releases に載せる（main だけ。PR では動かない）。説明はその版の更新履歴から作る（bundle.py notes）。
+  # 確かめ終えた配る ZIP を GitHub の Releases に載せる（main だけ。PR では動かない）。説明はその版の更新履歴から windows の職が作った notes.md（cargo xtask notes）。
   # 書き込みの権限はこの job にだけ渡す。同じ版の札が既にあれば上書きしない（版を上げずに入った変更。配った ZIP と指紋を変えない）。
   release:
     needs: windows
@@ -94,9 +100,6 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
       - uses: actions/download-artifact@v4
         with:
           name: desktop-windows
@@ -105,14 +108,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version=$(python desktop/bundle/bundle.py version)
+          version=$(jq -r .version program/app/version.json)
           tag="v$version"
-          read -r built zip < <(python -c 'import json; r = json.load(open("out/release.json", encoding="utf-8")); print(r["version"], r["zip"])')
+          read -r built zip < <(jq -r '"\(.version) \(.zip)"' out/release.json)
           if [ "$built" != "$version" ]; then echo "::error::作った ZIP の版（$built）と program の版（$version）が違います"; exit 1; fi
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "::warning::$tag は既に Releases にあります（上書きしません）。配る物を変えたときは版を上げてください。"
             exit 0
           fi
-          python desktop/bundle/bundle.py notes --release out/release.json > notes.md
           gh release create "$tag" "out/$zip" "out/$zip.sha256" out/release.json \
-            --target "$GITHUB_SHA" --title "版 $version" --notes-file notes.md --latest
+            --target "$GITHUB_SHA" --title "版 $version" --notes-file out/notes.md --latest

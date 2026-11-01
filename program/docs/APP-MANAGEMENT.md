@@ -153,7 +153,7 @@ DefectTrace では: `desktop/src/presence.rs`、`desktop/src/app.rs` の `presen
 - ショートカットは各 PC の `app\` を指す（共有の exe を指していたら次の起動で直す）。作るかどうかは画面が尋ね、「今後たずねない」も選べる。
 - 起動画面は、窓が確かめた事実だけで進み具合（中身を探す → 新しい版を確かめる → 画面を開く）を言い、止まったら理由と次にすることを出す。
 
-DefectTrace では: `desktop/src/update.rs`・`install.rs`・`main.rs`、確かめは `desktop/bundle/verify.py update`。
+DefectTrace では: `desktop/src/update.rs`・`install.rs`・`main.rs`、確かめは `cargo xtask verify-update`（`desktop/xtask/src/verify.rs`）。
 
 ## 7. 共有の設定（全 PC に効く初期値）
 
@@ -189,7 +189,7 @@ DefectTrace では: `desktop/src/update.rs`・`install.rs`・`main.rs`、確か�
 |---|---|
 | 名乗り・鍵・使用状況の決まり（使い始め・要更新・掃除・消せない PC・鍵の確かめ） | `cargo test`（`desktop/src/presence.rs`） |
 | 配布の置き場の探し方・置く・配る・消す | `cargo test`（`release.rs`・`distribute.rs`） |
-| 本物の窓での更新の通し | `xvfb-run python desktop/bundle/verify.py update`（CI は Linux と Windows） |
+| 本物の窓での更新の通し | `cd desktop && xvfb-run -a cargo xtask verify-update --exe target/debug/DefectTrace`（CI は Linux と Windows） |
 | 画面 | 撮影（`program/tools/ui-check.mjs`）と評価の通し（`program/tools/*-check.mjs`） |
 
 ## 10. LotScope との違い

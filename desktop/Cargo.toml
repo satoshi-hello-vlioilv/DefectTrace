@@ -1,6 +1,6 @@
 [package]
 name = "defecttrace-desktop"
-version = "4.8.0"
+version = "4.9.0"
 description = "DefectTrace（検査計画像ビュワー）デスクトップ版"
 edition = "2021"
 rust-version = "1.90"
@@ -23,6 +23,8 @@ custom-protocol = ["tauri/custom-protocol"]
 
 [build-dependencies]
 tauri-build = { version = "2.7", features = [] }
+# アイコンを描く（作業用の道具 xtask のアイコンだけ。外のプログラムを起こさない）
+xtask = { path = "xtask", default-features = false }
 
 [dependencies]
 tauri = { version = "2.12", features = [] }
@@ -53,6 +55,13 @@ windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Thre
 tiny_http = "0.12"
 # 試験で本物の MSZIP の CAB（塊をまたいで前の塊を辞書に使う）を作る
 cab = "0.6"
+# 試験のロットを作る（tests/golden.rs）・配る ZIP の形を窓の読み方で確かめる（tests/xtask.rs）
+xtask = { path = "xtask" }
+
+# 作業用の道具（cargo xtask。xtask/）も同じ場所で作り、試験する（cargo build・test・clippy が両方を見る）
+[workspace]
+members = [".", "xtask"]
+default-members = [".", "xtask"]
 
 [profile.release]
 opt-level = 3

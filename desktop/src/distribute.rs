@@ -331,7 +331,7 @@ mod tests {
             (format!("App/{exe}"), exe_body.to_string()),
             ("App/program/app/static/index.html".into(), "<!doctype html>".into()),
             ("App/program/app/brand.json".into(), format!(r#"{{"app_id":"{app_id}","name":"App","exe":"{exe}"}}"#)),
-            ("App/program/app/version.py".into(), format!("APP_VERSION = \"{version}\"\n")),
+            ("App/program/app/version.json".into(), format!(r#"{{"version": "{version}"}}"#)),
         ];
         files.extend(legacy.iter().map(|l| (format!("App/{l}"), exe_body.to_string())));
         for (n, body) in files {

@@ -144,7 +144,8 @@ def main(out: Path):
     work = Path(tempfile.mkdtemp(prefix="dt-golden-"))
     try:
         root = work / "fx"
-        subprocess.run([sys.executable, str(HERE / "fixture_lot.py"), str(root)], check=True, capture_output=True)
+        # 試験のロットは作業用の道具（desktop/xtask/src/fixture.rs）が作る（版 4.8.0 までの Python の fixture_lot.py と同じバイト）
+        subprocess.run(["cargo", "xtask", "fixture", str(root)], cwd=REPO / "desktop", check=True, capture_output=True)
         client, cfg = old_app(work, root)
         rec = Recorder(client, root, work / "cache")
         rec.get("/api/equipments")

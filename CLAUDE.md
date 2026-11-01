@@ -17,13 +17,14 @@
 |---|---|
 | `desktop/` | exe（Rust・Tauri）。窓・起動・更新と配布（`src/main.rs`・`updater.rs`）と、窓に依らない中身（`src/lib.rs` の下: 検査データ・画像・解析・画面の問い合わせ `app.rs`） |
 | `desktop/examples/` | 試しの入口 `serve.rs`（窓を使わずブラウザで画面を出す・撮影用）と、測る道具 `imgbench.rs`・`openbench.rs` |
-| `desktop/bundle/` | 配る ZIP の組み立て `bundle.py` と、本物の窓での更新の通し `verify.py` |
-| `program/app/` | 配る物: 画面（`static/` の HTML・JS・CSS）・名前（`brand.json`）・版（`version.py`）・アイコン（`app_icon.py`。作るときに描く） |
+| `desktop/xtask/` | 作る・配る・試すための作業用の道具（Rust。`cd desktop && cargo xtask` で一覧）: アイコンを描く `icon.rs`（作るとき build.rs が呼ぶ）・試験のロット `fixture.rs`・版の管理 `version.rs`・配る ZIP `bundle.rs`・自己診断 `selftest.rs`・本物の窓での更新の通し `verify.rs` |
+| `program/app/` | 配る物: 画面（`static/` の HTML・JS・CSS）・名前（`brand.json`）・版と更新履歴（`version.json`） |
 | `program/config/` | 配る設定の既定（利用者の設定は PC の作業場所 `%LOCALAPPDATA%\DefectTrace\config.json`） |
-| `program/tests/` | 試験のロットを作る `fixture_lot.py`・正解データを作る `make_golden.py`・Python の試験 |
+| `program/tests/` | 正解データを版 3.8（Flask）から取り出す `make_golden.py`（試験のロットは `cargo xtask fixture`） |
 | `program/tools/` | 画面の撮影（`ui-check.mjs`・`ui-variants.mjs`）・採点（`ui_score.py`）・採点の記録（`proposals/`） |
 
-使う PC には Python も Flask も要らない（exe だけで動く）。Python は作る・試す・測る道具だけに使う。
+使う PC には Python も Flask も要らない（exe だけで動く）。作る・配る・試すのも Rust（`cargo` だけ）で、Python は要らない。
+Python が残るのは、正解データを版 3.8 から取り出す `make_golden.py` と、採点の集計・実データの確かめ（`program/tools/` の .py）だけ。
 
 ## push の決まり
 
@@ -40,31 +41,33 @@
 ```sh
 # 1. 型・構文（JavaScript・Python・Rust）
 bash program/tools/js-check.sh   # import を使う .js・.mjs はモジュールとして確かめる（node --check だけでは見逃す）
-python -m compileall -q program desktop/bundle
+python -m compileall -q program
 (cd desktop && cargo build --locked)
 # 2. lint（Python・Rust）
-ruff check program desktop/bundle
+ruff check program
 (cd desktop && cargo fmt --check && cargo clippy --locked --all-targets -- -D warnings)
-# 3. テスト（Python・Rust。Rust の試験には、版 3.8〈Flask 版〉の答えとの突き合わせ tests/golden.rs を含む）
-(cd program && python -m unittest discover -s tests -t .)
-python -m unittest discover -s desktop/bundle -t desktop/bundle
+# 3. テスト（Rust。窓と作業用の道具 xtask の両方。版 3.8〈Flask 版〉の答えとの突き合わせ tests/golden.rs・版の管理 xtask/tests/repo.rs を含む）
 (cd desktop && cargo test --locked)
 ```
 
 - 型検査の道具（TypeScript・mypy）は入れていないので、JavaScript・Python は構文の確かめで代えている。入れたら差し替える。Rust はコンパイラが型を確かめる。
-- JavaScript の lint の設定は無い（2 は Python と Rust）。JavaScript のテスト（`npm test`）も、このリポジトリにはまだ無い（画面は自己診断 `desktop/src/selftest.js` が本物の窓で確かめる）。
+- JavaScript の lint の設定は無い（2 は Python と Rust）。Python の試験は無い（残っている Python は道具だけ。1・2 で確かめる）。JavaScript のテスト（`npm test`）も、このリポジトリにはまだ無い（画面は自己診断 `desktop/src/selftest.js` が本物の窓で確かめる）。
 - CI（`.github/workflows/ci.yml`）も同じ物を流す。ruff と Rust（clippy）は手元と同じ版に留める（ruff 0.15.20・Rust 1.97.0。
   版が上がると決まりが増え、手元で通った物が CI で落ちるため）。上げるときは手元と CI を一緒に上げる。
-- `program/app`・`program/config` の中身を変えたら、版を上げて（`program/app/version.py` の APP_VERSION と CHANGELOG・`desktop/Cargo.toml`・`desktop/tauri.conf.json`）
-  `cd program && python app_build.py --release` で `RELEASE` を書き直す（`tests/test_version.py` が止める）。まだ配っていない版を直しただけなら `--amend`。
+- `program/app`・`program/config` の中身を変えたら、版を上げて（`program/app/version.json` の version と changelog・`desktop/Cargo.toml`・`desktop/tauri.conf.json`）
+  `cd desktop && cargo xtask release` で `release` を書き直す（`xtask/tests/repo.rs` が止める）。まだ配っていない版を直しただけなら `--amend`。
 - 版 3.8（Flask 版）と答えを変えるときは、変える理由を `program/tests/make_golden.py`（正解データの作り方）と `desktop/tests/golden.rs` に書き、
   正解データを作り直す（`pip install flask pillow` のうえで `python program/tests/make_golden.py desktop/tests/golden.json`）。
+  試験のロット（`desktop/xtask/src/fixture.rs`）は、版 4.8.0 までの Python の `fixture_lot.py` とバイトまで同じ物を作る（乱数も Python と同じ。`pyrand.rs`）。
+  変えると正解データと合わなくなるので、変えるときは正解データも作り直す。
 - 窓（`desktop/`。Tauri）を Linux で作るには WebKitGTK などが要る（`libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev`）。
 - Windows だけのコード（`#[cfg(windows)]`）は Linux の確かめではコンパイルされない。変えたときは `rustup target add x86_64-pc-windows-msvc` のうえで
   `cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings` も通す。窓全体が Linux から Windows 向けに組めないときは、その部分だけを
   `windows` クレートに頼る小さな作業用クレートへ写し、`cargo check --target x86_64-pc-windows-msvc` で型を確かめる。
 - 起動・更新・配布の流れ（`desktop/src/update.rs`・`distribute.rs`・`install.rs`・`release.rs`・`main.rs`・`updater.rs`）を変えたら、
-  本物の窓で更新の通しを流す: `xvfb-run -a python desktop/bundle/verify.py update --exe desktop/target/debug/DefectTrace`（Windows は CI）。
+  本物の窓で更新の通しを流す: `cd desktop && xvfb-run -a cargo xtask verify-update --exe target/debug/DefectTrace`（Windows は CI）。
+- 配った窓（版 4.8.0 まで）は、取り込む版を配る形の `program/app/version.py` で確かめる。配る ZIP にはその写しを作って入れる（`bundle.rs`）。
+  外すと古い PC が更新できなくなる（版 4.9.0 で確かめた）。
 - 本物の窓での自己診断（`DT_SELFTEST`）は CI が Linux（WebKitGTK）と Windows（WebView2・`.github/workflows/desktop.yml`）で流す。
 - 結果は**終了コードと「Ran … / OK / FAILED」「test result」の行で**読む。出力の最後の 1 行だけ（`tail -1` など）で判断しない
   （Python の試験は最後に ResourceWarning が出ることがあり、FAILED の行が隠れる）。
@@ -94,7 +97,7 @@ UI/UX に限らず、何かを改良するときは、必ず次の順で設計�
    （採点のファイルの `"built"`）。作った後も、合格点以上か、減点が残っていないかを確かめ、届かなければ直して撮り直す。
    比べた画像・数は比較のページ（Artifact）で見せる
 
-画面の撮影は、試しの入口（`desktop/examples/serve.rs`）を試験のロット（`program/tests/fixture_lot.py`）で起こして行う（`ui-harness.mjs` が自動でする）。
+画面の撮影は、試しの入口（`desktop/examples/serve.rs`）を試験のロット（`cargo xtask fixture`）で起こして行う（`ui-harness.mjs` が自動でする）。
 窓だけが答えること（更新・配布・ショートカット）は、`ui-harness.mjs` の作り物の答え（FAKE）で撮る。
 
 **加点**（100 点満点。4 分類・11 項目を 0〜10 で付け、重みを掛けて足す）
