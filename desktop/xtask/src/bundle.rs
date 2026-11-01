@@ -195,7 +195,11 @@ fn mode_of(p: &Path) -> u32 {
 pub fn zip_dir(root: &Path, top: &str, out: &Path) -> Result<usize, String> {
     let files = walk(root);
     let mut z = zip::ZipWriter::new(std::fs::File::create(out).map_err(|e| format!("{}: {e}", out.display()))?);
-    let opt = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated).compression_level(Some(9));
+    // 「作った OS」は Unix に固定（既定は作る PC の OS で、Windows では DOS になり、書いた権限が読まれない）。どの PC で作っても同じ ZIP になる
+    let opt = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .compression_level(Some(9))
+        .system(zip::System::Unix);
     for (rel, p) in &files {
         z.start_file(format!("{top}/{rel}"), opt.unix_permissions(mode_of(p))).map_err(|e| e.to_string())?;
         z.write_all(&std::fs::read(p).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
