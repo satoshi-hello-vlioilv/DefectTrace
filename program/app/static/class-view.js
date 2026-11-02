@@ -119,7 +119,8 @@
       <div class="cls-add" data-new role="button" tabindex="0" title="カードをここへドラッグしても作れます">＋ グループを作る</div>
       ${C.err ? `<div class="cls-err" role="alert">${esc(C.err)}</div>` : ""}
       <div class="cls-sort">一覧の並び <span class="seg"><button type="button" data-sort="cab" class="${C.sort === "cab" ? "on" : ""}">CAB 順</button><button type="button" data-sort="group" class="${C.sort === "group" ? "on" : ""}">グループ順</button></span></div>
-      ${C.groups.every((g) => g.examples.length < NEED) ? `<ol class="cls-how"><li>「＋ グループを作る」で名前を付ける（カードを「＋」へドラッグしても作れます）</li><li>似た欠陥の画像のカードを、${NEED} 枚以上グループの行へドラッグ</li><li>見本に共通する特徴から条件を割り出し、当てはまる画像に札が付く。行を押すと一覧をそのグループに絞る</li></ol>` : ""}`;
+      ${C.groups.every((g) => g.examples.length < NEED) ? `<ol class="cls-how"><li>「＋ グループを作る」で名前を付ける（カードを「＋」へドラッグしても作れます）</li><li>似た欠陥の画像のカードを、${NEED} 枚以上グループの行へドラッグ</li><li>見本に共通する特徴から条件を割り出し、当てはまる画像に札が付く。行を押すと一覧をそのグループに絞る</li></ol>`
+        : `<ul class="cls-tips"><li>見本を足すほど条件が確かになります（違う種類の画像は別のグループへ）</li><li>名前はダブルクリックで直す・見本は小さな画像の × で外す</li><li>グループはこの PC に残り、ほかのロットを開いても使えます</li></ul>`}`;
     const inp = $("clsPane").querySelector("[data-name]");
     if (inp) { inp.focus(); inp.select(); }
   }

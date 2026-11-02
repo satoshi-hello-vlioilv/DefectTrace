@@ -79,7 +79,7 @@
         : `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" class="mk-under"/><line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" class="mk-line"/>`;
       const ends = [[x0, y0], [x1, y1]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5" class="mk-end"/>`).join("");
       // 番号（右の欄の一覧と結ぶ）は、終わりの端の外側（欠陥の上に置かない）
-      const nx = x1 + (x1 >= x0 ? 12 : -12), ny = y1 + (y1 >= y0 ? 12 : -12);
+      const nx = x1 + (x1 >= x0 ? 18 : -18), ny = y1 + (y1 >= y0 ? 18 : -18);
       const num = i < M.list.length ? `<text x="${nx}" y="${ny}" class="mk-num" text-anchor="middle" dominant-baseline="central">${NUM[i]}</text>` : "";
       return shape + ends + num;
     }).join("");
@@ -106,11 +106,14 @@
     const c = ctx(), det = c?.img?.detect || [];
     const dval = (name) => { const f = det.find((x) => x[0] === name); return f ? f[1] : ""; };
     const rows = M.list.map((m, i) => { const v = value(m); return `<tr><td>${NUM[i]}</td><td class="n">${m.rect ? "枠" : "線"} ${esc(v.short)}</td><td class="n">${esc(v.px)}</td><td><button type="button" class="mini" data-mdel="${i}" title="消す">×</button></td></tr>`; }).join("");
-    const last = M.list[M.list.length - 1], v = value(last);
-    const cmp = sc() && (dval("width_mm") || dval("length_mm"))
-      ? `<table class="mcmp"><tr><th></th><th>${NUM[M.list.length - 1]} 測った</th><th>欠陥データ</th></tr><tr><td>幅</td><td class="n">${f2(v.w)} mm</td><td class="n">${esc(dval("width_mm"))} mm</td></tr><tr><td>長さ</td><td class="n">${f2(v.l)} mm</td><td class="n">${esc(dval("length_mm"))} mm</td></tr></table>` : "";
+    // 欠陥データの幅・長さと比べる: 枠があれば最後の枠、無ければ最後の線（線は 3 px 以上ある向きだけ。横に引いた線の「長さ 0.00」を出さない）
+    const ri = M.list.map((m) => m.rect).lastIndexOf(true), ci = ri >= 0 ? ri : M.list.length - 1, cm = M.list[ci], cv = value(cm);
+    const span = (k) => cm.rect || Math.abs(cm.b[k] - cm.a[k]) >= 3;
+    const crow = (name, on, mm, data) => (on && data ? `<tr><td>${name}</td><td class="n">${f2(mm)} mm</td><td class="n">${esc(data)} mm</td></tr>` : "");
+    const crows = sc() ? crow("幅", span(0), cv.w, dval("width_mm")) + crow("長さ", span(1), cv.l, dval("length_mm")) : "";
+    const cmp = crows ? `<table class="mcmp"><tr><th></th><th class="n">${NUM[ci]} 測った</th><th class="n">欠陥データ</th></tr>${crows}</table>` : "";
     box.insertAdjacentHTML("afterbegin", `<div class="msrbox"><div class="mh"><b>計測</b><span class="spacer"></span><button type="button" class="mini" data-mclear>すべて消す</button></div>
-      <table><tr><th>#</th><th>測った</th><th>px</th><th></th></tr>${rows}</table>${cmp}</div>`);
+      <table><tr><th>#</th><th class="n">測った</th><th class="n">px</th><th></th></tr>${rows}</table>${cmp}</div>`);
   }
 
   // ---------------------------------------------------------------- 合わせる（校正）
@@ -181,6 +184,8 @@
   window.addEventListener("dt:zoom", () => requestAnimationFrame(draw));
   window.addEventListener("dt:vinfo", panel);
   window.addEventListener("dt:vclose", () => { M.list = []; M.drag = null; M.key = ""; $("mCal").hidden = true; draw(); });
-  window.addEventListener("resize", () => { if (!$("viewer").hidden) draw(); });
+  // 画像の大きさ・位置が変わったら描き直す（合わせる欄の開け閉めで画像が下がって縮む・窓の大きさ・拡大。作った後の採点 2026-11-02: 線と枠がずれた）
+  new ResizeObserver(() => { if (!$("viewer").hidden) requestAnimationFrame(draw); }).observe($("vStage"));
+  new ResizeObserver(() => { if (!$("viewer").hidden) requestAnimationFrame(draw); }).observe($("vImg"));
   render();
 })();

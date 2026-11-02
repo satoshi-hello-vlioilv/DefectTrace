@@ -1,7 +1,7 @@
 {
  "_": ["アプリの版と更新履歴の正本（窓〈desktop/src/update.rs〉と作業用の道具〈desktop/xtask〉が読む）。", "version は「大.中.小」。配るたびに上げる（直した・足した: 小、画面や使い方が変わる: 中、作り直し: 大）。desktop/Cargo.toml・tauri.conf.json の version も同じにする。", "changelog の先頭は version と同じ。新しい版を上に足す（notes は利用者に見せる言葉。GitHub の Releases の説明になる）。", "release は「配った版と、そのときの配る物の中身の要約」。手で書かず cd desktop && cargo xtask release で書く（まだ配っていない版を直しただけなら --amend）。"],
  "version": "4.10.0",
- "release": {"version": "4.10.0", "digest": "6d22c672123f9e08"},
+ "release": {"version": "4.10.0", "digest": "f689ddfea6df454e"},
  "changelog": [
   {"version": "4.10.0", "date": "2026-11-02", "notes": [
    "拡大画像で長さを測れるようにしました。画像の上でドラッグすると線、Shift を押しながらドラッグすると枠（幅 × 長さ）で測り、窓の上の帯に mm と px で出ます。右クリックで最後の 1 つを消します。右の欄に測った一覧と、欠陥データの幅・長さとの比べが出ます。",

@@ -96,9 +96,33 @@ try {
     await page.screenshot({ path: path.join(out, `measure-${W}.png`) });
     const m2 = await page.evaluate(measure);
     check(m2.cut === 0 && !m2.hscroll, `${W}: はみ出し・横のスクロールが無い（計測）`, JSON.stringify(m2));
+    // 「合わせる…」を開くと画像が下がって縮む。線と枠も一緒に描き直され、画像の同じ所に重なる（作った後の採点 2026-11-02 で見つかったずれ）
+    // 線の終わりの端が、絵（全体表示では要素の箱の中に縦横比を保って収まる範囲）のどの割合の所にあるか。開く前と後で同じなら重なっている
+    const endFrac = () => page.evaluate(() => {
+      const l = document.querySelector("#mSvg line.mk-line"), s = document.getElementById("vStage"), r = s.getBoundingClientRect(), im = document.getElementById("vImg"), b = im.getBoundingClientRect();
+      const k = Math.min(b.width / im.naturalWidth, b.height / im.naturalHeight), pw = im.naturalWidth * k, ph = im.naturalHeight * k, px = b.left + (b.width - pw) / 2, py = b.top + (b.height - ph) / 2;
+      const x = r.left - s.scrollLeft + +l.getAttribute("x2"), y = r.top - s.scrollTop + +l.getAttribute("y2");
+      return { f: [(x - px) / pw, (y - py) / ph], size: [pw, ph], top: py }; });
+    const before = await endFrac();
+    await page.click("#mCalBtn");
+    await page.waitForTimeout(300);
+    const after = await endFrac(), off = Math.hypot((after.f[0] - before.f[0]) * after.size[0], (after.f[1] - before.f[1]) * after.size[1]);
+    const moved = Math.abs(after.size[1] - before.size[1]) + Math.abs(after.top - before.top);
+    check(moved > 5 && off < 1, "「合わせる…」を開いて画像が動いても・縮んでも、線は画像の同じ所に重なる", `絵の上 ${before.top.toFixed(0)} → ${after.top.toFixed(0)}・高さ ${before.size[1].toFixed(0)} → ${after.size[1].toFixed(0)} px・ずれ ${off.toFixed(2)} px`);
+    const btn = await page.evaluate(() => { const b = document.querySelector("#mCal [data-calx]"), s = getComputedStyle(b); return [s.color, s.backgroundColor]; });
+    check(btn[0] !== btn[1] && !/226, 230, 236/.test(btn[0]), "合わせる欄の「閉じる」が読める色", btn.join(" / "));
+    await page.click("#mCal [data-calx]");
+    await page.waitForTimeout(200);
+    // 横に引いた線: 比べの表は幅だけ（長さ 0.00 mm を出さない）。枠がある間は枠と比べるので、枠を消してから
+    await page.evaluate(() => document.querySelectorAll("#vInfo [data-mdel]")[1].click());
+    const b3 = await page.locator("#vImg").boundingBox();
+    await drag([b3.x + b3.width * 0.2, b3.y + b3.height * 0.8], [b3.x + b3.width * 0.7, b3.y + b3.height * 0.8]);
+    const flat = await page.evaluate(() => [...document.querySelectorAll("#vInfo .msrbox .mcmp tr td:first-child")].map((x) => x.textContent));
+    check(flat.join() === "幅", "横の線は、比べの表に幅だけ", flat.join("・"));
     await page.mouse.click(...pt(0.1, 0.9), { button: "right" });
     await page.waitForTimeout(150);
     check(await page.evaluate(() => document.querySelectorAll("#mSvg .mk-line").length === 1), "右クリックで最後の 1 つが消える");
+    check(await page.evaluate(() => document.querySelectorAll("#vInfo .msrbox > table:first-of-type tr").length === 2), "一覧も 1 行になる");
     check(errs.length === 0, `${W}: 画面のエラーが無い`, errs.join(" / "));
     await page.context().close();
   }

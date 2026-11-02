@@ -1,7 +1,7 @@
 {
  "title": "拡大画像の計測（ドラッグで線を引いて測る）。説明は 2026-11-02-measure-classify.md",
  "rule": "2026-10-17",
- "evaluator": "採点者（案を作っていない別のエージェント）。node program/tools/ui-variants.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-msr/props program/tools/proposals/2026-11-02-measure.mjs で 6 案を 1728・1536・1280 で撮り、今の画面は node program/tools/ui-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-msr/now 1728x1152,1280x720 の info-1728・info-1280 で撮った。sheet-measure-1728 で全体を見て、1280 の 6 案と今を 1 枚ずつ開き、上の帯の右半分を 6 案並べて切り出し（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-msr/bar-1280.png・bar-1728.png）、線と札の付近を 1728・1536 で切り出して（lab-1728.png・lab-1536.png）細部を見た。F の「合わせる…」は 1280 の画像の画素からコントラストを測った（2.4。button.mini は 11px・var(--sub)）。既存の操作は app.js で確かめた（拡大の窓はダブルクリックで全体⇔2x・ホイールで拡大。ドラッグは今は使っていない）。 2 回目の採点者: 案を作っておらず 1 回目も採点していない別のエージェント。node program/tools/ui-variants.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-msr2/props program/tools/proposals/2026-11-02-measure-2.mjs で 5 案（G・H・I・J・K）を 1728・1536・1280 で撮り、sheet-measure-1728・1536 で全体を見て、1280 の 5 案と 1728-G・1728-K を 1 枚ずつ開いて細部を見た。H の帯（1728・1536）と K の 1280 の窓の上の帯を切り出して見た（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-msr2/bar-H-1728.png・bar-H-1536.png・bar-K-1280.png）。既存の操作は app.js で確かめた（ダブルクリック＝全体⇔2x・ホイール＝拡大・#vStage は overflow:auto でスクロールバーで送る。ドラッグは使っていない）。1 回目の付け方にそろえ、画像を覆う読み取り欄は D の帯と同じく重なりで引き、操作の説明が画面に無いのは減点でなく『考えさせない』で下げた。",
+ "evaluator": "採点者（案を作っていない別のエージェント）。node program/tools/ui-variants.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-msr/props program/tools/proposals/2026-11-02-measure.mjs で 6 案を 1728・1536・1280 で撮り、今の画面は node program/tools/ui-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-msr/now 1728x1152,1280x720 の info-1728・info-1280 で撮った。sheet-measure-1728 で全体を見て、1280 の 6 案と今を 1 枚ずつ開き、上の帯の右半分を 6 案並べて切り出し（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-msr/bar-1280.png・bar-1728.png）、線と札の付近を 1728・1536 で切り出して（lab-1728.png・lab-1536.png）細部を見た。F の「合わせる…」は 1280 の画像の画素からコントラストを測った（2.4。button.mini は 11px・var(--sub)）。既存の操作は app.js で確かめた（拡大の窓はダブルクリックで全体⇔2x・ホイールで拡大。ドラッグは今は使っていない）。 2 回目の採点者: 案を作っておらず 1 回目も採点していない別のエージェント。node program/tools/ui-variants.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-msr2/props program/tools/proposals/2026-11-02-measure-2.mjs で 5 案（G・H・I・J・K）を 1728・1536・1280 で撮り、sheet-measure-1728・1536 で全体を見て、1280 の 5 案と 1728-G・1728-K を 1 枚ずつ開いて細部を見た。H の帯（1728・1536）と K の 1280 の窓の上の帯を切り出して見た（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score-msr2/bar-H-1728.png・bar-H-1536.png・bar-K-1280.png）。既存の操作は app.js で確かめた（ダブルクリック＝全体⇔2x・ホイール＝拡大・#vStage は overflow:auto でスクロールバーで送る。ドラッグは使っていない）。1 回目の付け方にそろえ、画像を覆う読み取り欄は D の帯と同じく重なりで引き、操作の説明が画面に無いのは減点でなく『考えさせない』で下げた。 作った後の採点者: 案を作っておらず、作ってもおらず、1・2 回目の案も採点していない別のエージェント。node program/tools/classify-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built-msr/use で使っている様子（measure-1728・1280。すべて OK）を、node program/tools/ui-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built-msr/now 1728x1152,1536x864,1280x720 で測る前の拡大の窓（info-1728・1536・1280）を撮り、作る前の before/info-1728・1280 と見比べた。さらに Playwright（/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built-msr/shoot.mjs）で 1728・1536・1280 の各幅に、欠陥の幅を線で測った所（own/line-<幅>）・欠陥を枠で囲んだ所（own/rect-<幅>）・『合わせる…』を開いた所（own/cal-<幅>）を撮った。帯（bar-1728.png）・右の欄の計測の表（panel-1728.png）・番号の札の付近（num2-1728.png）・合わせるの帯（calbar-1280.png）を切り出し、番号の札と欠陥の縁の重なり・『閉じる』の色は画素で測った。描き直しのきっかけは measure-view.js で確かめた（window の resize と dt:zoom・dt:viewer だけ）。案の採点の付け方（重なり・読みにくい字の数え方）にそろえた。",
  "rounds": [
   {
    "name": "1 回目",
@@ -299,5 +299,35 @@
     }
    }
   }
- ]
+ ],
+ "built": {
+  "name": "作った後（版 4.10.0）",
+  "images": "/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built-msr/use/measure-1728.png・measure-1280.png（classify-check.mjs）、/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built-msr/now/info-1728・1536・1280.png（ui-check.mjs）、/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built-msr/own/line・rect・cal-<1728・1536・1280>.png（自分で Playwright）、切り出し bar-1728・panel-1728・num2-1728・calbar-1280.png",
+  "result": {
+   "score": {
+    "order": 9,
+    "chunk": 9,
+    "hierarchy": 8,
+    "visual": 8,
+    "steps": 9,
+    "effortless": 9,
+    "intuitive": 8,
+    "form": 8,
+    "place": 9,
+    "layout": 7,
+    "tone": 8
+   },
+   "minus": [
+    {
+     "kind": "overlap",
+     "where": "own/cal-1280.png・cal-1728.png: 『合わせる…』を押すと帯（約 45px）が出て画像が下がり縮むが、線と枠を描き直さない（measure-view.js は window の resize でしか draw しない）。rect-1280 で欠陥にぴたりと合っていた枠②が、cal-1280 では欠陥の下へ約 30px ずれて灰の地に重なり、線①も欠陥の中ほどからずれる（合わせる値を入れる、まさにその時に図が誤る）"
+    },
+    {
+     "kind": "unreadable",
+     "where": "own/cal-1280.png・cal-1728.png の合わせるの帯（calbar-1280.png）: 『閉じる』が白い地に .mcal の明るい字色（#e2e6ec）を受け継ぎ、コントラスト約 1.2 でほとんど読めない（押せない物に見える）"
+    }
+   ],
+   "seen": "案の H のとおりに作られている。窓の上の帯の下に 1 段の計測の帯（1728・1536・1280 とも高さ 36px で折れず、はみ出し 0・横のスクロール無し）があり、左から 操作の説明 → いまの読み（黄の太字 1.20 mm）→ 幅・長さ・px の内訳 → 物差しの箱（幅 0.0857 / 長さ 0.192 mm/px 推定・24 件・合わせる…）と使う順に並ぶ。測る前（info-<幅>）は『画像の上でドラッグすると、ここに長さが出ます』が出て、測れることに気づける。画像の上は線・枠・端の印・番号だけで、帯や札が欠陥を覆わない。H の採点者の『作るときに直すとよい所』は直っている: 物差しの値は普通の明るい字で黄の太字は読みの 1 つだけ（主と従が分かれた。bar-1728.png）・右の欄の先頭に計測の一覧と『② 測った／欠陥データ』の 幅・長さ の比べがある（line-1536 で欠陥の幅を線で測ると 1.20 mm、データの 1.2 mm とそろう）・言葉は横・縦でなく 幅・長さ（帯・一覧・比べ・物差しで同じ）。弱い所: 合わせるの帯を開くと図がずれる・その帯の『閉じる』が読めない（減点）。右の欄の表の見出し『測った』は左寄せなのに値は右寄せで間が空き、『② 測った』の見出しも値の列とそろわない（panel-1728.png。整列）。番号の札が線の端のすぐ外で、欠陥の縁に接する（num2-1728 で 1〜2px 被る。減点するほどではない）。線を横に引くと内訳に『長さ 0.00 mm』と出て、比べの表でも長さ 0.00 とデータ 2.5 が並ぶ（線のときは比べの片方が意味を持たない）。帯の分だけ画像が 45px 低い（info-1280 と before/info-1280）。"
+  }
+ }
 }
