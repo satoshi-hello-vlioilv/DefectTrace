@@ -119,6 +119,8 @@ try {
     await drag([b3.x + b3.width * 0.2, b3.y + b3.height * 0.8], [b3.x + b3.width * 0.7, b3.y + b3.height * 0.8]);
     const flat = await page.evaluate(() => [...document.querySelectorAll("#vInfo .msrbox .mcmp tr td:first-child")].map((x) => x.textContent));
     check(flat.join() === "幅", "横の線は、比べの表に幅だけ", flat.join("・"));
+    const flatBar = await page.textContent("#mParts");
+    check(!/長さ/.test(flatBar), "横の線は、帯の内訳にも長さを出さない", flatBar);
     await page.mouse.click(...pt(0.1, 0.9), { button: "right" });
     await page.waitForTimeout(150);
     check(await page.evaluate(() => document.querySelectorAll("#mSvg .mk-line").length === 1), "右クリックで最後の 1 つが消える");

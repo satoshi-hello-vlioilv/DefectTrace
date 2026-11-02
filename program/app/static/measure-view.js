@@ -59,9 +59,11 @@
         ? { main: `幅 ${f2(dx * s.x)} × 長さ ${f2(dy * s.y)} mm`, parts: `面積 ${f2(dx * s.x * dy * s.y)} mm² ・ ${dx.toFixed(1)} × ${dy.toFixed(1)} px`, w: dx * s.x, l: dy * s.y, short: `${f2(dx * s.x)} × ${f2(dy * s.y)} mm`, px: `${dx.toFixed(0)} × ${dy.toFixed(0)}` }
         : { main: `幅 ${dx.toFixed(1)} × 長さ ${dy.toFixed(1)} px`, parts: "物差しが無いので px だけ", short: `${dx.toFixed(0)} × ${dy.toFixed(0)} px`, px: `${dx.toFixed(0)} × ${dy.toFixed(0)}` };
     }
+    // 線の内訳は 3 px 以上ある向きだけ（横に引いた線に「長さ 0.00」を出さない。右の欄の比べと同じ基準）
+    const axes = (fw, fl, unit) => [dx >= 3 && `幅 ${fw}`, dy >= 3 && `長さ ${fl}`].filter(Boolean).join(" × ") + (dx >= 3 || dy >= 3 ? ` ${unit} ・ ` : "");
     return s
-      ? { main: `${f2(Math.hypot(dx * s.x, dy * s.y))} mm`, parts: `幅 ${f2(dx * s.x)} × 長さ ${f2(dy * s.y)} mm ・ ${px.toFixed(1)} px`, w: dx * s.x, l: dy * s.y, short: `${f2(Math.hypot(dx * s.x, dy * s.y))} mm`, px: px.toFixed(1) }
-      : { main: `${px.toFixed(1)} px`, parts: `幅 ${dx.toFixed(1)} × 長さ ${dy.toFixed(1)} px ・ 物差しが無いので px だけ`, short: `${px.toFixed(1)} px`, px: px.toFixed(1) };
+      ? { main: `${f2(Math.hypot(dx * s.x, dy * s.y))} mm`, parts: `${axes(f2(dx * s.x), f2(dy * s.y), "mm")}${px.toFixed(1)} px`, w: dx * s.x, l: dy * s.y, short: `${f2(Math.hypot(dx * s.x, dy * s.y))} mm`, px: px.toFixed(1) }
+      : { main: `${px.toFixed(1)} px`, parts: `${axes(dx.toFixed(1), dy.toFixed(1), "px")}物差しが無いので px だけ`, short: `${px.toFixed(1)} px`, px: px.toFixed(1) };
   }
 
   // ---------------------------------------------------------------- 描く
