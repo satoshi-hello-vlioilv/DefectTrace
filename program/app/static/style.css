@@ -540,3 +540,58 @@ table.set-t{width:100%;border-collapse:collapse}.set-t th{font-weight:400;color:
 .set-ops button[data-set="nudge"]{width:7.5em}
 /* 設定の「この PC」の頁: 版・ショートカットの文は 1 行を使い、ボタンはその下の右（文の末尾の 1〜2 字だけが折れない） */
 #setPc .rl-row{flex-wrap:wrap;gap:6px 12px}#setPc .rl-row .grow{flex:1 1 100%}#setPc .rl-row .rl-btn{margin-left:auto}
+
+/* ================================================================ 画像の仕分け（class-view.js。3 回の案出しと採点で L に決めた: program/tools/proposals/2026-11-02-classify*）
+   木のすぐ下に置く（木は中身の高さまで・札の見本は欄の底）。グループの色（--gc）は表裏・分類の色と重ならない色に記号を添える */
+#treePane>#tree{flex:0 1 auto;min-height:80px}
+#treePane>.nb-leg{margin-top:auto}
+.cls-pane{flex:0 1 auto;min-height:0;overflow:auto;padding:8px 10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.cls-head{display:flex;gap:6px;align-items:baseline;font-size:13px;color:var(--acc)}.cls-head .sub{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cls-busy{margin-left:auto;font-size:12px;color:var(--sub)}
+.cls-list{display:flex;flex-direction:column;gap:6px}
+.cls-g{display:grid;grid-template-columns:auto 1fr auto auto;gap:2px 8px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--pane);cursor:pointer}
+.cls-g:hover{border-color:var(--gc)}
+.cls-g.on{border:2px solid var(--gc);padding:5px 7px;background:color-mix(in srgb,var(--gc) 9%,var(--pane))}
+.cls-g.drop,.cls-add.drop{outline:2px dashed var(--gc,var(--acc));outline-offset:2px;background:color-mix(in srgb,var(--gc,var(--acc)) 10%,var(--pane))}
+body.cls-dragging .cls-g,body.cls-dragging .cls-add{outline:1px dashed var(--gc,var(--acc));outline-offset:1px}
+.cls-g .mk{font-size:14px;width:18px;text-align:center;color:var(--gc)}.cls-g .nm{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cls-g .n{font:12px Consolas,monospace;color:var(--sub);white-space:nowrap}
+.cls-g .rule{grid-column:1/-1;font-size:12px;color:var(--sub);line-height:1.45}.cls-g .rule.need{color:color-mix(in srgb,var(--gc) 75%,var(--txt))}
+.cls-g .cls-name{font-size:13px;min-width:0;width:100%}
+.cls-x{border:none;background:none;color:var(--sub);padding:0 4px;font-size:13px;line-height:1}.cls-x:hover{color:var(--ng)}.cls-x.yes{color:#fff;background:var(--ng);border-radius:4px;padding:1px 6px;font-size:12px}
+.cls-ex{grid-column:1/-1;display:flex;gap:4px;flex-wrap:wrap}
+.cls-exi{position:relative;display:inline-block;width:34px;height:26px;border:1.5px solid var(--gc);border-radius:3px;overflow:hidden;background:#9aa3ad}
+.cls-exi.other{border-style:dashed}.cls-exi img{width:100%;height:100%;object-fit:cover;display:block}
+.cls-exi button{position:absolute;top:0;right:0;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:11px;line-height:1;padding:1px 3px;display:none}.cls-exi:hover button{display:block}
+.cls-more{font-size:12px;color:var(--sub);align-self:center}
+.cls-add{font-size:12px;color:var(--acc);border:1px dashed var(--acc);border-radius:6px;padding:4px 8px;text-align:center;cursor:pointer}.cls-add .sub{color:var(--sub);margin-left:4px}
+.cls-err{font-size:12px;color:var(--ng)}
+.cls-sort{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--sub)}.cls-sort .seg button{font-size:12px;padding:1px 8px}
+.cls-how{margin:2px 0 0;padding-left:18px;font-size:12px;color:var(--sub);line-height:1.6}
+/* カードの札: 見本＝塗り・当てはまる＝枠（字でも分ける） */
+.th>.ctag{position:absolute;z-index:2;right:8px;top:4px;font:700 12px/1.5 system-ui,sans-serif;color:var(--gc);background:var(--pane);border:1.5px solid var(--gc);border-radius:4px;padding:0 6px;pointer-events:none;white-space:nowrap}
+.th>.ctag.ex{color:#fff;background:var(--gc)}
+/* フィルタの帯の仕分けの札 */
+.f-chip.cls-chip{border-color:var(--gc);background:color-mix(in srgb,var(--gc) 9%,var(--pane));color:var(--txt)}.f-chip.cls-chip .mk{color:var(--gc)}.f-chip.cls-chip .x{color:var(--gc)}
+/* 一覧のグループ順（カードは動かさず order で並べる。CAB の見出しは隠し、グループの見出しを出す） */
+#grid.gmode>.cabsep:not(.gsep),#grid.gmode>.ph{display:none}
+#grid>.gsep{font-size:12px}#grid>.gsep .gmk{font-size:1em}#grid>.gsep .gcab{font-weight:400;margin-left:4px}
+
+/* ================================================================ 拡大画像の計測（measure-view.js。2 回の案出しと採点で H に決めた: program/tools/proposals/2026-11-02-measure*） */
+.mbar2{display:flex;gap:14px;align-items:center;padding:4px 12px;background:#18212e;color:#e2e6ec;font-size:13px;border-bottom:1px solid #2c3a4f;white-space:nowrap;min-width:0}
+.mbar2 .mhelp{color:#c9d2de;font-size:12px}
+.mbar2 .mval{font:700 16px Consolas,monospace;color:#ffd23f}.mbar2 .mparts{font-family:Consolas,monospace;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.mbar2 .mscale{display:inline-flex;gap:8px;align-items:center;background:#223044;border:1px solid #3d4d66;border-radius:6px;padding:2px 4px 2px 8px}
+.mbar2 .ms-l{color:#c9d2de}.mbar2 .ms-v{font-family:Consolas,monospace;color:#e2e6ec}.mbar2 .ms-s{color:#c9d2de;font-size:12px}
+.mbar2 button{background:#e8edf4;color:#14202e;border-color:#e8edf4;font-size:12px;padding:1px 8px}
+.mcal[hidden]{display:none}
+.mcal{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:6px 12px;background:#223044;color:#e2e6ec;font-size:13px;border-bottom:1px solid #3d4d66}
+.mcal input{width:7em}.mcal small,.mcal .mcal-n{color:#c9d2de;font-size:12px}.mcal button{font-size:12px;padding:1px 10px}
+#vStage{position:relative;cursor:crosshair}
+#mSvg{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+#mSvg .mk-under{fill:none;stroke:#111;stroke-width:5;opacity:.55}#mSvg .mk-line{fill:none;stroke:#ffd23f;stroke-width:2.5}
+#mSvg .mk-end{fill:#111;stroke:#ffd23f;stroke-width:2.5}#mSvg .mk-num{fill:#ffd23f;stroke:#111;stroke-width:3;paint-order:stroke;font:700 15px system-ui,sans-serif}
+#vInfo>.msrbox{background:var(--pane);border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:8px}
+.msrbox .mh{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px}
+.msrbox table{width:100%;border-collapse:collapse;font-size:13px}.msrbox td,.msrbox th{padding:3px 4px;border-bottom:1px solid var(--line2);text-align:left}
+.msrbox td.n{font-family:Consolas,monospace;text-align:right}.msrbox .mcmp{margin-top:6px}.msrbox .mini{font-size:12px;padding:0 6px}

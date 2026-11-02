@@ -65,6 +65,23 @@ pub struct App {
     shared_dir: std::sync::Mutex<Option<(std::time::Instant, Option<PathBuf>)>>,
     /// この PC の使い始め（使用状況の心拍）
     session: crate::presence::Session,
+    /// 画像の特徴（仕分け・物差しの推定。ロット・画像の組ごとに最近の 3 つ）
+    feats: Mutex<Vec<(LotKey, Arc<LotFeats>)>>,
+}
+
+/// ロット・画像の組（覚えの鍵）
+type LotKey = (String, String);
+
+/// ロットの画像の特徴（classify.rs）。keys の順に vals・blobs
+pub struct LotFeats {
+    pub defs: Vec<crate::classify::FeatDef>,
+    pub keys: Vec<String>,
+    pub vals: Vec<Vec<Option<f64>>>,
+    pub blobs: Vec<Option<crate::classify::Blob>>,
+    /// 物差しの推定（欠陥データの幅・長さと画像の上の欠陥の大きさから）
+    pub scale: Option<Value>,
+    /// 分類の欄の値 → 名前（分類名・面の名前・カメラ・明暗）
+    pub cat_names: HashMap<(String, i64), String>,
 }
 
 /// 画像 → 欠陥の対応（"cab/name" → DETECT_INFO の番号）。
@@ -206,6 +223,7 @@ impl App {
             lot_re,
             shared_dir: Default::default(),
             session: Default::default(),
+            feats: Default::default(),
         })
     }
 
@@ -224,6 +242,242 @@ impl App {
 
     fn filter_store(&self) -> crate::filters::Store {
         crate::filters::Store { home: self.cfg.home.clone(), shared: self.shared_dir() }
+    }
+
+    /// ロットの画像の特徴を計算する（覚えがあれば使う）。CAB ごとに 1 つの作業者へ割り振る（同じ CAB を何度も展開しない）
+    pub fn lot_feats(&self, lot: &str, g: &str) -> Result<Arc<LotFeats>, Reply> {
+        use crate::classify::{data_feature_kind, estimate_scale, image_features, FeatDef, IMG_FEATS};
+        let job = self.images.job(Path::new(lot), true).map_err(|e| Reply::error(404, &e))?;
+        job.wait_named(Duration::from_secs(60));
+        let (units, _) = job.names(g);
+        let keys: Vec<String> = units.iter().flat_map(|(stem, ns)| ns.iter().map(move |n| format!("{stem}/{n}"))).collect();
+        let ck = (lot.to_string(), g.to_string());
+        if let Some((_, f)) = self.feats.lock().unwrap().iter().find(|(k, f)| *k == ck && f.keys.len() == keys.len()) {
+            return Ok(f.clone());
+        }
+        let jr = job.with(&self.images);
+        let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(1, 8);
+        let mut img: Vec<Option<crate::classify::ImageFeat>> = (0..keys.len()).map(|_| None).collect();
+        let starts: Vec<usize> = units
+            .iter()
+            .scan(0, |s, (_, ns)| {
+                let at = *s;
+                *s += ns.len();
+                Some(at)
+            })
+            .collect();
+        std::thread::scope(|sc| {
+            let hs: Vec<_> = (0..workers)
+                .map(|w| {
+                    let (units, starts, jr) = (&units, &starts, &jr);
+                    sc.spawn(move || {
+                        let mut out = vec![];
+                        for (u, (stem, ns)) in units.iter().enumerate().filter(|(u, _)| u % workers == w) {
+                            for (k, n) in ns.iter().enumerate() {
+                                let f = jr
+                                    .original(g, stem, n)
+                                    .ok()
+                                    .and_then(|(_, b)| crate::thumb::decode(&b).ok())
+                                    .map(|r| image_features(&r));
+                                out.push((starts[u] + k, f));
+                            }
+                        }
+                        out
+                    })
+                })
+                .collect();
+            for h in hs {
+                for (i, f) in h.join().unwrap_or_default() {
+                    img[i] = f;
+                }
+            }
+        });
+        // 欠陥データの欄（数の欄。番号・どの件も同じ欄は除く）
+        let res = self.lotres(lot)?;
+        let det = res.dat("DETECT_INFO");
+        let m = self.image_map(lot, safe_part(g)?)?;
+        let mut defs: Vec<FeatDef> =
+            IMG_FEATS.iter().map(|(k, l)| FeatDef { key: k.to_string(), label: l.to_string(), cat: *k == "img:polarity" }).collect();
+        let mut dcols = vec![];
+        for (ci, f) in det.value_fields().enumerate() {
+            let all: Vec<Option<f64>> = det.records.iter().map(|r| r.vals.get(ci).and_then(V::num)).collect();
+            if let Some(cat) = data_feature_kind(&all) {
+                let label = if f.label.is_empty() { f.name.clone() } else { f.label.clone() };
+                defs.push(FeatDef { key: format!("dat:{}", f.name), label, cat });
+                dcols.push((ci, f.name.clone()));
+            }
+        }
+        let mut cat_names: HashMap<(String, i64), String> = HashMap::new();
+        cat_names.insert(("img:polarity".into(), -1), "暗い".into());
+        cat_names.insert(("img:polarity".into(), 1), "明るい".into());
+        let (mut vals, mut blobs, mut pairs) = (vec![], vec![], vec![]);
+        for (i, k) in keys.iter().enumerate() {
+            let f = img[i].take();
+            let mut v = f.as_ref().map(|f| f.vals.clone()).unwrap_or_else(|| vec![None; IMG_FEATS.len()]);
+            let rec = m.map.get(k).map(|&d| &det.records[d]);
+            for (ci, name) in &dcols {
+                let x = rec.and_then(|r| r.vals.get(*ci));
+                if let (Some(x), Some(n)) = (x, x.and_then(V::num)) {
+                    cat_names.entry((format!("dat:{name}"), n as i64)).or_insert_with(|| match name.as_str() {
+                        "group" => side_info(res.sides(), x).name,
+                        "camera" => res.cam_label(x),
+                        k if lot::KIND_KEYS.contains(&k) => res.kind_info(Some(x)).name,
+                        _ => py_str(x),
+                    });
+                }
+                v.push(x.and_then(V::num));
+            }
+            let blob = f.and_then(|f| f.blob);
+            if let (Some(b), Some(r)) = (&blob, rec) {
+                let num = |n: &str| det.get(r, n).and_then(V::num).unwrap_or(0.0);
+                pairs.push((num("width_mm"), num("length_mm"), b.w() as f64, b.h() as f64));
+            }
+            vals.push(v);
+            blobs.push(blob);
+        }
+        let out = Arc::new(LotFeats { defs, keys, vals, blobs, scale: estimate_scale(&pairs), cat_names });
+        let mut c = self.feats.lock().unwrap();
+        c.retain(|(k, _)| *k != ck);
+        c.push((ck, out.clone()));
+        if c.len() > 3 {
+            c.remove(0);
+        }
+        Ok(out)
+    }
+
+    /// 物差しの推定（拡大の窓を開くたびに使うので速く）。仕分けで全部の画像の特徴を計算済みならそれを使い、
+    /// まだなら欠陥データのある画像を最大 SCALE_SAMPLE 枚だけ読んで推定する（何万枚のロットでも待たせない）
+    fn scale_estimate(&self, lot: &str, g: &str) -> Result<Option<Value>, Reply> {
+        const SCALE_SAMPLE: usize = 120;
+        let ck = (lot.to_string(), g.to_string());
+        if let Some((_, f)) = self.feats.lock().unwrap().iter().find(|(k, _)| *k == ck) {
+            return Ok(f.scale.clone());
+        }
+        let job = self.images.job(Path::new(lot), true).map_err(|e| Reply::error(404, &e))?;
+        let res = self.lotres(lot)?;
+        let det = res.dat("DETECT_INFO");
+        let m = self.image_map(lot, g)?;
+        let jr = job.with(&self.images);
+        let mut picked: Vec<(&String, usize)> = m.order.iter().map(|(k, d)| (k, *d)).collect();
+        let step = (picked.len() / SCALE_SAMPLE).max(1);
+        picked = picked.into_iter().step_by(step).take(SCALE_SAMPLE).collect();
+        let mut pairs = vec![];
+        for (k, d) in picked {
+            let Some((stem, name)) = k.split_once('/') else { continue };
+            let Some(r) = jr.original(g, stem, name).ok().and_then(|(_, b)| crate::thumb::decode(&b).ok()) else { continue };
+            if let Some(b) = crate::classify::image_features(&r).blob {
+                let rec = &det.records[d];
+                let num = |n: &str| det.get(rec, n).and_then(V::num).unwrap_or(0.0);
+                pairs.push((num("width_mm"), num("length_mm"), b.w() as f64, b.h() as f64));
+            }
+        }
+        Ok(crate::classify::estimate_scale(&pairs))
+    }
+
+    /// 仕分けと物差し:
+    /// - GET /api/classes・POST /api/classes {groups}: この PC のグループ（作業場所の classes.json）
+    /// - GET /api/classify/feat?lot&g&cab&name: 1 枚の特徴（見本として残す。ほかのロットでも使えるように値で持つ）と欠陥の枠
+    /// - POST /api/classify {lot, g, groups: [{id, examples: [{feat: {特徴: 値}}]}]}: 条件を割り出し、ロットの画像を振り分ける
+    /// - GET /api/scale?lot&g&eq: 物差し（合わせた値が先・無ければ推定）・POST /api/scale {eq, x, y}（null で消す）
+    fn classify_api(&self, method: &str, path: &str, a: &Args, b: &Value) -> R {
+        use crate::classify::{learn, rule_json, score};
+        let home = &self.cfg.home;
+        match (method, path) {
+            ("GET", "/api/classes") => {
+                Ok(Reply::json(&crate::update::read_json(&home.join("classes.json")).unwrap_or_else(|| json!({"groups": []}))))
+            }
+            ("POST", "/api/classes") => {
+                let groups = b["groups"].as_array().cloned().ok_or_else(|| Reply::error(400, "groups がありません"))?;
+                crate::update::write_json(&home.join("classes.json"), &json!({"groups": groups})).map_err(|e| Reply::error(500, &e))?;
+                Ok(Reply::json(&json!({"ok": true})))
+            }
+            ("GET", "/api/classify/feat") => {
+                let (lot, g) = (a.req("lot")?, safe_part(a.req("g")?)?);
+                let key = format!("{}/{}", safe_part(a.req("cab")?)?, safe_part(a.req("name")?)?);
+                let f = self.lot_feats(lot, g)?;
+                let i = f.keys.iter().position(|k| *k == key).ok_or_else(|| Reply::error(404, "その画像はありません"))?;
+                let feat: Map<String, Value> =
+                    f.defs.iter().zip(&f.vals[i]).filter_map(|(d, v)| v.map(|v| (d.key.clone(), json!(v)))).collect();
+                let blob = f.blobs[i].as_ref().map(|b| json!([b.x0, b.y0, b.x1, b.y1]));
+                Ok(Reply::json(&json!({"key": key, "feat": feat, "blob": blob})))
+            }
+            ("POST", "/api/classify") => {
+                let (lot, g) = (b["lot"].as_str().unwrap_or(""), safe_part(b["g"].as_str().unwrap_or(""))?);
+                let f = self.lot_feats(lot, g)?;
+                let vec_of = |feat: &Value| -> Vec<Option<f64>> { f.defs.iter().map(|d| feat[&d.key].as_f64()).collect() };
+                let groups: Vec<&Value> = b["groups"].as_array().map(|v| v.iter().collect()).unwrap_or_default();
+                let ex: Vec<Vec<Vec<Option<f64>>>> =
+                    groups.iter().map(|gr| gr["examples"].as_array().into_iter().flatten().map(|e| vec_of(&e["feat"])).collect()).collect();
+                let fmt_cat =
+                    |k: &str, v: f64| f.cat_names.get(&(k.to_string(), v as i64)).cloned().unwrap_or_else(|| crate::classify::nice(v));
+                let learned: Vec<_> = (0..groups.len())
+                    .map(|i| {
+                        let others: Vec<Vec<Option<f64>>> =
+                            (0..groups.len()).filter(|&o| o != i).flat_map(|o| ex[o].iter().cloned()).collect();
+                        learn(&f.defs, &f.vals, &ex[i], &others)
+                    })
+                    .collect();
+                // 1 枚ずつ、いちばん当てはまるグループ（すべての条件を満たす物 → 見本の中心に近い物。1 つだけ外れる物は「近い」）
+                let mut assign = Map::new();
+                let mut counts = vec![(0usize, 0usize); groups.len()];
+                for (i, k) in f.keys.iter().enumerate() {
+                    let best = (0..groups.len())
+                        .filter(|&gi| !learned[gi].rules.is_empty())
+                        .map(|gi| (gi, score(&f.defs, &learned[gi], &f.vals[i])))
+                        .filter(|(gi, (hit, _))| *hit + 1 >= learned[*gi].rules.len())
+                        .min_by(|a, b| {
+                            (learned[b.0].rules.len() - b.1 .0)
+                                .cmp(&(learned[a.0].rules.len() - a.1 .0))
+                                .reverse()
+                                .then(a.1 .1.total_cmp(&b.1 .1))
+                        });
+                    if let Some((gi, (hit, d))) = best {
+                        let full = hit == learned[gi].rules.len();
+                        if full {
+                            counts[gi].0 += 1;
+                        } else {
+                            counts[gi].1 += 1;
+                        }
+                        assign.insert(k.clone(), json!({"g": groups[gi]["id"], "hit": full, "d": (d * 100.0).round() / 100.0}));
+                    }
+                }
+                let out: Vec<Value> = groups
+                    .iter()
+                    .zip(&learned)
+                    .zip(&counts)
+                    .map(|((gr, l), (hit, near))| {
+                        json!({"id": gr["id"], "n": l.n, "why": l.why, "hit": hit, "near": near,
+                               "rules": l.rules.iter().map(|r| rule_json(&f.defs, r, &fmt_cat)).collect::<Vec<_>>()})
+                    })
+                    .collect();
+                Ok(Reply::json(&json!({"groups": out, "assign": assign, "total": f.keys.len()})))
+            }
+            ("GET", "/api/scale") => {
+                let calib =
+                    crate::update::read_json(&home.join("scales.json")).and_then(|v| v[a.get("eq").unwrap_or("")].as_object().cloned());
+                if let Some(c) = calib {
+                    return Ok(Reply::json(&json!({"x": c["x"], "y": c["y"], "from": "calib", "at": c["at"]})));
+                }
+                let (lot, g) = (a.req("lot")?, safe_part(a.req("g")?)?);
+                Ok(Reply::json(&self.scale_estimate(lot, g)?.unwrap_or(Value::Null)))
+            }
+            ("POST", "/api/scale") => {
+                let eq = b["eq"].as_str().filter(|e| !e.is_empty()).ok_or_else(|| Reply::error(400, "設備がありません"))?;
+                let p = home.join("scales.json");
+                let mut all = crate::update::read_json(&p).filter(Value::is_object).unwrap_or_else(|| json!({}));
+                match (b["x"].as_f64(), b["y"].as_f64()) {
+                    (Some(x), Some(y)) if x > 0.0 && y > 0.0 => {
+                        all[eq] = json!({"x": x, "y": y, "at": chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()});
+                    }
+                    _ => {
+                        all.as_object_mut().unwrap().remove(eq);
+                    }
+                }
+                crate::update::write_json(&p, &all).map_err(|e| Reply::error(500, &e))?;
+                Ok(Reply::json(&json!({"ok": true})))
+            }
+            _ => Err(Reply::error(404, "知らない問い合わせです")),
+        }
     }
 
     /// 欠陥のフィルタ: 一覧（GET）・保存（POST {scope, filter}）・消す（DELETE ?scope&id）・使える項目（GET fields?lot）・
@@ -303,6 +557,9 @@ impl App {
             ("GET", "/api/imginfo") => self.imginfo(&a),
             ("GET", "/api/map") => self.map(&a),
             (m, p) if p == "/api/filters" || p.starts_with("/api/filters/") => self.filters_api(m, p, &a, &b),
+            (m, p) if p == "/api/classes" || p.starts_with("/api/classify") || p.starts_with("/api/scale") => {
+                self.classify_api(m, p, &a, &b)
+            }
             ("GET", "/api/pairs") => self.pairs(&a),
             ("GET", "/api/pitch") => self.pitch(&a),
             ("GET", "/img") => self.image(&a, false),

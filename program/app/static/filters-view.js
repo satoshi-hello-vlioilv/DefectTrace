@@ -79,9 +79,11 @@
   }
   function renderBar() {
     const fs = activeFilters(), ctx = window.dtFilter.ctx();
-    $("fChips").innerHTML = fs.length ? fs.map(chip).join("") : '<span class="f-none">なし（全部の画像を出しています）</span>';
-    $("fClear").hidden = !fs.length;
-    $("fCount").innerHTML = ctx && fs.length ? `<b>${window.dtFilter.shownCount()}</b> / ${ctx.total} 枚` : ctx ? `${ctx.total} 枚` : "";
+    // 仕分けで絞っているときは、その札も同じ帯に出す（同じ「絞る」は同じ置き場・同じ形。class-view.js）
+    const cls = window.dtClass?.chip?.() || "", on = fs.length || cls;
+    $("fChips").innerHTML = on ? cls + fs.map(chip).join("") : '<span class="f-none">なし（全部の画像を出しています）</span>';
+    $("fClear").hidden = !on;
+    $("fCount").innerHTML = ctx && on ? `<b>${window.dtFilter.shownCount()}</b> / ${ctx.total} 枚` : ctx ? `${ctx.total} 枚` : "";
     fitChips();
   }
   // 1 段に入りきらなければ、チップを帯の 2 段目へ折り返す（名前・中身・× を切らない。作った後の採点 2026-10-27: 畳むと中身と × が消えた）
@@ -211,7 +213,7 @@
     const t = e.target;
     if (t.closest("#fPick")) { openPick(); return; }
     if (t.closest("#fOpen")) { $("fPop").hidden = true; openWin(); return; }
-    if (t.closest("#fClear")) { F.active = []; F.temp = null; saveActive(); apply(); return; }
+    if (t.closest("#fClear")) { F.active = []; F.temp = null; saveActive(); window.dtClass?.clear?.(); apply(); return; }
     const off = t.closest("[data-off]");
     if (off) { if (off.dataset.off === "temp") { F.temp = null; apply(); } else toggle(off.dataset.off, false); return; }
     if (!$("fPop").hidden && !t.closest("#fPop")) $("fPop").hidden = true;
@@ -267,4 +269,6 @@
   // ロットを開いて対応付けが済んだら、使っている条件を当て直す（項目の名前もそのロットの物に）
   window.dtFilter.onReady(async () => { F.counts = new Map(); renderBar(); await loadFields(window.dtFilter.ctx()); apply(); });
   loadList().then(renderBar);
+  // 仕分けの絞り込みが変わったら、帯（札・枚数）を描き直す
+  window.addEventListener("dt:shown", renderBar);
 })();

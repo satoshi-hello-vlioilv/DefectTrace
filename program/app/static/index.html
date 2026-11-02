@@ -39,6 +39,9 @@
       <div class="dz chips listzone" data-drop="list" title="ロット一覧に表示する項目（ここへドラッグ）"><span class="dzl">一覧</span><span class="pins" data-place="list"></span></div>
     </div>
     <ul id="tree" class="tree" role="tree"></ul>
+    <!-- 画像の仕分け（class-view.js。形は 3 回の案出しと別のエージェントの採点で L に決めた: program/tools/proposals/2026-11-02-classify*）。
+         木のすぐ下: グループの行＝カードのドロップ先・行を押すと一覧を絞る・一覧の並び（CAB 順／グループ順） -->
+    <section id="clsPane" class="cls-pane" aria-label="仕分け"></section>
     <div class="nb-leg" aria-label="札の見本"><span><span class="fl nb">画像なし</span> 確かめる画像なし（良品など）</span><span><span class="fl ovl">多量 n</span><span class="fl ovl">上限</span> 記録落ちの可能性（要確認）</span></div>
   </aside>
   <div class="split" data-split="treePane" title="ドラッグで幅を変更"></div>
@@ -155,8 +158,17 @@
     <button type="button" id="vNext">次</button>
     <button type="button" id="vClose" class="primary">閉じる</button>
   </div>
+  <!-- 計測（measure-view.js。形は 2 回の案出しと別のエージェントの採点で H に決めた: program/tools/proposals/2026-11-02-measure*）。
+       モード無し: 画像の上でドラッグ＝線・Shift＋ドラッグ＝枠・右クリック＝最後の 1 つを消す -->
+  <div id="mBar" class="mbar2" aria-live="polite">
+    <span class="mhelp">📏 ドラッグ＝線・Shift＋ドラッグ＝枠・右クリック＝消す</span>
+    <b id="mVal" class="mval"></b><span id="mParts" class="mparts"></span>
+    <span class="spacer"></span>
+    <span id="mScale" class="mscale"></span>
+  </div>
+  <form id="mCal" class="mcal" hidden></form>
   <div class="vbody">
-    <div id="vStage" class="fit"><img id="vImg" alt=""></div>
+    <div id="vStage" class="fit"><img id="vImg" alt="" draggable="false"><svg id="mSvg" class="msvg" aria-hidden="true"></svg></div>
     <div id="vInfo"></div>
   </div>
 </div>
@@ -235,6 +247,8 @@
 <script src="/static/lotlist-view.js?v={{v}}"></script>
 <script src="/static/app.js?v={{v}}"></script>
 <script src="/static/filters-view.js?v={{v}}"></script>
+<script src="/static/class-view.js?v={{v}}"></script>
+<script src="/static/measure-view.js?v={{v}}"></script>
 <script src="/static/desktop.js?v={{v}}"></script>
 <script src="/static/settings-view.js?v={{v}}"></script>
 </body>
