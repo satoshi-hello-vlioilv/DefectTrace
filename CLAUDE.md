@@ -16,7 +16,7 @@
 | 場所 | 中身 |
 |---|---|
 | `desktop/` | exe（Rust・Tauri）。窓・起動・更新と配布（`src/main.rs`・`updater.rs`）と、窓に依らない中身（`src/lib.rs` の下: 検査データ・画像・解析・画面の問い合わせ `app.rs`） |
-| `desktop/examples/` | 試しの入口 `serve.rs`（窓を使わずブラウザで画面を出す・撮影用）と、測る道具 `imgbench.rs`・`openbench.rs` |
+| `desktop/examples/` | 試しの入口 `serve.rs`（窓を使わずブラウザで画面を出す・撮影用）と、測る道具 `imgbench.rs`・`openbench.rs`・`classbench.rs`（仕分けの当たり具合） |
 | `desktop/xtask/` | 作る・配る・試すための作業用の道具（Rust。`cd desktop && cargo xtask` で一覧）: アイコンを描く `icon.rs`（作るとき build.rs が呼ぶ）・試験のロット `fixture.rs`・版の管理 `version.rs`・配る ZIP `bundle.rs`・自己診断 `selftest.rs`・本物の窓での更新の通し `verify.rs` |
 | `program/app/` | 配る物: 画面（`static/` の HTML・JS・CSS）・名前（`brand.json`）・版と更新履歴（`version.json`） |
 | `program/config/` | 配る設定の既定（利用者の設定は PC の作業場所 `%LOCALAPPDATA%\DefectTrace\config.json`） |

@@ -203,7 +203,7 @@
     Object.assign(S, { items: [], cur: -1, group: null, seen: new Set(), named: false, queue: [], LOT: null, img: null, imap: {}, map: null, sides: {}, kinds: {},
       P: null, D: new Map(), psel: null, pselRef: null, pairN: {}, plist: [], plistPairs: [], pshow: 150, PT: null, ptsel: null });
     S.gen++;
-    S.fk = S.fd = null; S.fn = 0;   // 前のロットのフィルタの答えは使わない（対応付けが済んだら、フィルタの係が当て直す）
+    S.fk = S.fd = null; S.fn = 0; S.ck = null; S.cn = "";   // 前のロットのフィルタ・仕分けの答えは使わない（対応付けが済んだら、それぞれの係が当て直す）
     Object.assign(S, { t0: performance.now(), samples: [], drawn: 0, total: 0, st: null, cardVer: (S.cardVer || 0) + 1,
       phase: { info: "run", link: "wait", map: "wait", pairs: "wait", pitch: "wait" } });
     $("pitchList").innerHTML = '<div class="empty">読込中...</div>'; $("ptSum").textContent = ""; $("pitchCnt").textContent = "";
@@ -255,7 +255,7 @@
     S.finishedGen = S.gen;
     const ng = st.cabs.filter((c) => c.state === "error").length;
     const kd = st.kinds || {}, kl = [kd.cab ? `CAB ${kd.cab}` : "", kd.dir ? `フォルダ ${kd.dir}` : "", kd.loose ? "直下" : ""].filter(Boolean).join("・");
-    status(`${S.fk ? `${S.items.filter(shown).length} / ${S.items.length} 枚を表示（フィルタ ${S.fn} つ）` : `${S.items.length} 枚`} / ${kl || "画像なし"}${ng ? ` / 失敗 ${ng}` : ""} / ${((performance.now() - S.t0) / 1000).toFixed(1)}秒`, ng > 0);
+    status(`${narrowed() ? `${S.items.filter(shown).length} / ${S.items.length} 枚を表示（${[S.fk ? `フィルタ ${S.fn} つ` : "", S.ck ? `仕分け ${S.cn}` : ""].filter(Boolean).join("・")}）` : `${S.items.length} 枚`} / ${kl || "画像なし"}${ng ? ` / 失敗 ${ng}` : ""} / ${((performance.now() - S.t0) / 1000).toFixed(1)}秒`, ng > 0);
   }
 
   function renderTabs(groups) {
@@ -283,15 +283,17 @@
   const key = (it) => `${it.g}/${it.cab}/${it.name}`;
   const mkey = (it) => `${it.cab}/${it.name}`;
   // ---------------------------------------------------------------- 欠陥のフィルタ（filters-view.js が条件を決め、ここは絞った答えを一覧・送り・MAP・数に当てる）
-  const shown = (it) => !S.fk || S.fk.has(mkey(it));
+  // 仕分けで絞っているとき（class-view.js が S.ck を決める）は、フィルタと重ねる（どちらも満たす画像だけ）
+  const shown = (it) => (!S.fk || S.fk.has(mkey(it))) && (!S.ck || S.ck.has(mkey(it)));
+  const narrowed = () => !!(S.fk || S.ck);
   function applyShown() {
-    document.querySelectorAll("#grid .th").forEach((t) => { const k = t.dataset.key; t.classList.toggle("fo", !!S.fk && !S.fk.has(k.slice(k.indexOf("/") + 1))); });
+    document.querySelectorAll("#grid .th").forEach((t) => t.classList.toggle("fo", !shown(itemOf(t))));
     const per = new Map();
     for (const it of S.items) { const c = per.get(it.cab) || [0, 0]; c[1]++; if (shown(it)) c[0]++; per.set(it.cab, c); }
     for (const [cab, [v, n]] of per) {
       const sec = document.getElementById("cab_" + cab), s = sec && sec.querySelector(".st");
-      if (s && s.classList.contains("done")) s.textContent = S.fk ? `${v} / ${n}枚` : `${n}枚`;
-      if (sec) sec.hidden = !!S.fk && v === 0;   // 当てはまる画像の無い CAB の見出しは出さない
+      if (s && s.classList.contains("done")) s.textContent = narrowed() ? `${v} / ${n}枚` : `${n}枚`;
+      if (sec) sec.hidden = narrowed() && v === 0;   // 当てはまる画像の無い CAB の見出しは出さない
     }
     if (S.cur >= 0 && S.items[S.cur] && !shown(S.items[S.cur])) { const i = S.items.findIndex(shown); if (i >= 0) select(i); else { S.cur = -1; $("imgTitle").textContent = "当てはまる画像がありません"; } }
     else if (S.cur >= 0) select(S.cur);
@@ -312,6 +314,20 @@
     set(r, gen) { if (gen !== S.gen) return; S.fk = r ? new Set(r.keys) : null; S.fd = r ? new Set(r.detects) : null; S.fn = r ? r.n : 0; applyShown(); },
     shownCount: () => S.items.filter(shown).length,
     onReady: (cb) => fready.push(cb),
+  };
+  // 仕分け（class-view.js）の口: 絞る組・カードの札・並び（グループ順）を当てる
+  const cready = [];
+  window.dtClass = {
+    ctx: () => (S.lot && S.phase.link === "done" ? { lot: S.lot.path, eq: S.lot.eq, g: S.group, gen: S.gen, total: S.items.length } : null),
+    /** 絞る（keys: 画像 cab/name・name: 帯に出す名前）。null で外す */
+    set(keys, name, gen) { if (gen !== S.gen) return; S.ck = keys ? new Set(keys) : null; S.cn = keys ? name : ""; applyShown(); window.dispatchEvent(new Event("dt:shown")); },
+    narrowed: () => !!S.ck,
+    shownCount: () => S.items.filter(shown).length,
+    /** 札・並びが変わった: 見えているカードを描き直す */
+    refresh: () => updateCards(),
+    /** 一覧の並びの番号（cab/name → 何番目）。グループ順に並べるときに使う */
+    order: () => new Map(S.items.map((it, i) => [mkey(it), i])),
+    onReady: (cb) => cready.push(cb),
   };
   const BUDGET = 12;
   function insertBlock(rank, its) {
@@ -392,6 +408,10 @@
     th.querySelector(":scope>fieldset>legend").innerHTML = cardHead(it, m);
     th.querySelector(":scope>.cm").innerHTML = cardMeta(it, m);
     th.style.setProperty("--sc", m ? m.scolor : "#9aa3ad");
+    th.querySelector(":scope>.ctag")?.remove();
+    const tag = window.dtClass.tag?.(mkey(it));   // 仕分けの札（class-view.js）
+    if (tag) th.insertAdjacentHTML("afterbegin", tag);
+    th.draggable = true;
     th.title = m ? `${m.sname} / ${m.kname}` : "";
     th.dataset.v = S.cardVer;
   }
@@ -523,6 +543,7 @@
     if (S.cur >= 0) select(S.cur);
     if (!Object.keys(S.imap).length && d.info) status(`画像と欠陥データの対応付けができません（${JSON.stringify(d.info)}）`, true);
     fready.forEach((cb) => cb());
+    cready.forEach((cb) => cb());
   }
   const sideName = (v) => S.sides[v]?.name ?? (v == null ? "" : `G${v}`);
   const sideColor = (v) => S.sides[v]?.color || "#1e5aa8";
@@ -552,7 +573,7 @@
     document.querySelectorAll(".th.sel").forEach((x) => x.classList.remove("sel"));
     const t = document.querySelector(`.th[data-key="${CSS.escape(key(it))}"]`);
     if (t) { t.classList.add("sel"); if (S.view === "grid") t.scrollIntoView({ block: "nearest" }); }
-    $("imgTitle").textContent = S.fk ? `${it.cab}/${it.name}  (${S.items.slice(0, i + 1).filter(shown).length}/${S.items.filter(shown).length}・絞り込み中)` : `${it.cab}/${it.name}  (${i + 1}/${S.items.length})`;
+    $("imgTitle").textContent = narrowed() ? `${it.cab}/${it.name}  (${S.items.slice(0, i + 1).filter(shown).length}/${S.items.filter(shown).length}・絞り込み中)` : `${it.cab}/${it.name}  (${i + 1}/${S.items.length})`;
     drawMap();
     if (!$("viewer").hidden) showViewer();
     clearTimeout(infoTimer);
@@ -580,6 +601,7 @@
     if (d.detect_index == null) h += `<div class="hint">${d.map_final ? "欠陥データとの対応なし" : "全画像の展開後に欠陥データと対応付けます"}</div>`;
     $("imgInfo").innerHTML = h;
     $("vInfo").innerHTML = h + `<div class="sec">ロット</div><table class="kv">${grouped(lotPins("summary").concat(lotPins("lot")), (p) => p.id, (p) => pinRow(p, "x"), SEP_ROW)}</table>`;
+    window.dispatchEvent(new Event("dt:vinfo"));   // 計測の一覧（measure-view.js）を右の欄の先頭に入れ直す
   }
 
   // ================================================================ lot info
@@ -1509,10 +1531,12 @@
   const imgUrl = (it) => "/img?" + q({ lot: S.lot.path, g: it.g, cab: it.cab, name: it.name });
   function prefetch(i) { const it = S.items[i]; if (!it) return; const u = imgUrl(it); if (pre.has(u)) return; const im = new Image(); im.src = u; pre.set(u, im); if (pre.size > 30) pre.delete(pre.keys().next().value); }
   function openViewer() { if (S.cur < 0) return; $("viewer").hidden = false; showViewer(); renderImgInfo(); }
-  function closeViewer() { $("viewer").hidden = true; $("grid").focus(); }
+  function closeViewer() { $("viewer").hidden = true; $("grid").focus(); window.dispatchEvent(new Event("dt:vclose")); }
+  // 計測（measure-view.js）の口: いまの画像と、その欠陥データ
+  window.dtViewer = { ctx: () => (S.lot && S.cur >= 0 ? { lot: S.lot.path, eq: S.lot.eq, it: S.items[S.cur], img: S.img, open: !$("viewer").hidden } : null) };
   function showViewer() {
     const it = S.items[S.cur], im = $("vImg");
-    im.onload = () => { im.dataset.w = im.naturalWidth; im.dataset.h = im.naturalHeight; applyZoom(); };
+    im.onload = () => { im.dataset.w = im.naturalWidth; im.dataset.h = im.naturalHeight; applyZoom(); window.dispatchEvent(new CustomEvent("dt:viewer", { detail: { key: `${it.g}/${it.cab}/${it.name}` } })); };
     im.src = imgUrl(it);
     const m = S.imap[mkey(it)];
     $("vName").textContent = `${S.lot.eq}  ${lotPins("summary")[0]?.value || ""}  ${S.lot.name}  ${m && m.no != null ? "欠陥No:" + m.no + "  " + m.kname + " [" + m.sname + "]" : it.cab + "/" + it.name}  (${S.cur + 1}/${S.items.length})`;
@@ -1523,6 +1547,7 @@
     $("vStage").classList.toggle("fit", S.zoom === "fit");
     if (S.zoom === "fit" || !im.dataset.w) { im.style.width = ""; im.style.height = ""; return; }
     im.style.width = im.dataset.w * S.zoom + "px"; im.style.height = im.dataset.h * S.zoom + "px";
+    window.dispatchEvent(new Event("dt:zoom"));
   }
   function setZoom(z) { S.zoom = z; document.querySelectorAll("#zoomSeg button").forEach((b) => b.classList.toggle("on", String(b.dataset.z) === String(z))); applyZoom(); }
   $("zoomSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setZoom(b.dataset.z === "fit" ? "fit" : Number(b.dataset.z)); });

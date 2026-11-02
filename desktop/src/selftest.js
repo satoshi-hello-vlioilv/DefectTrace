@@ -89,6 +89,22 @@
         ok("転写候補", pr.r.ok && pr.j.ok && pr.j.pairs.length > 0, pr.j && pr.j.pairs.length);
         const pt = await json("/api/pitch?" + q({ lot: l.path, g: c.group, skip: 1 }));
         ok("ピッチ候補", pt.r.ok && pt.j.ok && pt.j.chains.length > 0, pt.j && pt.j.chains.length);
+        // 仕分け: 同じ分類の画像 3 枚を見本にすると条件を割り出し、振り分ける（class-view.js・desktop/src/classify.rs）
+        const byKind = {};
+        for (const [k, v] of Object.entries(m.j.map)) (byKind[v.kname] ||= []).push(k);
+        const kind = Object.keys(byKind).find((k) => byKind[k].length >= 3);
+        if (kind) {
+          const feats = await Promise.all(byKind[kind].slice(0, 3).map((k) => json("/api/classify/feat?" + q({ lot: l.path, g: c.group, cab: k.split("/")[0], name: k.split("/").slice(1).join("/") }))));
+          const cl = await fetch("/api/classify", { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lot: l.path, g: c.group, groups: [{ id: "t", examples: feats.map((f) => ({ feat: f.j.feat })) }] }) });
+          const cj = cl.ok ? await cl.json() : {};
+          const rules = cj.groups ? cj.groups[0].rules.map((x) => x.text).join(" かつ ") : "";
+          ok("仕分け（見本 3 枚から条件）", cl.ok && rules.length > 0 && cj.groups[0].hit >= 3, `${kind}: ${rules}・${cj.groups && cj.groups[0].hit} 枚`);
+        }
+        // 計測の物差し（欠陥データの幅・長さと画像の上の欠陥から推定。measure-view.js）と、画面の計測の帯・仕分けの欄
+        const sc = await json("/api/scale?" + q({ lot: l.path, g: c.group, eq: l.eq || "" }));
+        ok("計測の物差し", sc.r.ok && (sc.j === null || (sc.j.x > 0 && sc.j.y > 0)), sc.j ? `幅 ${(+sc.j.x).toPrecision(3)}・長さ ${(+sc.j.y).toPrecision(3)} mm/px（${sc.j.from}）` : "なし（px だけ）");
+        ok("計測の帯と仕分けの欄", !!document.getElementById("mBar") && !!document.getElementById("clsPane"));
         // 画面でも開く（ツリーのロット行を押したのと同じ道）
         localStorage.setItem("lastLot", l.path);
       }
