@@ -624,7 +624,7 @@ body.cls-dragging .cls-g,body.cls-dragging .cls-add{outline:1px dashed var(--gc,
 .dock{padding:0;gap:0;overflow:auto}
 .blk{display:flex;flex-direction:column;min-height:64px;background:var(--pane);flex:var(--w,1) 1 0;border-bottom:1px solid var(--line2)}
 .blk.solo{flex:1 1 0}
-.blk.fold{flex:none;min-height:0}.blk.fold>.bb{display:none}
+.blk.fold{flex:none;min-height:0!important}   /* たたんだら見出しだけ（ブロックごとの最小の高さより先） */.blk.fold>.bb{display:none}
 .blk[hidden]{display:none}
 .blk>.bh{flex:none;display:flex;align-items:center;gap:4px;padding:3px 6px 3px 4px;border-bottom:1px solid var(--line2);background:#f3f6fa;font-size:13px;color:var(--acc);min-width:0}
 .blk.fold>.bh{border-bottom:none}
@@ -643,6 +643,8 @@ body.cls-dragging .cls-g,body.cls-dragging .cls-add{outline:1px dashed var(--gc,
 #infoPane .blk>.bb{padding:4px 8px}
 #infoPane .blk>.bb>*{margin:0 0 6px}
 .blk[data-blk=img]{min-height:min(200px,28vh)}
+/* 移した先でも使える最小の高さ（仕分けは「＋ グループを作る」まで・ロットは数行の木） */
+.blk[data-blk=tree]{min-height:min(160px,24vh)}   /* 仕分けは「＋ グループを作る」まで（data-min-to: layout-view.js が測る） */
 /* MAP は、図のほかの中身（切り替え・凡例・横縦の受け）＋図の最小の高さより小さくしない（layout-view.js が測って min-height を当てる）。
    図の高さは残りの全部（図は見えている大きさで描く: app.js の drawMap） */
 .blk[data-blk=map]>.bb{overflow:hidden;padding:4px 8px}.blk[data-blk=map]>.bb>*{flex:none;margin:0 0 6px}

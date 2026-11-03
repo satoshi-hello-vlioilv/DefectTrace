@@ -80,6 +80,11 @@ try {
     await page.mouse.up(); await page.waitForTimeout(200);
     const order = await page.evaluate(() => [...document.querySelectorAll("#infoPane>.blk")].map((b) => b.dataset.blk).join(","));
     check(during.line && during.nextIsMap && during.ghost && order === "img,cls,map,lot", `${W}: ⠿ でつかんで右の欄へ移す（線 ${during.line}・札 ${during.ghost}・右の欄 ${order}）`);
+    // 移した先でも使える: 「＋ グループを作る」までブロックの中に見える。入りきらなければほかをたたみ、そう知らせる
+    const room = await page.evaluate(() => { const b = document.querySelector(".blk[data-blk=cls]>.bb").getBoundingClientRect(), a = document.querySelector("#clsPane .cls-add").getBoundingClientRect(), col = document.getElementById("infoPane");
+      return { addIn: a.bottom <= b.bottom + 1, fits: col.scrollHeight <= col.clientHeight + 1, folded: Object.keys(window.dtLayout.get().fold).filter((k) => window.dtLayout.get().fold[k]).join(","), status: document.getElementById("status").textContent }; });
+    check(room.addIn && room.fits && (!room.folded.replace("lot", "") || /たたみました/.test(room.status)),
+      `${W}: 移した先で「＋ グループを作る」まで見え、欄に収まる（たたんだ物: ${room.folded || "なし"}${/たたみました/.test(room.status) ? `・知らせ「${room.status}」` : ""}）`);
 
     // 5. ⋯ のメニュー: 移せる先だけ（いまの欄は出ない）・字が 1 行
     await page.click('.blk[data-blk="cls"] .bmore'); await page.waitForTimeout(100);
@@ -88,7 +93,8 @@ try {
     const names = m.map((x) => x[0]);
     check(names.includes("左の欄へ") && !names.includes("右の欄へ") && names.includes("2 列目を足して移す") && m.every((x) => x[1] <= 32), `${W}: ⋯ に移せる先だけ・1 行（${names.join("／")}）`);
     await page.click('.blk-menu button:has-text("左の欄へ")'); await page.waitForTimeout(150);
-    check(await colOf("cls") === "treePane", `${W}: ⋯ の「左の欄へ」で戻る`);
+    const reopened = await page.evaluate(() => ["img", "map"].every((id) => !window.dtLayout.get().fold[id]));
+    check(await colOf("cls") === "treePane" && reopened, `${W}: ⋯ の「左の欄へ」で戻り、場所が足りずにたたんだ右のブロックは開き直る`);
 
     // 6. 画面の配置 → 左2列・中・右
     await page.click("#layBtn"); await page.waitForTimeout(100);
@@ -102,6 +108,9 @@ try {
     const cut = await page.evaluate(() => { const f = document.querySelector("#fBar"), n = document.querySelector("#fChips .f-none");
       return { over: f.scrollWidth - f.clientWidth, silent: !!n && n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).textOverflow !== "ellipsis" }; });
     check(cut.over <= 0 && !cut.silent, `${W}: 左2列でもフィルタの帯がはみ出さず、説明は省略記号で切る（はみ出し ${cut.over}px）`);
+    // MAP の描き方と形は 1 行（右の欄が細くても折れない）
+    const mk = await page.evaluate(() => { const r = [...document.querySelectorAll(".mkbar .mk-row")[1].querySelectorAll(":scope>.mk-fld")].map((f) => Math.round(f.getBoundingClientRect().top)); return new Set(r).size; });
+    check(mk === 1, `${W}: 左2列でも MAP の「描き方」と「形」が 1 行`);
     await page.screenshot({ path: path.join(out, `cols-${W}.png`) });
 
     // 7. 左・中 → 右のブロックが左へ・右の欄は隠れる／中・右 → 左のブロックが右へ／左・中・右で元の場所
@@ -136,11 +145,14 @@ try {
     const g2 = await box('.blk[data-blk="tree"] .grip'), img2 = await box('.blk[data-blk="img"]');
     await page.mouse.move(g2.x + 5, g2.y + 5); await page.mouse.down(); await page.mouse.move(img2.x + img2.w / 2, img2.y + 10, { steps: 10 }); await page.mouse.up();
     await page.waitForTimeout(200);
-    const saved = await page.evaluate(() => JSON.stringify(window.dtLayout.get()));
+    // 並び順によらず中身で比べる（たたんだ物などの鍵を並べ替えてから文字にする）
+    const canon = () => page.evaluate(() => { const L = window.dtLayout.get(); const sort = (o) => Object.fromEntries(Object.entries(o).sort());
+      return JSON.stringify({ ...L, w: sort(L.w), fold: sort(L.fold), auto: sort(L.auto) }); });
+    const saved = await canon();
     await reopen();
-    const back = await page.evaluate(() => JSON.stringify(window.dtLayout.get()));
+    const back = await canon();
     const L = JSON.parse(back);
-    check(back === saved && L.place.right[0] === "tree" && L.fold.lot, `${W}: 開き直しても配置が残る（右の欄 ${L.place.right.join(",")}・ロット情報をたたんだまま）`);
+    check(back === saved && L.place.right[0] === "tree" && L.fold.lot, `${W}: 開き直しても配置が残る（右の欄 ${L.place.right.join(",")}・ロット情報をたたんだまま）${back === saved ? "" : `／前 ${saved}／後 ${back}`}`);
     check(!errs.length, `${W}: 画面の誤りが出ない（${errs.join(" / ") || "なし"}）`);
     await page.context().close();
   }

@@ -48,7 +48,7 @@
     </section>
     <!-- 画像の仕分け（class-view.js。形は 3 回の案出しと別のエージェントの採点で L に決めた: program/tools/proposals/2026-11-02-classify*）。
          グループの行＝カードのドロップ先・行を押すと一覧を絞る・一覧の並び（CAB 順／グループ順） -->
-    <section class="blk" data-blk="cls" data-title="仕分け">
+    <section class="blk" data-blk="cls" data-title="仕分け" data-min-to=".cls-add">
       <span class="bn" id="clsN"></span>
       <section id="clsPane" class="cls-pane" aria-label="仕分け"></section>
     </section>
@@ -135,7 +135,7 @@
           <label class="mk-fld" title="記号の大きさ（1〜28px。極小 1〜2・小 3〜5・中 6〜10・大 11〜）"><span class="mk-l">大きさ</span><input id="markSize" type="range" min="1" max="28" step="0.5"><b id="markSizeV"></b></label>
           <label class="mk-fld" title="記号の濃さ（半透明にすると、重なるほど濃く見え、欠陥の集まりが分かります）"><span class="mk-l">濃さ</span><input id="markAlpha" type="range" min="5" max="100" step="5"><b id="markAlphaV"></b></label></div>
           <button type="button" id="markAuto" class="mk-auto" aria-pressed="true" title="点の数に合わせて大きさと濃さを決めます（少ないと大きく濃く、多いと小さく薄く）。つまみを動かすと手で決め、押すと自動に戻ります">自動</button></div>
-        <div class="mk-row"><span class="mk-fld"><span class="mk-l">描き方</span><span id="markLook" class="seg mk-seg"><button type="button" data-v="fill">塗り</button><button type="button" data-v="line">輪郭</button><button type="button" data-v="both">塗り＋輪郭</button></span></span>
+        <div class="mk-row"><span class="mk-fld"><span class="mk-l">描き方</span><span id="markLook" class="seg mk-seg"><button type="button" data-v="fill">塗り</button><button type="button" data-v="line">輪郭</button><button type="button" data-v="both" title="塗り＋輪郭">両方</button></span></span>
           <span class="mk-fld">形 <span id="markShape" class="seg mk-seg"><button type="button" data-v="kind" title="分類の形（● ▲ ■ ★ ◆）">分類</button><button type="button" data-v="dot" title="どの分類も丸（色で見分ける）">点</button></span></span></div>
       </div>
       <canvas id="map" height="300" data-grow="90"></canvas>

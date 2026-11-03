@@ -19,7 +19,7 @@
   const HOME = { tree: "left", cls: "left", img: "right", map: "right", lot: "right" };   // 標準の置き場
   const WEIGHT = { tree: 1, cls: 1.15, img: 0.9, map: 1.6, lot: 0.5 };                  // 標準の高さの比率
   // 標準: 窓の高さが低い（900px 未満）ときは、ロット情報をたたんでおき、画像情報と MAP に高さを回す
-  const STD = () => ({ mode: "lcr", place: { left: ["tree", "cls"], col2: [], right: ["img", "map", "lot"] }, w: { ...WEIGHT }, fold: innerHeight < 900 ? { lot: true } : {}, widths: null });
+  const STD = () => ({ mode: "lcr", place: { left: ["tree", "cls"], col2: [], right: ["img", "map", "lot"] }, w: { ...WEIGHT }, fold: innerHeight < 900 ? { lot: true } : {}, auto: {}, widths: null });
   const PRESETS = {
     std: { name: "標準", make: STD },
     cls: { name: "仕分けを広く", make: () => ({ ...STD(), mode: "llcr", place: { left: ["tree"], col2: ["cls"], right: ["img", "map", "lot"] } }) },
@@ -60,10 +60,11 @@
       L.fold = {};
       for (const id of Object.keys(blocks)) if (v.fold[id]) L.fold[id] = true;
     }
+    if (v.auto && typeof v.auto === "object") for (const id of Object.keys(blocks)) if (v.auto[id] && L.fold[id]) L.auto[id] = true;
     return L;
   }
   let L = load(), prev = null;
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ mode: L.mode, place: L.place, w: L.w, fold: L.fold })); } catch (_) { /* 覚えられなくても使える */ } };
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ mode: L.mode, place: L.place, w: L.w, fold: L.fold, auto: L.auto })); } catch (_) { /* 覚えられなくても使える */ } };
   const where = (id) => COLS.find((c) => L.place[c].includes(id));
   const shown = (c) => MODES[L.mode].cols.includes(c);
   // 配置を変える前に 1 つ前を取っておく（「元に戻す」）
@@ -135,6 +136,14 @@
   //（中身が下の境目・ブロックに隠れない）。ほかの中身の高さは、凡例の行の数・欄の幅で変わるので、変わるたびに測り直す
   function fitMins() {
     for (const b of Object.values(blocks)) {
+      // data-min-to="選び方": その物の下端までは、ブロックの中を送らずに見える（仕分けの「＋ グループを作る」）
+      const to = b.dataset.minTo && b.querySelector(b.dataset.minTo);
+      if (to && !b.hidden && !L.fold[b.dataset.blk]) {
+        const bb = b.querySelector(".bb"), r = to.getBoundingClientRect(), top = bb.getBoundingClientRect().top;
+        if (r.height) b.style.minHeight = `${Math.ceil(b.querySelector(".bh").offsetHeight + r.bottom - top + bb.scrollTop + 8)}px`;
+        continue;
+      }
+      if (to) { b.style.minHeight = ""; continue; }
       const grow = b.querySelector("[data-grow]");
       if (!grow || b.hidden || L.fold[b.dataset.blk]) { b.style.minHeight = ""; continue; }
       const bb = b.querySelector(".bb"), cs = getComputedStyle(bb);
@@ -150,9 +159,11 @@
   }
   { let raf = 0; const again = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fitMins); };
     const ro = new ResizeObserver(again);
-    for (const b of Object.values(blocks)) if (b.querySelector("[data-grow]")) for (const k of b.querySelector(".bb").children) if (!k.dataset.grow) ro.observe(k); }
+    for (const b of Object.values(blocks)) if (b.querySelector("[data-grow]")) for (const k of b.querySelector(".bb").children) if (!k.dataset.grow) ro.observe(k);
+    // 中身が描き直される（仕分けのグループが増える）と測り直す
+    for (const b of Object.values(blocks)) if (b.dataset.minTo) new MutationObserver(again).observe(b.querySelector(".bb"), { childList: true, subtree: true }); }
   // 中央（画像一覧）に最小の幅を残す: 出ている欄の幅（覚えた幅か標準）の和が入りきらなければ、欄を比率で細くする（覚えた幅は変えない）
-  const DEF_W = { treePane: 340, col2: 300, infoPane: 360 }, MIN_W = { treePane: 180, col2: 180, infoPane: 240 };
+  const DEF_W = { treePane: 340, col2: 300, infoPane: 360 }, MIN_W = { treePane: 180, col2: 180, infoPane: 300 };   // 右は MAP の操作が 1 行に入る幅
   function roomForCenter() {
     const docks = COLS.map((c) => COL_EL[c]).filter((id) => !$(id).hidden);
     const want = Object.fromEntries(docks.map((id) => [id, +(localStorage.getItem(`w_${id}`) || 0) || DEF_W[id]]));
@@ -170,15 +181,35 @@
     .observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
   // ---------------------------------------------------------------- 操作: たたむ・境目・移す
-  function toggleFold(id) { remember(); L.fold[id] = !L.fold[id]; apply(); }
+  function toggleFold(id) { remember(); L.fold[id] = !L.fold[id]; delete L.auto[id]; apply(); }   // 手でたたむ・開いた物は自動の印を外す
   function moveTo(id, col, index) {
     remember();
+    const from = where(id);
     for (const c of COLS) L.place[c] = L.place[c].filter((x) => x !== id);
     const arr = L.place[col];
     arr.splice(index == null ? arr.length : Math.max(0, Math.min(arr.length, index)), 0, id);
     if (!shown(col)) L.mode = col === "col2" ? "llcr" : "lcr";   // 隠れている欄へ移すときは、その欄を出す
     delete L.fold[id];
+    // 元の欄で、場所が足りずに自動でたたんだブロックは、場所が空いたので開き直す（入りきらなければ makeRoom がまたたたむ）
+    if (from !== col) for (const x of Object.keys(L.auto)) if (where(x) === from) { delete L.fold[x]; delete L.auto[x]; }
     apply();
+    if (from !== col) makeRoom(from);
+    makeRoom(col, id);
+  }
+  // 欄にブロックが入りきらない（最小の高さの和が欄より高い）ときは、keep 以外のブロックを、重さの低い順にたたむ。
+  // たたんだことは下の帯に出す（勝手に消えたと思わせない）
+  const FOLD_ORDER = ["lot", "img", "map", "tree", "cls"];
+  function makeRoom(col, keep) {
+    const el = $(COL_EL[col]), done = [];
+    for (const id of FOLD_ORDER) {
+      if (el.hidden || el.scrollHeight <= el.clientHeight + 1) break;
+      if (id === keep || !L.place[col].includes(id) || L.fold[id] || blocks[id].hidden) continue;
+      L.fold[id] = true; L.auto[id] = true; done.push(blocks[id].dataset.title); render();
+    }
+    if (!done.length) return;
+    save();
+    const st = $("status");
+    if (st) st.textContent = `入りきらないため ${done.join("・")} をたたみました（名前を押すと開く）`;
   }
 
   // 境目: 上下の 2 つのブロックの比率を、動かした分だけ移す（高さの和は変えない）
@@ -338,5 +369,6 @@
   window.addEventListener("resize", closeMenu);
 
   render();
-  window.dtLayout = { get: () => JSON.parse(JSON.stringify(L)), reset: () => { remember(); L = STD(); apply(); } };
+  // 覚える物（欄の数・置き場・高さの比率・たたみ）だけを返す（「元に戻す」の控えの幅などは含めない）
+  window.dtLayout = { get: () => JSON.parse(JSON.stringify({ mode: L.mode, place: L.place, w: L.w, fold: L.fold, auto: L.auto })), reset: () => { remember(); L = STD(); apply(); } };
 })();
