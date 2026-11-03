@@ -181,7 +181,7 @@
     .observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
   // ---------------------------------------------------------------- 操作: たたむ・境目・移す
-  function toggleFold(id) { remember(); L.fold[id] = !L.fold[id]; delete L.auto[id]; apply(); }   // 手でたたむ・開いた物は自動の印を外す
+  function toggleFold(id) { remember(); if (L.auto[id]) untell(); L.fold[id] = !L.fold[id]; delete L.auto[id]; apply(); }   // 手でたたむ・開いた物は自動の印を外す
   function moveTo(id, col, index) {
     remember();
     const from = where(id);
@@ -191,7 +191,7 @@
     if (!shown(col)) L.mode = col === "col2" ? "llcr" : "lcr";   // 隠れている欄へ移すときは、その欄を出す
     delete L.fold[id];
     // 元の欄で、場所が足りずに自動でたたんだブロックは、場所が空いたので開き直す（入りきらなければ makeRoom がまたたたむ）
-    if (from !== col) for (const x of Object.keys(L.auto)) if (where(x) === from) { delete L.fold[x]; delete L.auto[x]; }
+    if (from !== col) for (const x of Object.keys(L.auto)) if (where(x) === from) { delete L.fold[x]; delete L.auto[x]; untell(); }
     apply();
     if (from !== col) makeRoom(from);
     makeRoom(col, id);
@@ -208,8 +208,25 @@
     }
     if (!done.length) return;
     save();
+    tell(`入りきらないため ${done.join("・")} をたたみました（名前を押すと開く）`);
+  }
+  // 下の帯の知らせ: 出す前の字を控え、開き直したとき・8 秒たったときに戻す（今と違う知らせを残さない）
+  let told = null;
+  function tell(text) {
     const st = $("status");
-    if (st) st.textContent = `入りきらないため ${done.join("・")} をたたみました（名前を押すと開く）`;
+    if (!st) return;
+    if (!told) told = { before: st.textContent, cls: st.className };
+    st.textContent = text; st.className = "";
+    clearTimeout(told.timer);
+    told.timer = setTimeout(untell, 8000);
+    told.text = text;
+  }
+  function untell() {
+    const st = $("status");
+    if (!told || !st) return;
+    clearTimeout(told.timer);
+    if (st.textContent === told.text) { st.textContent = told.before; st.className = told.cls; }   // ほかの知らせに替わっていたら触らない
+    told = null;
   }
 
   // 境目: 上下の 2 つのブロックの比率を、動かした分だけ移す（高さの和は変えない）

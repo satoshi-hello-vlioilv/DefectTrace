@@ -93,8 +93,9 @@ try {
     const names = m.map((x) => x[0]);
     check(names.includes("左の欄へ") && !names.includes("右の欄へ") && names.includes("2 列目を足して移す") && m.every((x) => x[1] <= 32), `${W}: ⋯ に移せる先だけ・1 行（${names.join("／")}）`);
     await page.click('.blk-menu button:has-text("左の欄へ")'); await page.waitForTimeout(150);
-    const reopened = await page.evaluate(() => ["img", "map"].every((id) => !window.dtLayout.get().fold[id]));
-    check(await colOf("cls") === "treePane" && reopened, `${W}: ⋯ の「左の欄へ」で戻り、場所が足りずにたたんだ右のブロックは開き直る`);
+    const reopened = await page.evaluate(() => ({ open: ["img", "map"].every((id) => !window.dtLayout.get().fold[id]), status: document.getElementById("status").textContent }));
+    check(await colOf("cls") === "treePane" && reopened.open && !/たたみました/.test(reopened.status),
+      `${W}: ⋯ の「左の欄へ」で戻り、場所が足りずにたたんだ右のブロックは開き直る・古い知らせは消える（下の帯「${reopened.status}」）`);
 
     // 6. 画面の配置 → 左2列・中・右
     await page.click("#layBtn"); await page.waitForTimeout(100);

@@ -1,0 +1,278 @@
+{
+  "title": "フィルタを作る窓（#fModal）を大きく・使いやすくする",
+  "rule": "2026-10-17",
+  "evaluator": "採点者（案を作っていない別のエージェント）。リポジトリの最上位で自分で撮った: node program/tools/ui-variants.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score/{layout,filter} <定義>（lot・alt・filter × 1728・1536・1280）と、今の画面は lay/now.mjs で /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score/now。一覧（sheet-*.png）と 1 枚ずつの画像を Read で直接開き、PIL で一部を切り出して拡大して確かめた（仕分けの見出しの省略・置き場の行の折り返し）。操作（ドラッグ・境目・窓の角）は画像の手がかりと定義のコメントから判断した。 ／ 2 回目の採点者（案を作っていない、1 回目の採点者とも別のエージェント）: リポジトリの最上位で自分で撮った node program/tools/ui-variants.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score2/layout program/tools/proposals/2026-11-02-layout-2.mjs と /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score2/filter …/2026-11-02-filter-win-2.mjs（lot・alt・cols／filter × 1728・1536・1280）。一覧（sheet-*.png）と 1 枚ずつを Read で直接開き、PIL で 4 欄の 1280 の見出しとフィルタの行を切り出して拡大して確かめた。1 回目の点は見ずに画像から付けた。操作（ドラッグ・境目・⋯ のメニュー）は画像の手がかりと定義のコメントから判断した。 ／ 作った後（built）の採点者（案を作っていない、案出しの 1〜3 回目の採点者とも別のエージェント）: リポジトリの最上位で自分で撮った node program/tools/ui-variants.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built/now /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/lay/now.mjs（lot・filter × 1728・1536・1280）と、動きの通し node program/tools/layout-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built/layout（lot・drag・blkmenu・laymenu・cols × 1728・1280。OK（すべて）・終了コード 0）・node program/tools/filter-win-check.mjs /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built/filter（filter・filter-m × 3 幅。OK（すべて）・終了コード 0）。作る前の画像（scratchpad/lay/now）と並べ、1 枚ずつ Read で直接開き、PIL で MAP の図の下端・画像情報・4 欄のフィルタの帯の右端・MAP の横の受けを切り出して拡大して確かめた。案の採点の『作るときに直すべき点』が直っているかも見た。",
+  "rounds": [
+    {
+      "name": "1 回目",
+      "images": "/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score/filter（今は /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score/now/filter-*-0.png）",
+      "self_check": "案を作った者が全案の画像を開いて確かめた。直した所: Q・T の 1280 で条件の行の「×」が次の行へ折れていた → 条件の行は折らない・項目の選択は最大 230px・作る所の列を最小 470px に。Q・T で「当てはまる画像」が見出しと数の行の 2 回出ていた → 見出しを外し数の行を見出しにした。値を 100 にすると試験のロットでは当てはまる画像が 0 枚で見本が見えない → 値は 2（全 24 枚）に戻した。見本の画像は試験のロットの画像を繰り返して格子の見え方を確かめている（同じ画像が並ぶのは撮影の都合）。",
+      "proposals": {
+        "P 窓を広げる・2 列のまま": {
+          "score": {
+            "order": 7,
+            "chunk": 7,
+            "hierarchy": 7,
+            "visual": 7,
+            "steps": 7,
+            "effortless": 7,
+            "intuitive": 7,
+            "form": 8,
+            "place": 6,
+            "layout": 5,
+            "tone": 8
+          },
+          "minus": [],
+          "seen": "filter-1728-P: 窓が画面の 94%×90% に広がり、入れ物・分布・見本（130px 角）が大きい。見本は 2 行の間が約 130px 空き、間延びする。保存のボタンは窓の右下の隅で、入れる所から遠い。左の列は空のまま。1280: 見本は 1 行と少し、保存は見える。"
+        },
+        "Q 3 列（登録｜作る｜見本）": {
+          "score": {
+            "order": 8,
+            "chunk": 8,
+            "hierarchy": 7,
+            "visual": 8,
+            "steps": 8,
+            "effortless": 8,
+            "intuitive": 8,
+            "form": 8,
+            "place": 8,
+            "layout": 7,
+            "tone": 8
+          },
+          "minus": [
+            {
+              "kind": "wrap",
+              "where": "filter-1280-Q 作る所の列: 「置き場」の名前だけが 1 段目に出て、選ぶ所が 2 段目に折れる（切り出して確かめた）"
+            }
+          ],
+          "seen": "filter-1728-Q: 左から登録した条件・作る・当てはまる画像。右の列の見出しが「当てはまる画像 24 / 24 枚（欠陥 63 / 63）」で、数と見本がひとまとまり。保存は作る所のすぐ下で、入れる→確かめる→保存の流れが左から右に通る。足りない所: 作る所の列は保存の下が大きく空き（1728 で約 580px）、左の列もほぼ空。分布の棒は大きくなったが、値の位置（≥2）が分布の上に示されない。"
+        },
+        "R 上下（下いっぱいに見本）": {
+          "score": {
+            "order": 7,
+            "chunk": 7,
+            "hierarchy": 7,
+            "visual": 7,
+            "steps": 7,
+            "effortless": 7,
+            "intuitive": 7,
+            "form": 8,
+            "place": 7,
+            "layout": 7,
+            "tone": 8
+          },
+          "minus": [],
+          "seen": "filter-1728-R: 上に作る所、下いっぱいに見本が 10 列。見本は一度に多く見える。分布は高さ 70px と小さめ。1280 では見本の 2 行目が窓の底で切れ、中で送る。保存は作る所の右下。左の列は下まで空く。"
+        },
+        "S 右の引き出し（後ろの一覧が見本）": {
+          "score": {
+            "order": 7,
+            "chunk": 6,
+            "hierarchy": 7,
+            "visual": 8,
+            "steps": 7,
+            "effortless": 5,
+            "intuitive": 6,
+            "form": 7,
+            "place": 6,
+            "layout": 6,
+            "tone": 7
+          },
+          "minus": [
+            {
+              "kind": "cut",
+              "where": "filter-1728-S・filter-1280-S: 引き出し（620px）が後ろの画像一覧の右の列と上の帯（データ項目・設定）に被り、欠陥No:22 などのカードが半分で切れる"
+            }
+          ],
+          "seen": "filter-1728-S: 窓を引き出しにし、当てはまらない画像を後ろの一覧で薄くする。絞られていく様子を本物の一覧で見られる良さがある。足りない所: 依頼は「モーダルをしっかり大きく」なのに、引き出しは 620px で今より狭い。一覧の右の列が隠れ、薄くなった結果の全部は見えない。引き出しの下半分は空く。"
+        },
+        "T 大きさを変える窓＋3 列": {
+          "score": {
+            "order": 8,
+            "chunk": 8,
+            "hierarchy": 7,
+            "visual": 8,
+            "steps": 8,
+            "effortless": 8,
+            "intuitive": 9,
+            "form": 8,
+            "place": 8,
+            "layout": 7,
+            "tone": 8
+          },
+          "minus": [
+            {
+              "kind": "wrap",
+              "where": "filter-1280-T 作る所の列: 「置き場」の名前だけが 1 段目に出て、選ぶ所が 2 段目に折れる"
+            }
+          ],
+          "seen": "filter-1728-T: Q と同じ 3 列に加え、見出しの右に「窓の大きさ 中｜大｜全画面」、窓の右下の角に斜線のつかむ所。大きさを利用者が選べ、覚える（定義のコメント）。依頼の「しっかり大きく」に、大きさも選べる形で応える。足りない所: Q と同じく作る所の列と左の列の下が大きく空く。見本は 15 枚で、24 枚全部は送らないと見えない（見本の数の札はある）。値の位置が分布の上に示されない。"
+        },
+        "U 分布が主役（範囲をドラッグ）": {
+          "score": {
+            "order": 7,
+            "chunk": 7,
+            "hierarchy": 7,
+            "visual": 7,
+            "steps": 8,
+            "effortless": 6,
+            "intuitive": 6,
+            "form": 7,
+            "place": 7,
+            "layout": 6,
+            "tone": 7
+          },
+          "minus": [
+            {
+              "kind": "hidden_state",
+              "where": "filter-1728-U 分布: 「◀ ドラッグで範囲 ▶」の札だけで、いまの範囲（≥2）が分布の上に色や印で出ていない。どこを選んでいるか見えない"
+            }
+          ],
+          "seen": "filter-1728-U: 分布が高さ 200px で窓いっぱいの幅。見本は 11 列×2 行（100px 角）。良い所: 分布で決める狙いは分かる。足りない所: つかむ所（範囲の両端）が無く、札が棒の上に浮いているだけで、どこをドラッグするか推測させる。保存の下が大きく空く（1728 で約 200px）。1280 では見本の 2 行目が切れて中で送る。"
+        }
+      },
+      "baseline": {
+        "今": {
+          "score": {
+            "order": 6,
+            "chunk": 6,
+            "hierarchy": 6,
+            "visual": 4,
+            "steps": 6,
+            "effortless": 5,
+            "intuitive": 6,
+            "form": 7,
+            "place": 7,
+            "layout": 4,
+            "tone": 7
+          },
+          "minus": [],
+          "seen": "now/filter-1536-0.png: 窓は 1350×490px ほどで、下の 1/3 は暗い背景のまま。分布は高さ 50px 弱で棒が読みにくい。値の入れ物は狭く、左の「登録した条件」は説明 2 行だけで大半が空く。当てはまる画像の見本は値を入れないと出ない。"
+        }
+      }
+    },
+    {
+      "name": "2 回目",
+      "images": "/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/lay/w2（filter × 1728・1536・1280）／2 回目の採点者が撮り直した物: /tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/score2/filter",
+      "self_check": "案を作った者が全案の画像を開いて確かめた。1280 で置き場の選ぶ所が 1 行に収まること（置き場は見出しの下の行）、分布に値の線と札（≥ 2）が出ること、左の列に「例から作る」が出ることを確かめた。試験のロットの長さは 2.5 と 500 に分かれており、分布の棒は両端の 2 本だけになる（データの都合）。見本の画像は試験のロットの画像を繰り返している。",
+      "proposals": {
+        "T2 T を直した物": {
+          "score": {
+            "order": 8,
+            "chunk": 9,
+            "hierarchy": 8,
+            "visual": 8,
+            "steps": 9,
+            "effortless": 9,
+            "intuitive": 9,
+            "form": 9,
+            "place": 9,
+            "layout": 7,
+            "tone": 9
+          },
+          "minus": [],
+          "seen": "filter-1728-T2: 窓が画面のほぼ全部（94%×90%）で 3 列（登録した条件と例から作る｜新しい条件を作る｜当てはまる画像 24/24 枚と見本 15 枚）。名前→条件→分布→置き場→保存が上から下へ通る。分布は 190px と大きく、値の所に橙の縦線と札「≥ 2」、当てはまる側が薄い青で塗られ、どこを選んでいるか分かる。置き場は見出しの下に 3 つの選ぶ所が 1 行（filter-1280-T2 でも 1 行に収まる。1 回目の折り返しは直っている）。窓の大きさ（中・大・全画面）が × の左に独立し、右下の角にも大きさを変えるつまみ。左の列に「例から作る」5 つ。足りない所: 1728 では作る所の列の保存の下が約 470px 空き、釣り合いが悪い。分布の横の軸に目盛りが無く、値は説明の文（2.5〜500）でしか読めない。"
+        },
+        "Q2 Q を直した物": {
+          "score": {
+            "order": 8,
+            "chunk": 9,
+            "hierarchy": 8,
+            "visual": 8,
+            "steps": 9,
+            "effortless": 9,
+            "intuitive": 8,
+            "form": 9,
+            "place": 9,
+            "layout": 7,
+            "tone": 9
+          },
+          "minus": [],
+          "seen": "filter-1728-Q2・filter-1280-Q2: T2 と同じ 3 列・同じ分布の線と札・置き場 1 行・例から作る。違いは窓の大きさを変える所が無いこと（見出しがすっきり）。大きさを利用者が変えられないので、依頼の『しっかり大きく』には応えるが、もっと広くしたいときの逃げ道が無い。作る所の下の空きと分布の目盛りが無いのは T2 と同じ。"
+        },
+        "V ①②③ の順に": {
+          "score": {
+            "order": 9,
+            "chunk": 9,
+            "hierarchy": 9,
+            "visual": 8,
+            "steps": 8,
+            "effortless": 9,
+            "intuitive": 8,
+            "form": 9,
+            "place": 8,
+            "layout": 7,
+            "tone": 9
+          },
+          "minus": [],
+          "seen": "filter-1728-V: 作る所に丸数字の見出し ① 条件 ② 確かめる（分布と右の見本） ③ 名前と置き場を決めて保存。やる順が一目で分かり、何から手を付けるか考えなくてよい。③ は列の底に寄せられ、保存が右下の決まった所。足りない所: ② と ③ の間が 1728 で約 330px 空き、条件を入れてから保存まで目と手が長く下る。名前が窓の上から底へ移り、ほかの窓（名前が上）と置き場が違う。filter-1280-V でも ③ まで 1 画面に収まる。"
+        },
+        "W 上の帯に条件・下を 2 分": {
+          "score": {
+            "order": 6,
+            "chunk": 7,
+            "hierarchy": 7,
+            "visual": 5,
+            "steps": 8,
+            "effortless": 7,
+            "intuitive": 7,
+            "form": 8,
+            "place": 7,
+            "layout": 6,
+            "tone": 8
+          },
+          "minus": [
+            {
+              "kind": "lost",
+              "where": "filter-1728-W・filter-1536-W・filter-1280-W 左下の分布: 枠と値の線（≥ 2）と札は出るが、分布の棒が 1 本も描かれていない（高さを伸ばした分布の中が空）。分布で確かめる働きが消えている"
+            }
+          ],
+          "seen": "filter-1728-W: 上の帯に名前・条件・置き場・保存を横に並べ、下を分布｜当てはまる画像に 2 分。見本は広く見える。足りない所: 帯の中の順が『名前→絞るだけ/保存→（右へ）条件→置き場』で、保存のボタンが条件より前（左下）に来て、入れる前に保存が目に入る。分布の棒が消えて空の箱になり、何を見る所か分からない。分布の箱は縦に長すぎて（約 770px）、横長の物を縦に伸ばした形。"
+        },
+        "X 両端のつまみ": {
+          "score": {
+            "order": 8,
+            "chunk": 9,
+            "hierarchy": 8,
+            "visual": 9,
+            "steps": 9,
+            "effortless": 8,
+            "intuitive": 9,
+            "form": 9,
+            "place": 8,
+            "layout": 7,
+            "tone": 8
+          },
+          "minus": [
+            {
+              "kind": "overlap",
+              "where": "filter-1728-X・filter-1280-X 分布の左下: 左のつまみ（白地に橙の枠）が分布のいちばん左の棒の下端に被り、棒の左端が隠れる"
+            }
+          ],
+          "seen": "filter-1728-X: T2（つまみの無い版）に加え、分布の両端に橙のつまみと札「≥ 2」「≤ 500」、下に『両端のつまみをドラッグすると、下の値が変わり、右の見本が絞られます』。範囲を手で決められることが見た目で分かり、範囲が色・線・札の 3 つで見える。足りない所: 分布の上の『≤ 500』は条件の行には無く（条件は「長さ ≥ 2」だけ）、どちらが本当の条件か一瞬考えさせる。つまみが棒に被る。作る所の下の空きは T2 と同じ。"
+        }
+      }
+    }
+  ],
+  "built": {
+    "name": "作った後（版 4.11.0）",
+    "images": "/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built/filter（filter・filter-m × 1728・1536・1280）・/tmp/claude-0/-home-user-DefectTrace/56dea6f7-c782-5caa-974f-a86d49bd129a/scratchpad/built/now（filter-*）",
+    "result": {
+      "score": {
+        "order": 8,
+        "chunk": 9,
+        "hierarchy": 8,
+        "visual": 9,
+        "steps": 9,
+        "effortless": 9,
+        "intuitive": 9,
+        "form": 9,
+        "place": 9,
+        "layout": 7,
+        "tone": 9
+      },
+      "minus": [],
+      "seen": "案（T2）の狙いどおり。filter-1728: 窓は 1600×940（画面の約 93%×82%）で 3 列（登録した条件と例から作る 270px｜新しい条件を作る｜当てはまる画像 24/24 枚・欠陥 63/63 と見本の格子）。例「長さ ≥ ○ mm」を押すと名前・条件の形が入り、値の欄に入る。分布は箱 343px と大きく、値の所に橙の線と札「≥ 2」、当てはまる側が薄い青。案の採点の指摘だった横の軸の目盛りは「2.5・251・500」が付いて直った。置き場は 3 幅とも 1 行。窓の大きさ（中・大・全画面）が × の左、右下に角のつまみ。filter-m-1280 の『中』も 3 列が崩れない。filter-1280・1536 も見切れ・折り返しなし。残る所: 1728 では左の列の例の下（約 520px）と作る所の列の保存の下（約 300px）が空き、釣り合いが悪い（案の指摘が半分残る。分布が伸びた分だけ減った）。1280 では『中』（1120×648）と『大』（1203×648）の差が小さく、選んでも変わったように見えにくい。分布は棒が 2 本に偏り、線形の目盛りでは中ほどの値の数が読みにくい（データによる）。"
+    }
+  }
+}
