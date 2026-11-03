@@ -46,6 +46,7 @@
     const eqs = await api("/api/equipments");
     $("tree").innerHTML = "";
     for (const e of eqs) $("tree").appendChild(dirNode({ name: e.name, path: e.path }, true, e.name));
+    $("treeN").textContent = eqs.map((e) => e.name).join("・");   // ブロックの見出しの右に設備
     restoreLast();
   }
   function dirNode(d, isEq, eq) {
@@ -1016,7 +1017,7 @@
   function mapGeom() {
     const cv = $("map"), pts = S.map.points;
     const sides = S.mapSide === "all" ? sideList().filter((s) => pts.some((p) => p[2] === s) || S.sides[s]) : [+S.mapSide];
-    const W = cv.clientWidth, H = cv.clientHeight, gap = 8, top = 16, left = 40, pad = 5;
+    const [W, H] = S.mapBox || [cv.clientWidth, cv.clientHeight], gap = 8, top = 16, left = 40, pad = 5;
     const lw = (W - left - gap * Math.max(0, sides.length - 1)) / Math.max(1, sides.length);
     let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }
@@ -1031,7 +1032,9 @@
     const cv = $("map"), dpr = window.devicePixelRatio || 1;
     // 見えていない間（ロット表・右の列を畳んだ）は測らない。0×0 を書くと、高さを canvas の大きさから決めているので 0 のまま戻らない
     if (!cv.clientWidth || !cv.clientHeight) return;
-    cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+    // 大きさは解像度を書き換える前に測る（書き換えた直後は canvas の高さが一時的に変わり、測ると絵の下と右が切れる）
+    S.mapBox = [cv.clientWidth, cv.clientHeight];
+    cv.width = S.mapBox[0] * dpr; cv.height = S.mapBox[1] * dpr;
     const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, cv.width, cv.height);
     $("mapLegend").innerHTML = "";
     if (!S.map || !S.map.ok || !S.map.points.length) return;
@@ -1177,7 +1180,8 @@
     }
     const [cab, name] = best[4].split("/"); select(S.items.findIndex((x) => x.cab === cab && x.name === name));
   });
-  $("map").closest("details").addEventListener("toggle", drawMap);   // 畳んで開き直したら描き直す
+  // ブロックの大きさが変わったら（境目・たたむ・移す・欄の数: layout-view.js）描き直す。図の高さはブロックの高さから決まる
+  { let raf = 0; new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(drawMap); }).observe($("map")); }
   $("map").addEventListener("dblclick", () => { if (S.view === "pairs") openPV(); else if (S.cur >= 0) openViewer(); });
   // mark size
   // 記号の部品: 描いた大きさ・濃さ（自動なら点の数で決めた値）を、つまみと数に出す

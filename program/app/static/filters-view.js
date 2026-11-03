@@ -117,18 +117,57 @@
 
   // ---------------------------------------------------------------- 窓（登録した条件・作る所）
   const blank = () => ({ id: "", name: "", all: true, conds: [{ field: F.fields.find((x) => x.name === "length_mm") ? "length_mm" : (F.fields[0] || {}).name || "", op: ">=", v: "" }] });
+  const SIZE = "dtFilterWin";
+  const win = () => $("fWin");
+  let sizing = false;   // 自分で大きさを当てている間は、角で変えたと見なさない
+  function setSize(fs, wh) {
+    const w = win(); sizing = true;
+    w.className = `mbox f-win fs-${wh ? "free" : fs}`;
+    w.style.width = wh ? `${Math.min(wh.w, innerWidth - 16)}px` : ""; w.style.height = wh ? `${Math.min(wh.h, innerHeight - 16)}px` : "";
+    $("fSize").querySelectorAll("[data-fs]").forEach((b) => b.classList.toggle("on", !wh && b.dataset.fs === fs));
+    try { localStorage.setItem(SIZE, JSON.stringify(wh ? { w: wh.w, h: wh.h } : fs)); } catch (_) { /* 覚えられなくても使える */ }
+    requestAnimationFrame(() => { sizing = false; hist(); });
+  }
+  function restoreSize() {
+    let v = "l";
+    try { v = JSON.parse(localStorage.getItem(SIZE) || '"l"'); } catch (_) { v = "l"; }
+    if (v && typeof v === "object" && v.w > 0 && v.h > 0) setSize("", v); else setSize(["m", "l", "full"].includes(v) ? v : "l");
+  }
+  // 右下の角で変えたら、その大きさを覚える（中・大・全画面の選びは外す）。分布の棒は箱の高さから描き直す
+  let histTimer = null;
+  new ResizeObserver(() => {
+    const w = win();
+    if (w.closest("#fModal").hidden) return;
+    if (!sizing && w.style.width && !w.classList.contains("fs-free")) setSize("", { w: w.offsetWidth, h: w.offsetHeight });
+    else if (!sizing && w.classList.contains("fs-free")) { try { localStorage.setItem(SIZE, JSON.stringify({ w: w.offsetWidth, h: w.offsetHeight })); } catch (_) { /* 同上 */ } }
+    clearTimeout(histTimer); histTimer = setTimeout(hist, 120);
+  }).observe(win());
   async function openWin(edit) {
     const ctx = window.dtFilter.ctx();
     await loadFields(ctx);
     F.edit = edit ? JSON.parse(JSON.stringify(edit)) : F.edit || blank();
     F.editScope = edit ? edit.scope : F.editScope || "mine";
     $("fModal").hidden = false;
+    restoreSize();
     renderWin();
     await loadCounts();
     renderLib();
     preview();
   }
-  const renderLib = () => { $("fLib").innerHTML = `<b>登録した条件（チェックで重ねる）</b>${libHtml(true)}<div class="f-hint">チェックした条件を、どれも満たす欠陥の画像だけを出します</div>`; };
+  // 例から作る: 押すと作る所に条件の形が入り、値を入れるだけにする（このロットにある項目だけを出す）
+  const EXAMPLES = [
+    { text: "長さ ≥ ○ mm（長い欠陥）", name: "長い欠陥", cond: { field: "length_mm", op: ">=" } },
+    { text: "面積 ≥ ○ mm²（大きい欠陥）", name: "大きい欠陥", cond: { field: "area_mm", op: ">=" } },
+    { text: "幅 ≥ ○ mm（幅の広い欠陥）", name: "幅の広い欠陥", cond: { field: "width_mm", op: ">=" } },
+    { text: "分類で選ぶ（穴・キズ など）", name: "分類", cond: { field: "kindID", op: "in" } },
+    { text: "表面だけ・裏面だけ", name: "面", cond: { field: "group", op: "in" } },
+    { text: "幅方向の場所 ○〜○ mm", name: "場所", cond: { field: "x_mm", op: "between" } },
+  ];
+  const exampleHtml = () => {
+    const have = new Set(F.fields.map((x) => x.name)), ex = EXAMPLES.map((e, i) => [e, i]).filter(([e]) => have.has(e.cond.field));
+    return ex.length ? `<div class="f-exs"><b>例から作る</b>${ex.map(([e, i]) => `<button type="button" data-ex="${i}">${esc(e.text)}</button>`).join("")}<div class="f-hint">押すと右に条件の形が入ります。値を入れて確かめ、保存します</div></div>` : "";
+  };
+  const renderLib = () => { $("fLib").innerHTML = `<b>登録した条件（チェックで重ねる）</b>${libHtml(true)}<div class="f-hint">チェックした条件を、どれも満たす欠陥の画像だけを出します</div>${exampleHtml()}`; };
   function fieldOptions(sel) {
     return F.fields.map((x) => `<option value="${esc(x.name)}" ${x.name === sel ? "selected" : ""}>${esc(x.label)}</option>`).join("") || `<option value="${esc(sel)}">${esc(sel)}</option>`;
   }
@@ -151,13 +190,13 @@
         <select data-c="${i}" data-k="op">${OPS.map(([o, t]) => `<option value="${o}" ${o === c.op ? "selected" : ""}>${t}</option>`).join("")}</select>${valueInput(c, i)}
         <button type="button" class="f-mini del" data-rm="${i}" title="この条件を外す">×</button></div>`).join("")}
         <div class="f-r"><button type="button" class="f-btn" data-add>＋ 条件</button><select id="fAll" ${f.conds.length > 1 ? "" : "hidden"} title="条件のつなぎ方"><option value="1" ${f.all !== false ? "selected" : ""}>すべて満たす（かつ）</option><option value="0" ${f.all === false ? "selected" : ""}>どれか（または）</option></select></div></div>
-      <div class="f-hint" id="fHistT"></div><div class="f-hist" id="fHist"></div>
-      <div class="f-r"><span class="f-k">置き場</span><span class="f-scope">
+      <div class="f-hwrap" id="fHwrap" hidden><div class="f-hint" id="fHistT"></div><div class="f-hist" id="fHist"></div><div class="f-axis" id="fAxis"></div></div>
+      <div class="f-sc2"><span class="f-k">置き場</span><span class="f-scope">
         <label><input type="radio" name="fsc" value="mine" ${F.editScope === "mine" ? "checked" : ""}><span class="f-sc mine">自分</span>この PC</label>
         <label><input type="radio" name="fsc" value="share" ${F.editScope === "share" ? "checked" : ""}><span class="f-sc share">共有</span>だれでも</label>
         <label class="${dev ? "" : "no"}" title="${dev ? "全員の既定の条件として保存します" : "既定の条件は開発者だけが保存できます"}"><input type="radio" name="fsc" value="def" ${dev ? "" : "disabled"} ${F.editScope === "def" ? "checked" : ""}><span class="f-sc def">既定</span>開発者だけ</label></span></div>
-      <div class="f-r"><span class="f-n" id="fLive"></span></div><div class="f-prev" id="fPrev"></div>
       <div class="f-r" style="justify-content:flex-end"><span class="f-err" id="fErr"></span><button type="button" class="f-btn" data-temp>絞るだけ（保存しない）</button><button type="button" class="f-btn f-pri" data-save>保存</button></div>`;
+    if (!$("fLive")) $("fRes").innerHTML = '<div class="f-n" id="fLive"></div><div class="f-prev" id="fPrev"></div>';
     hist();
   }
   // 作っている条件を、窓の部品から読む
@@ -177,16 +216,25 @@
   }
   const ready = (f) => f.conds.length && f.conds.every((c) => c.field && (c.op === "in" ? Array.isArray(c.v) && c.v.length : c.v !== "" && (c.op !== "between" || c.v2 !== "")));
   let previewTimer = null;
+  const PREV_MAX = 60;
+  // 見本の格子（cab/name の並び。多いときは PREV_MAX 枚まで）
+  const figs = (ctx, keys) => keys.slice(0, PREV_MAX).map((k) => { const [cab, ...n] = k.split("/");
+    return `<figure class="f-pv" title="${esc(k)}"><img alt="" loading="lazy" src="/thumb?${q({ lot: ctx.lot, g: ctx.g, cab, name: n.join("/") })}"><figcaption>${esc(k)}</figcaption></figure>`; }).join("")
+    + (keys.length > PREV_MAX ? `<div class="f-hint">ほか ${keys.length - PREV_MAX} 枚（「絞るだけ」か「保存」で一覧に出ます）</div>` : "");
   function preview() {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(async () => {
       const ctx = window.dtFilter.ctx(), f = readEdit();
       if (!ctx) { $("fLive").textContent = "ロットを開くと、当てはまる画像の数が出ます"; return; }
-      if (!ready(f)) { $("fLive").textContent = "条件の値を入れると、当てはまる画像の数が出ます"; $("fPrev").innerHTML = ""; return; }
+      if (!ready(f)) {   // 値を入れる前は、このロットの画像を並べ、値を入れると絞られることを見せる
+        const all = [...document.querySelectorAll("#grid .th")].map((t) => t.dataset.key.split("/").slice(1).join("/"));
+        $("fLive").innerHTML = `このロットの画像 <b>${ctx.total}</b> 枚<span class="f-hint">（条件の値を入れると、当てはまる画像だけに絞られます）</span>`;
+        $("fPrev").innerHTML = figs(ctx, all); $("fPrev").classList.add("all"); hist(); return;
+      }
       try {
         const r = await post("/api/filters/apply", { lot: ctx.lot, g: ctx.g, filters: [{ ...f, name: f.name || "（名前なし）" }] });
         $("fLive").innerHTML = `当てはまる画像 <b>${r.nimg}</b> / ${ctx.total} 枚（欠陥 ${r.ndet} / ${r.totaldet}）`;
-        $("fPrev").innerHTML = r.keys.slice(0, 8).map((k) => { const [cab, ...n] = k.split("/"); return `<img alt="" src="/thumb?${q({ lot: ctx.lot, g: ctx.g, cab, name: n.join("/") })}">`; }).join("");
+        $("fPrev").innerHTML = figs(ctx, r.keys); $("fPrev").classList.remove("all");
       } catch (e) { $("fLive").textContent = e.message; }
       hist();
     }, 250);
@@ -194,13 +242,26 @@
   // 1 つ目の数の条件の項目の分布（このロット）。当てはまる所を濃く
   async function hist() {
     const ctx = window.dtFilter.ctx(), c = (F.edit.conds || []).find((x) => x.op !== "in" && x.field);
-    if (!ctx || !c) { $("fHist").innerHTML = ""; $("fHistT").textContent = ""; return; }
+    if (!ctx || !c) { $("fHist").innerHTML = ""; $("fHistT").textContent = ""; $("fHwrap").hidden = true; return; }
     const keyh = ctx.lot + "|" + c.field;
     if (!F.hist || F.hist.key !== keyh) { try { F.hist = { key: keyh, ...(await call("/api/filters/hist?" + q({ lot: ctx.lot, field: c.field }))) }; } catch (_) { return; } }
     const h = F.hist, max = Math.max(1, ...h.bins), w = h.bins.length ? (h.max - h.min) / h.bins.length : 1;
     const inn = (x) => (c.v === "" ? false : c.op === ">=" ? x >= c.v : c.op === "<=" ? x <= c.v : c.op === ">" ? x > c.v : c.op === "<" ? x < c.v : c.op === "between" ? x >= c.v && x <= c.v2 : c.op === "=" ? Math.abs(x - c.v) < w : c.op === "!=" ? Math.abs(x - c.v) >= w : false);
     $("fHistT").textContent = h.n ? `${fieldLabel(c.field)} の分布（このロット ${fmt(h.min)}〜${fmt(h.max)}・濃い所が当てはまる）` : `${fieldLabel(c.field)}: このロットに値がありません`;
-    $("fHist").innerHTML = h.bins.map((n, i) => `<i class="${inn(h.min + (i + 0.5) * w) ? "in" : ""}" style="height:${Math.max(n ? 2 : 0, Math.round((n / max) * 44))}px" title="${fmt(h.min + i * w)}〜${fmt(h.min + (i + 1) * w)}: ${n}"></i>`).join("");
+    $("fHwrap").hidden = !h.n;
+    const box = $("fHist"), tall = Math.max(40, box.clientHeight - 24);   // 上の 22px は値の札の場所
+    const at = (x) => Math.max(0, Math.min(100, ((x - h.min) / ((h.max - h.min) || 1)) * 100));
+    const v = c.v === "" ? null : +c.v, v2 = c.v2 === "" || c.v2 == null ? null : +c.v2;
+    let mark = "";
+    if (v != null && h.n) {
+      const line = (x, text, right) => `<span class="f-mark${right ? " r" : ""}" style="left:${at(x)}%"><b>${esc(text)}</b></span>`;
+      if (c.op === "between" && v2 != null) mark = `<span class="f-shade" style="left:${at(v)}%;width:${at(v2) - at(v)}%"></span>${line(v, `≥ ${v}`)}${line(v2, `≤ ${v2}`, true)}`;
+      else if (c.op === ">=" || c.op === ">") mark = `<span class="f-shade" style="left:${at(v)}%;right:0"></span>${line(v, `${opText[c.op] || c.op} ${v}`, at(v) > 80)}`;
+      else if (c.op === "<=" || c.op === "<") mark = `<span class="f-shade" style="left:0;width:${at(v)}%"></span>${line(v, `${opText[c.op] || c.op} ${v}`, at(v) > 80)}`;
+      else mark = line(v, `${opText[c.op] || c.op} ${v}`, at(v) > 80);   // 札は入れた値のまま（2 を 2.0 にしない）
+    }
+    box.innerHTML = h.bins.map((n, i) => `<i class="${inn(h.min + (i + 0.5) * w) ? "in" : ""}" style="height:${Math.max(n ? 2 : 0, Math.round((n / max) * tall))}px" title="${fmt(h.min + i * w)}〜${fmt(h.min + (i + 1) * w)}: ${n}"></i>`).join("") + mark;
+    $("fAxis").innerHTML = h.n ? [h.min, (h.min + h.max) / 2, h.max].map((x) => `<span>${fmt(x)}</span>`).join("") : "";
   }
   const fmt = (x) => (Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 1 ? x.toFixed(1) : x.toFixed(3));
 
@@ -229,6 +290,16 @@
       return;
     }
     if (t.closest("[data-new]")) { F.edit = blank(); renderWin(); preview(); return; }
+    const ex = t.closest("[data-ex]");
+    if (ex) {
+      const e2 = EXAMPLES[+ex.dataset.ex];
+      F.edit = { id: "", name: e2.name, all: true, conds: [{ ...e2.cond, v: e2.cond.op === "in" ? [] : "", ...(e2.cond.op === "between" ? { v2: "" } : {}) }] };
+      renderWin(); preview();
+      $("fEd").querySelector('[data-k="v"],[data-in]')?.focus();
+      return;
+    }
+    const fs = t.closest("[data-fs]");
+    if (fs) { setSize(fs.dataset.fs); return; }
     if (t.closest("[data-add]")) { readEdit(); F.edit.conds.push({ field: (F.fields[0] || {}).name || "", op: ">=", v: "" }); renderWin(); return; }
     const rm = t.closest("[data-rm]");
     if (rm) { readEdit(); F.edit.conds.splice(+rm.dataset.rm, 1); if (!F.edit.conds.length) F.edit = blank(); renderWin(); preview(); return; }
