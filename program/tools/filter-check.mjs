@@ -64,7 +64,7 @@ try {
 
   // 共有にもう 1 つ（面積 ≥ 2.4）を保存して重ねる
   await page.click("#fOpen"); await page.waitForSelector("#fEd #fName");
-  await page.click("[data-new]");
+  await page.click("#fEd [data-new]");
   await page.fill("#fName", "面積 2.4 以上");
   await page.selectOption('#fEd select[data-k="field"]', "area_mm");
   await page.fill('#fEd input[data-k="v"]', "2.4");

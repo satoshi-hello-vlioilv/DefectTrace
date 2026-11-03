@@ -30,21 +30,32 @@
 <nav id="modeBar" class="mbar"><div class="mtabs" role="tablist">
   <button type="button" data-mode="grid" class="on" title="開いたロットの画像・MAP・ロット情報を見る"><span class="ic" aria-hidden="true">▣</span>画像を見る</button>
   <button type="button" data-mode="list" title="左の木で選んだ設備・年・月・日の下のロットを表にし、ロット単位の値を全件書き出す"><span class="ic" aria-hidden="true">▦</span>ロット表<span id="lotTableN" class="ltn"></span></button>
-</div></nav>
+</div><button type="button" id="layBtn" class="lay-btn" aria-expanded="false" aria-haspopup="true" title="欄の数・よく使う形を選ぶ（ブロックは見出しの ⠿ をつかんで移す）"><span aria-hidden="true">▥</span> 画面の配置 ▾</button></nav>
 <main id="main">
-  <aside id="treePane">
-    <div class="pane-head">
-      <div class="fline"><input id="treeFilter" type="search" placeholder="絞込（ロットNo・時刻など）">
-        <button type="button" id="listCfg" class="mini" aria-expanded="false" title="ロット一覧の表示項目（ドラッグ中は自動で開きます）">項目▾</button></div>
-      <div class="dz chips listzone" data-drop="list" title="ロット一覧に表示する項目（ここへドラッグ）"><span class="dzl">一覧</span><span class="pins" data-place="list"></span></div>
-    </div>
-    <ul id="tree" class="tree" role="tree"></ul>
+  <!-- 機能ブロックの配置（layout-view.js。形は 3 回の案出しと別のエージェントの採点で G3 に決めた: program/tools/proposals/2026-11-02-layout*）。
+       欄（aside.dock）の中に、ブロック（section.blk）が上から並ぶ。見出しの ⠿ をつかんでほかの欄・上下へ移す・境目で高さ・▾ でたたむ・⋯ で移す先。
+       欄の数は上の「画面の配置」で選ぶ（左・中・右／左2列・中・右／左・中／中・右）。見出しは layout-view.js が作る（.bn は見出しの右の数・名前） -->
+  <aside id="treePane" class="dock" data-col="left">
+    <section class="blk" data-blk="tree" data-title="ロット">
+      <span class="bn" id="treeN"></span>
+      <div class="pane-head">
+        <div class="fline"><input id="treeFilter" type="search" placeholder="絞込（ロットNo・時刻など）">
+          <button type="button" id="listCfg" class="mini" aria-expanded="false" title="ロット一覧の表示項目（ドラッグ中は自動で開きます）">項目▾</button></div>
+        <div class="dz chips listzone" data-drop="list" title="ロット一覧に表示する項目（ここへドラッグ）"><span class="dzl">一覧</span><span class="pins" data-place="list"></span></div>
+      </div>
+      <ul id="tree" class="tree" role="tree"></ul>
+      <div class="nb-leg" aria-label="札の見本"><span><span class="fl nb">画像なし</span> 確かめる画像なし（良品など）</span><span><span class="fl ovl">多量 n</span><span class="fl ovl">上限</span> 記録落ちの可能性（要確認）</span></div>
+    </section>
     <!-- 画像の仕分け（class-view.js。形は 3 回の案出しと別のエージェントの採点で L に決めた: program/tools/proposals/2026-11-02-classify*）。
-         木のすぐ下: グループの行＝カードのドロップ先・行を押すと一覧を絞る・一覧の並び（CAB 順／グループ順） -->
-    <section id="clsPane" class="cls-pane" aria-label="仕分け"></section>
-    <div class="nb-leg" aria-label="札の見本"><span><span class="fl nb">画像なし</span> 確かめる画像なし（良品など）</span><span><span class="fl ovl">多量 n</span><span class="fl ovl">上限</span> 記録落ちの可能性（要確認）</span></div>
+         グループの行＝カードのドロップ先・行を押すと一覧を絞る・一覧の並び（CAB 順／グループ順） -->
+    <section class="blk" data-blk="cls" data-title="仕分け">
+      <span class="bn" id="clsN"></span>
+      <section id="clsPane" class="cls-pane" aria-label="仕分け"></section>
+    </section>
   </aside>
   <div class="split" data-split="treePane" title="ドラッグで幅を変更"></div>
+  <aside id="col2" class="dock" data-col="col2" hidden></aside>
+  <div class="split" data-split="col2" title="ドラッグで幅を変更" hidden></div>
 
   <section id="center">
     <div id="summary" class="dz summary" data-drop="summary" title="ロットサマリ（ロット情報をここへドラッグ）">
@@ -110,13 +121,13 @@
   </section>
   <div class="split" data-split="infoPane" data-rev="1" title="ドラッグで幅を変更"></div>
 
-  <aside id="infoPane">
-    <details class="box dz" data-drop="image" open>
-      <summary>画像情報 <span id="imgTitle" class="sub"></span></summary>
+  <aside id="infoPane" class="dock" data-col="right">
+    <section class="blk dz" data-blk="img" data-title="画像情報" data-drop="image">
+      <span class="bn"><span id="imgTitle" class="sub"></span></span>
       <div id="imgInfo"><div class="hint">画像をクリックで表示</div></div>
-    </details>
-    <details class="box" open>
-      <summary>MAP <span id="mapTitle" class="sub"></span></summary>
+    </section>
+    <section class="blk" data-blk="map" data-title="MAP">
+      <span class="bn"><span id="mapTitle" class="sub"></span></span>
       <div class="mapbar"><div id="mapSide" class="seg"></div><span class="spacer"></span></div>
       <!-- 記号: 形は 2 回の案出しと別のエージェントの採点で決めた（M7: program/tools/proposals/2026-10-27-map-marks*） -->
       <div class="mkbar">
@@ -134,11 +145,10 @@
         <div class="dz slot" data-drop="mapy"><span class="dzl">縦</span><span class="pins" data-place="mapy"></span></div>
       </div>
       <div id="mapMsg" class="hint"></div>
-    </details>
-    <details class="box dz" data-drop="lot" open>
-      <summary>ロット情報</summary>
+    </section>
+    <section class="blk dz" data-blk="lot" data-title="ロット情報" data-drop="lot">
       <div id="lotInfo"><div class="hint">ロットを選択すると表示</div></div>
-    </details>
+    </section>
   </aside>
 </main>
 
@@ -193,10 +203,13 @@
   <div class="pbtn"><button type="button" id="pinCancel">取消</button><button type="submit" class="primary">追加</button></div>
 </form>
 <div id="fModal" class="modal" hidden>
-  <div class="mbox f-win" role="dialog" aria-modal="true" aria-labelledby="fTitle">
-    <div class="mhead"><b id="fTitle">欠陥のフィルタ</b><span class="sub">画像一覧を欠陥の項目で絞る・条件に名前を付けて登録する</span>
+  <!-- 形は 2 回の案出しと別のエージェントの採点で T2 に決めた（program/tools/proposals/2026-11-02-filter-win*）:
+       画面の 94%×90% の大きな窓・3 列（登録した条件と例｜作る所と大きな分布｜当てはまる画像）・窓の大きさは「中・大・全画面」か右下の角で変え、この PC に残す -->
+  <div class="mbox f-win" id="fWin" role="dialog" aria-modal="true" aria-labelledby="fTitle">
+    <div class="mhead"><b id="fTitle">欠陥のフィルタ</b><span class="sub">画像一覧を欠陥の項目で絞る・名前を付けて登録する</span>
+      <span class="f-size">窓の大きさ <span class="seg" id="fSize"><button type="button" data-fs="m">中</button><button type="button" data-fs="l">大</button><button type="button" data-fs="full">全画面</button></span></span>
       <button type="button" id="fClose" class="mclose" title="閉じる（Esc）" aria-label="閉じる">×</button></div>
-    <div class="f-body"><div id="fLib" class="f-lib"></div><div id="fEd" class="f-ed"></div></div>
+    <div class="f-body"><div id="fLib" class="f-lib"></div><div id="fEd" class="f-ed"></div><div id="fRes" class="f-res"></div></div>
   </div>
 </div>
 <!-- 設定の窓（3 回の案出しと別のエージェントの採点で N に決めた: program/tools/proposals/2026-10-28-settings*）。
@@ -245,6 +258,7 @@
 <script src="/static/lotscope/lotlist-columns.js?v={{v}}"></script>
 <script src="/static/lotscope/xlsx-writer.js?v={{v}}"></script>
 <script src="/static/lotlist-view.js?v={{v}}"></script>
+<script src="/static/layout-view.js?v={{v}}"></script>
 <script src="/static/app.js?v={{v}}"></script>
 <script src="/static/filters-view.js?v={{v}}"></script>
 <script src="/static/class-view.js?v={{v}}"></script>

@@ -46,6 +46,7 @@
     const eqs = await api("/api/equipments");
     $("tree").innerHTML = "";
     for (const e of eqs) $("tree").appendChild(dirNode({ name: e.name, path: e.path }, true, e.name));
+    $("treeN").textContent = eqs.map((e) => e.name).join("・");   // ブロックの見出しの右に設備
     restoreLast();
   }
   function dirNode(d, isEq, eq) {
@@ -1177,7 +1178,8 @@
     }
     const [cab, name] = best[4].split("/"); select(S.items.findIndex((x) => x.cab === cab && x.name === name));
   });
-  $("map").closest("details").addEventListener("toggle", drawMap);   // 畳んで開き直したら描き直す
+  // ブロックの大きさが変わったら（境目・たたむ・移す・欄の数: layout-view.js）描き直す。図の高さはブロックの高さから決まる
+  { let raf = 0; new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(drawMap); }).observe($("map")); }
   $("map").addEventListener("dblclick", () => { if (S.view === "pairs") openPV(); else if (S.cur >= 0) openViewer(); });
   // mark size
   // 記号の部品: 描いた大きさ・濃さ（自動なら点の数で決めた値）を、つまみと数に出す

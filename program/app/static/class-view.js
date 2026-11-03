@@ -114,7 +114,8 @@
         ${ex ? `<span class="cls-ex">${ex}</span>` : ""}<span class="rule${g.examples.length < NEED ? " need" : ""}">${esc(ruleText(g))}</span></div>`;
     }).join("");
     const empty = !C.groups.length;
-    $("clsPane").innerHTML = `<div class="cls-head"><b>仕分け</b><span class="sub">${empty ? "似た欠陥の画像をまとめる" : "カードをグループへドラッグ・行を押すと絞る"}</span>${busy ? '<span class="cls-busy">割り出し中…</span>' : ""}</div>
+    $("clsN").textContent = C.groups.length ? `${C.groups.length} グループ` : "";   // ブロックの見出しの右（名前は見出しに）
+    $("clsPane").innerHTML = `<div class="cls-head"><span class="sub">${empty ? "似た欠陥の画像をまとめる" : "カードをグループへドラッグ・行を押すと絞る"}</span>${busy ? '<span class="cls-busy">割り出し中…</span>' : ""}</div>
       ${rows ? `<div class="cls-list">${rows}</div>` : ""}
       <div class="cls-add" data-new role="button" tabindex="0" title="カードをここへドラッグしても作れます">＋ グループを作る</div>
       ${C.err ? `<div class="cls-err" role="alert">${esc(C.err)}</div>` : ""}
