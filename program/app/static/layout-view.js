@@ -18,7 +18,8 @@
   };
   const HOME = { tree: "left", cls: "left", img: "right", map: "right", lot: "right" };   // 標準の置き場
   const WEIGHT = { tree: 1, cls: 1.15, img: 0.9, map: 1.6, lot: 0.5 };                  // 標準の高さの比率
-  const STD = () => ({ mode: "lcr", place: { left: ["tree", "cls"], col2: [], right: ["img", "map", "lot"] }, w: { ...WEIGHT }, fold: {}, widths: null });
+  // 標準: 窓の高さが低い（900px 未満）ときは、ロット情報をたたんでおき、画像情報と MAP に高さを回す
+  const STD = () => ({ mode: "lcr", place: { left: ["tree", "cls"], col2: [], right: ["img", "map", "lot"] }, w: { ...WEIGHT }, fold: innerHeight < 900 ? { lot: true } : {}, widths: null });
   const PRESETS = {
     std: { name: "標準", make: STD },
     cls: { name: "仕分けを広く", make: () => ({ ...STD(), mode: "llcr", place: { left: ["tree"], col2: ["cls"], right: ["img", "map", "lot"] } }) },
@@ -55,7 +56,10 @@
       for (const id of Object.keys(blocks)) if (!seen.has(id)) L.place[HOME[id] || "left"].push(id);
     }
     for (const id of Object.keys(WEIGHT)) if (v.w && v.w[id] > 0) L.w[id] = +v.w[id];
-    if (v.fold) for (const id of Object.keys(blocks)) if (v.fold[id]) L.fold[id] = true;
+    if (v.fold && typeof v.fold === "object") {   // 覚えたたたみ方をそのまま使う（標準のたたみ〈低い窓のロット情報〉を開いたことも残す）
+      L.fold = {};
+      for (const id of Object.keys(blocks)) if (v.fold[id]) L.fold[id] = true;
+    }
     return L;
   }
   let L = load(), prev = null;
@@ -124,8 +128,29 @@
     }
     document.body.dataset.layout = L.mode;
     roomForCenter();
+    fitMins();
     window.dispatchEvent(new Event("dt:layout"));
   }
+  // 伸びる中身（data-grow="最小の高さ"。MAP の図）を持つブロックは、ほかの中身の高さ＋伸びる中身の最小より小さくしない
+  //（中身が下の境目・ブロックに隠れない）。ほかの中身の高さは、凡例の行の数・欄の幅で変わるので、変わるたびに測り直す
+  function fitMins() {
+    for (const b of Object.values(blocks)) {
+      const grow = b.querySelector("[data-grow]");
+      if (!grow || b.hidden || L.fold[b.dataset.blk]) { b.style.minHeight = ""; continue; }
+      const bb = b.querySelector(".bb"), cs = getComputedStyle(bb);
+      // 伸びる中身の最小は中の高さ（枠線の分を足す）
+      let h = b.querySelector(".bh").offsetHeight + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + (+grow.dataset.grow || 0) + (grow.offsetHeight - grow.clientHeight);
+      for (const k of bb.children) {
+        if (k.hidden || getComputedStyle(k).display === "none") continue;
+        const m = getComputedStyle(k);
+        h += parseFloat(m.marginTop) + parseFloat(m.marginBottom) + (k === grow ? 0 : k.offsetHeight);
+      }
+      b.style.minHeight = `${Math.ceil(h) + 2}px`;   // offsetHeight は整数に丸めた値なので、足した分のずれ（1px ほど）を見込む
+    }
+  }
+  { let raf = 0; const again = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fitMins); };
+    const ro = new ResizeObserver(again);
+    for (const b of Object.values(blocks)) if (b.querySelector("[data-grow]")) for (const k of b.querySelector(".bb").children) if (!k.dataset.grow) ro.observe(k); }
   // 中央（画像一覧）に最小の幅を残す: 出ている欄の幅（覚えた幅か標準）の和が入りきらなければ、欄を比率で細くする（覚えた幅は変えない）
   const DEF_W = { treePane: 340, col2: 300, infoPane: 360 }, MIN_W = { treePane: 180, col2: 180, infoPane: 240 };
   function roomForCenter() {

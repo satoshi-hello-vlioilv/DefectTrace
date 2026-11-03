@@ -437,7 +437,7 @@ body.mode-list #summary,body.mode-list #center>.toolbar{display:none!important}
 .f-bar{flex:none;display:flex;align-items:center;gap:6px;padding:5px 12px;border-bottom:1px solid var(--line);background:#f8fafc;min-width:0;position:relative}
 .f-bar[hidden]{display:none}.f-bar .lab{flex:none;font-size:12.5px;color:var(--sub);font-weight:600}
 .f-chips{display:flex;gap:6px;min-width:0;flex:1;overflow:hidden;padding:1px 2px 1px 1px;align-items:center}
-.f-none{font-size:12.5px;color:var(--sub);white-space:nowrap}
+.f-none{font-size:12.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .f-chip{flex:none;display:inline-flex;align-items:center;gap:4px;border:1px solid var(--acc);border-radius:14px;padding:1px 2px 1px 4px;font-size:12.5px;background:var(--accbg);color:var(--acc);white-space:nowrap}
 .f-chip[hidden],.f-chip .c[hidden]{display:none}.f-chip .c{color:#36506f}.f-chip b{font-weight:600}.f-chip .x{border:none;background:none;color:var(--acc);padding:0 5px;font-size:13px}
 .f-sc{display:inline-flex;align-items:center;border-radius:3px;padding:0 5px;font-size:11px;font-weight:700;border:1px solid;line-height:16px;white-space:nowrap}
@@ -642,11 +642,11 @@ body.cls-dragging .cls-g,body.cls-dragging .cls-add{outline:1px dashed var(--gc,
 .blk[data-blk=tree]>.bb{overflow:hidden}.blk[data-blk=tree]>.bb>#tree{flex:1 1 auto;min-height:0}.blk[data-blk=tree] .nb-leg{flex:none}
 #infoPane .blk>.bb{padding:4px 8px}
 #infoPane .blk>.bb>*{margin:0 0 6px}
-.blk[data-blk=img]{min-height:110px}
-/* MAP は中身（図は最小 110px・凡例・横縦の受け）の高さより小さくしない（図の下が切れない）。窓がごく小さいときは欄の中を送る */
-.blk[data-blk=map]{min-height:auto}
-.blk[data-blk=map]>.bb{overflow:visible;padding:4px 8px}.blk[data-blk=map]>.bb>*{flex:none;margin:0 0 6px}
-.blk[data-blk=map]>.bb>#map{flex:1 1 0;min-height:110px;width:100%}
+.blk[data-blk=img]{min-height:min(200px,28vh)}
+/* MAP は、図のほかの中身（切り替え・凡例・横縦の受け）＋図の最小の高さより小さくしない（layout-view.js が測って min-height を当てる）。
+   図の高さは残りの全部（図は見えている大きさで描く: app.js の drawMap） */
+.blk[data-blk=map]>.bb{overflow:hidden;padding:4px 8px}.blk[data-blk=map]>.bb>*{flex:none;margin:0 0 6px}
+.blk[data-blk=map]>.bb>#map{flex:1 1 0;min-height:90px;width:100%}
 .dz.blk.over{outline-offset:-3px}
 /* 境目: 8px・濃いつまみ・触れると色 */
 .hsplit{flex:0 0 8px;cursor:row-resize;background:#e3e9f1;position:relative;border-bottom:1px solid #c9d3e0;touch-action:none}
@@ -682,3 +682,6 @@ body.lay-dragging,body.lay-dragging *{cursor:grabbing!important;user-select:none
 .blk-menu button:hover,.blk-menu button:focus-visible{background:var(--accbg)}.blk-menu button:disabled{color:#9aa3ad;background:none}
 .blk-menu hr{border:none;border-top:1px solid var(--line2);margin:4px 0}
 @media (prefers-color-scheme:dark){.blk>.bh{background:#1e2329}.hsplit{background:#2a3038;border-color:#39414c}}
+/* MAP の横・縦の受けは 1 行（「横」の札と受けを離さない。受けの名前は省略記号で切る） */
+.slot{flex-wrap:nowrap;min-width:0;overflow:hidden}.slot>.dzl{flex:none}
+.slot .chip{flex:0 1 auto;min-width:0}.slot .chip .cl{min-width:0;overflow:hidden;text-overflow:ellipsis}.slot .chip .x{flex:none}

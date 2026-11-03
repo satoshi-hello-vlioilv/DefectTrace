@@ -1017,7 +1017,7 @@
   function mapGeom() {
     const cv = $("map"), pts = S.map.points;
     const sides = S.mapSide === "all" ? sideList().filter((s) => pts.some((p) => p[2] === s) || S.sides[s]) : [+S.mapSide];
-    const W = cv.clientWidth, H = cv.clientHeight, gap = 8, top = 16, left = 40, pad = 5;
+    const [W, H] = S.mapBox || [cv.clientWidth, cv.clientHeight], gap = 8, top = 16, left = 40, pad = 5;
     const lw = (W - left - gap * Math.max(0, sides.length - 1)) / Math.max(1, sides.length);
     let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }
@@ -1032,7 +1032,9 @@
     const cv = $("map"), dpr = window.devicePixelRatio || 1;
     // 見えていない間（ロット表・右の列を畳んだ）は測らない。0×0 を書くと、高さを canvas の大きさから決めているので 0 のまま戻らない
     if (!cv.clientWidth || !cv.clientHeight) return;
-    cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+    // 大きさは解像度を書き換える前に測る（書き換えた直後は canvas の高さが一時的に変わり、測ると絵の下と右が切れる）
+    S.mapBox = [cv.clientWidth, cv.clientHeight];
+    cv.width = S.mapBox[0] * dpr; cv.height = S.mapBox[1] * dpr;
     const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, cv.width, cv.height);
     $("mapLegend").innerHTML = "";
     if (!S.map || !S.map.ok || !S.map.points.length) return;

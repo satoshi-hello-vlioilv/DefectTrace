@@ -34,10 +34,26 @@ try {
     // 1. 仕分けが押しつぶされない
     let pane = await box("#treePane"), cls = await box('.blk[data-blk="cls"]'), add = await box("#clsPane .cls-add");
     check(cls.h >= pane.h * 0.4 && add && add.y + add.h <= cls.y + cls.h, `${W}: 木が長くても仕分けは左の欄の 4 割以上（${Math.round(cls.h)} / ${Math.round(pane.h)}px）・「＋ グループを作る」まで見える`);
-    const mapOk = async () => page.evaluate(() => { const m = document.getElementById("map"), lg = document.getElementById("mapLegend"), s = document.querySelector(".blk[data-blk=map] .slots"), bb = document.querySelector(".blk[data-blk=map]>.bb").getBoundingClientRect();
-      const r = (e) => e.getBoundingClientRect(); return { canvas: Math.round(m.clientHeight), legendIn: r(lg).bottom <= bb.bottom + 1 && r(s).bottom <= bb.bottom + 1 }; });
-    let mp = await mapOk();
-    check(mp.canvas >= 100 && mp.legendIn, `${W}: MAP の図（${mp.canvas}px）と凡例・横縦の受けがブロックの中に見える`);
+    // MAP: 図・凡例・横縦の受けの下端がブロックの中（下の境目・ブロックに隠れない）・受けの「横」「縦」の札と名前が同じ行
+    // 描いた枠（表面・裏面）の下端・右端が canvas の大きさに収まる（解像度を書き換えた直後の大きさで描くと、絵の下と右が切れる）
+    const drawnIn = () => page.evaluate(async () => {
+      const m = document.getElementById("map"), sr = CanvasRenderingContext2D.prototype.strokeRect, rects = [];
+      CanvasRenderingContext2D.prototype.strokeRect = function (...a) { if (this.canvas === m) rects.push(a); return sr.apply(this, a); };
+      window.dispatchEvent(new Event("resize")); await new Promise((r) => setTimeout(r, 200));
+      CanvasRenderingContext2D.prototype.strokeRect = sr;
+      return rects.length > 0 && rects.every(([x, y, w, h]) => y + h <= m.clientHeight + 0.5 && x + w <= m.clientWidth + 0.5);
+    });
+    const mapOk = async () => (await drawnIn()) && page.evaluate(() => { const m = document.getElementById("map"), lg = document.getElementById("mapLegend"), s = document.querySelector(".blk[data-blk=map] .slots"), bb = document.querySelector(".blk[data-blk=map]>.bb").getBoundingClientRect();
+      const r = (e) => e.getBoundingClientRect();
+      const oneLine = [...s.querySelectorAll(".slot")].every((sl) => { const l = sl.querySelector(".dzl"), c = sl.querySelector(".chip"); return !c || Math.abs(r(l).top + r(l).height / 2 - (r(c).top + r(c).height / 2)) < 4; });
+      return { canvas: Math.round(m.clientHeight), legendIn: r(m).bottom <= bb.bottom + 1 && r(lg).bottom <= bb.bottom + 1 && r(s).bottom <= bb.bottom + 1 && oneLine }; });
+    // 画像情報: ブロックの中に見えている行の数
+    const imgRows = () => page.evaluate(() => { const b = document.querySelector(".blk[data-blk=img]>.bb").getBoundingClientRect();
+      return [...document.querySelectorAll("#imgInfo tr")].filter((t) => { const r = t.getBoundingClientRect(); return r.height && r.bottom <= b.bottom + 1; }).length; });
+    let mp = (await mapOk()) || { canvas: 0, legendIn: false };
+    check(mp.canvas >= 90 && mp.legendIn, `${W}: MAP の図（${mp.canvas}px）の下端・凡例・横縦の受けがブロックの中に見える（受けは 1 行）`);
+    const rows = await imgRows();
+    check(rows >= 6, `${W}: 画像情報が中を送らずに 6 行以上見える（${rows} 行）`);
     await page.screenshot({ path: path.join(out, `lot-${W}.png`) });
 
     // 2. 境目のドラッグで高さ（離すと残る）
@@ -79,11 +95,13 @@ try {
     await page.screenshot({ path: path.join(out, `laymenu-${W}.png`) });
     await page.click('[data-mode-set="llcr"]'); await page.waitForTimeout(400);
     const c2 = await box("#col2"), center = await box("#center");
-    mp = await mapOk();
-    check(c2 && await colOf("cls") === "col2" && center.w >= 400 && mp.canvas >= 100 && mp.legendIn,
+    mp = (await mapOk()) || { canvas: 0, legendIn: false };
+    check(c2 && await colOf("cls") === "col2" && center.w >= 400 && mp.canvas >= 90 && mp.legendIn && await imgRows() >= 6,
       `${W}: 左2列で仕分けが 2 列目へ（中央 ${Math.round(center.w)}px・MAP の図 ${mp.canvas}px・凡例が見える）`);
-    const cut = await page.evaluate(() => { const f = document.querySelector("#fBar"); return f.scrollWidth - f.clientWidth; });
-    check(cut <= 0, `${W}: 左2列でもフィルタの帯が切れない（はみ出し ${cut}px）`);
+    // フィルタの帯: はみ出さない。説明が入りきらないときは省略記号で切る（字の途中で黙って切らない）
+    const cut = await page.evaluate(() => { const f = document.querySelector("#fBar"), n = document.querySelector("#fChips .f-none");
+      return { over: f.scrollWidth - f.clientWidth, silent: !!n && n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).textOverflow !== "ellipsis" }; });
+    check(cut.over <= 0 && !cut.silent, `${W}: 左2列でもフィルタの帯がはみ出さず、説明は省略記号で切る（はみ出し ${cut.over}px）`);
     await page.screenshot({ path: path.join(out, `cols-${W}.png`) });
 
     // 7. 左・中 → 右のブロックが左へ・右の欄は隠れる／中・右 → 左のブロックが右へ／左・中・右で元の場所
@@ -112,6 +130,8 @@ try {
     await page.evaluate(() => document.querySelector('#modeBar [data-mode="grid"]').click()); await page.waitForTimeout(300);
 
     // 10. 開き直しても残る（境目の高さ・移した場所・たたんだ状態）
+    // ロット情報をたたむ（低い窓では標準でたたんであるので、そのときは開いてから、開いた状態が残ることも確かめる）
+    if (await page.evaluate(() => window.dtLayout.get().fold.lot)) { await page.click('.blk[data-blk="lot"] .bt'); await page.waitForTimeout(100); }
     await page.click('.blk[data-blk="lot"] .bt'); await page.waitForTimeout(100);
     const g2 = await box('.blk[data-blk="tree"] .grip'), img2 = await box('.blk[data-blk="img"]');
     await page.mouse.move(g2.x + 5, g2.y + 5); await page.mouse.down(); await page.mouse.move(img2.x + img2.w / 2, img2.y + 10, { steps: 10 }); await page.mouse.up();
