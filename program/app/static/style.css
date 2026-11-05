@@ -687,3 +687,24 @@ body.lay-dragging,body.lay-dragging *{cursor:grabbing!important;user-select:none
 /* MAP の横・縦の受けは 1 行（「横」の札と受けを離さない。受けの名前は省略記号で切る） */
 .slot{flex-wrap:nowrap;min-width:0;overflow:hidden}.slot>.dzl{flex:none}
 .slot .chip{flex:0 1 auto;min-width:0}.slot .chip .cl{min-width:0;overflow:hidden;text-overflow:ellipsis}.slot .chip .x{flex:none}
+/* MAP の浮かせる札（欠陥に指を乗せると、縮小画像・番号・分類・面・位置を点の横に出す）と、指した点の輪 */
+.mpop{position:fixed;z-index:60;width:240px;background:var(--pane);border:1px solid #9fb3cc;border-radius:8px;box-shadow:0 8px 24px rgba(15,30,60,.25);padding:8px;display:flex;flex-direction:column;gap:5px;pointer-events:none;font-size:12.5px}
+.mpop[hidden],.mring[hidden]{display:none}
+.mpop .h{display:flex;align-items:center;gap:6px;font-weight:700;white-space:nowrap}.mpop .h .face{font-size:11px;margin-left:auto}
+.mpop img,.mpop .noimg{display:block;align-self:center;width:calc(var(--ph,168px) * 4 / 3);height:var(--ph,168px);object-fit:contain;background:#222;image-rendering:pixelated;border-radius:4px}
+.mpop .noimg{display:flex;align-items:center;justify-content:center;background:var(--card);color:var(--sub)}
+.mpop .r{display:flex;justify-content:space-between;gap:12px}.mpop .r span{color:var(--sub)}.mpop .r b{font:400 12px Consolas,monospace}
+.mpop .k{color:var(--sub);font-size:11.5px;border-top:1px solid var(--line2);padding-top:5px}
+.mring{position:fixed;z-index:59;width:22px;height:22px;margin:-11px 0 0 -11px;border:2px solid var(--acc);border-radius:50%;pointer-events:none;box-shadow:0 0 0 2px #fff}
+/* 中央の大きな MAP（見方「MAP」）。操作の段（面・記号・軸）は右の MAP から移して上に 1 段で並べる */
+.bigmap{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;background:var(--pane);margin:6px 10px 8px;border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.bigmap[hidden]{display:none}
+.bm-ctl{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap}
+.bm-ctl .mkbar{display:contents}.bm-ctl .mk-row{display:contents}.bm-ctl .mk-sl{flex-direction:row;gap:10px;border:none;padding:0}
+.bm-ctl .seg,.bm-ctl .mk-fld{flex-wrap:nowrap;flex:none}.bm-ctl .mk-fld input[type=range]{width:64px}.bm-ctl .mk-fld b{min-width:34px}
+.bm-ctl .slots{flex:1 1 220px;display:flex;gap:6px;min-width:0}.bm-ctl .slots>.slot{flex:1;min-width:0}
+.bm-ctl #mapMsg:empty{display:none}
+#mapBig{flex:1;min-height:0;width:100%;display:block;background:#fbfbfc;border:1px solid var(--line2);border-radius:4px;cursor:crosshair}
+.bigmap .legend{font-size:12.5px;gap:2px 14px}
+.bm-go{border:1px solid #b7cbe6;background:var(--pane);color:var(--acc);border-radius:5px;padding:0 8px;font-size:12px;white-space:nowrap;margin-left:6px}
+.bm-go:hover{background:var(--accbg)}
