@@ -1067,7 +1067,7 @@
     const cv = t.cv, pts = S.map.points;
     const sides = S.mapSide === "all" ? sideList().filter((s) => pts.some((p) => p[2] === s) || S.sides[s]) : [+S.mapSide];
     // left: 縦軸の数の幅・bot: 横軸の数の段
-    const [W, H] = t.box || [cv.clientWidth, cv.clientHeight], gap = 8, top = 16, left = 46, bot = 18, pad = 5, ph = H - top - bot;
+    const [W, H] = t.box || [cv.clientWidth, cv.clientHeight], gap = 8, top = 16, left = 46, bot = 18, ph = H - top - bot;
     const lw = (W - left - gap * Math.max(0, sides.length - 1)) / Math.max(1, sides.length);
     let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }
@@ -1076,7 +1076,9 @@
     const lane = (s) => sides.indexOf(s);
     // mk: 記号を面の広さに合わせて大きくする倍率（右の欄の MAP の帯〈およそ 150×300〉を 1 として 1〜2.2 倍。自動のときだけ使う）
     const mk = Math.max(1, Math.min(2.2, Math.sqrt((lw * ph) / (150 * 300))));
-    return { W, H, sides, lw, top, left, gap, ph, mk, x0, x1, y0, y1,
+    // pad: 帯の内側の余白。端（軸の最大・最小）の記号が枠で切れないよう、記号の半径より広く
+    const pad = Math.max(5, Math.ceil(markPx({ mk }, pts.length) / 2) + 2);
+    return { W, H, sides, lw, top, left, gap, ph, pad, mk, x0, x1, y0, y1,
       sx: (p) => left + lane(p[2]) * (lw + gap) + pad + ((p[0] - x0) / (x1 - x0)) * (lw - pad * 2),
       sy: (p) => top + pad + ((p[1] - y0) / (y1 - y0)) * (ph - pad * 2) };
   }
@@ -1111,7 +1113,7 @@
     c.fillStyle = sub; c.font = `12px ${AXIS_FONT}`; c.textAlign = "right";
     for (let k = 0; k <= 4; k++) {
       const v = g.y0 + ((g.y1 - g.y0) * k) / 4;
-      const y = g.top + 5 + ((g.ph - 10) * k) / 4;
+      const y = g.top + g.pad + ((g.ph - g.pad * 2) * k) / 4;
       c.fillText(v >= 100 ? Math.round(v) : v.toFixed(1), g.left - 5, y + 4);
     }
     c.textAlign = "left";
@@ -1124,7 +1126,7 @@
       if (S.psel) line(S.psel[0], S.psel[1], "#e07800", 2.5);
     }
     if (S.map.bands?.length) {
-      const span = (g.ph - 10) / Math.max(1e-9, g.y1 - g.y0);
+      const span = (g.ph - g.pad * 2) / Math.max(1e-9, g.y1 - g.y0);
       c.fillStyle = "rgba(198,40,40,.28)";
       for (const [xa, xb, y, len, side] of S.map.bands) {
         if (!g.sides.includes(side)) continue;

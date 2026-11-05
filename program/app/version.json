@@ -1,7 +1,7 @@
 {
  "_": ["アプリの版と更新履歴の正本（窓〈desktop/src/update.rs〉と作業用の道具〈desktop/xtask〉が読む）。", "version は「大.中.小」。配るたびに上げる（直した・足した: 小、画面や使い方が変わる: 中、作り直し: 大）。desktop/Cargo.toml・tauri.conf.json の version も同じにする。", "changelog の先頭は version と同じ。新しい版を上に足す（notes は利用者に見せる言葉。GitHub の Releases の説明になる）。", "release は「配った版と、そのときの配る物の中身の要約」。手で書かず cd desktop && cargo xtask release で書く（まだ配っていない版を直しただけなら --amend）。"],
  "version": "4.12.0",
- "release": {"version": "4.12.0", "digest": "1d2c6d579ac6b1fc"},
+ "release": {"version": "4.12.0", "digest": "cb13202b3f6dba5c"},
  "changelog": [
  {"version": "4.12.0", "date": "2026-11-05", "notes": [
    "MAP を中央に大きく出せるようにしました。画像一覧の上の段の「◫ MAP」か、右の MAP の見出しの「⤢ 中央で大きく」で切り替わります。大きくしている間は、面・記号の大きさと濃さ・描き方・形・横と縦の項目の操作が MAP の上に並び、右の MAP はたたまれます（見出しの「⤡ 右へ戻す」か「画像一覧」で戻ります。画面の配置は変わりません）。フィルタで絞った欠陥だけを描きます。",
