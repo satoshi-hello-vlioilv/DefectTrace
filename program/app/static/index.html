@@ -64,6 +64,7 @@
     <div class="toolbar">
       <div id="viewSeg" class="seg" role="tablist">
         <button type="button" data-v="grid" class="on">画像一覧</button>
+        <button type="button" data-v="map" title="MAP を中央に大きく出す（欠陥に指を乗せると画像が出ます）"><span aria-hidden="true">◫</span> MAP</button>
         <button type="button" data-v="pairs" title="表と裏で幅方向位置が近い欠陥の組">転写候補 <span id="pairCnt" class="cnt0"></span></button>
         <button type="button" data-v="pitch" title="同一面・同一幅位置で等間隔に並ぶ欠陥">ピッチ候補 <span id="pitchCnt" class="cnt0"></span></button>
       </div>
@@ -79,6 +80,13 @@
       <div id="fPop" class="f-pop" hidden></div></div>
     <div id="loadBand" class="lpband3" data-progress hidden aria-live="polite"></div>
     <div id="grid" tabindex="0"><div class="empty">左のツリーからロットを選択</div></div>
+    <!-- 中央の大きな MAP（見方「MAP」。描き方・指した欠陥の引き方・浮かせる札は右の MAP と同じ物。
+         右の MAP の操作〈面・記号・軸〉は、出している間だけここへ移す。形は案出しと別のエージェントの採点で決めた: program/tools/proposals/2026-11-05-big-map*） -->
+    <div id="bigMap" class="bigmap" hidden>
+      <div id="bigMapCtl" class="bm-ctl"></div>
+      <canvas id="mapBig"></canvas>
+      <div id="mapBigLegend" class="legend"></div>
+    </div>
     <div id="pairView" hidden>
       <div class="pbar">
         <div id="baseSeg" class="seg" title="どちらの面を基準に候補をまとめるか">
@@ -127,7 +135,7 @@
       <div id="imgInfo"><div class="hint">画像をクリックで表示</div></div>
     </section>
     <section class="blk" data-blk="map" data-title="MAP">
-      <span class="bn"><span id="mapTitle" class="sub"></span></span>
+      <span class="bn"><span id="mapTitle" class="sub"></span><button type="button" id="mapBigBtn" class="bm-go" title="MAP を中央に大きく出す">⤢ 中央で大きく</button></span>
       <div class="mapbar"><div id="mapSide" class="seg"></div><span class="spacer"></span></div>
       <!-- 記号: 形は 2 回の案出しと別のエージェントの採点で決めた（M7: program/tools/proposals/2026-10-27-map-marks*） -->
       <div class="mkbar">

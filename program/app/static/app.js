@@ -1014,44 +1014,107 @@
     renderMapSide();
     drawMap();
   }
-  function mapGeom() {
-    const cv = $("map"), pts = S.map.points;
+  // MAP を描く先（右の欄の MAP と、中央の大きな MAP）。描き方・指した欠陥の引き方・浮かせる札は、どの描く先にも同じ物を使う
+  const MAPS = [{ cv: $("map"), legend: $("mapLegend"), box: null, main: true }, { cv: $("mapBig"), legend: $("mapBigLegend"), box: null }];
+  // 浮かせる札（MAP の欠陥に指を乗せると、その欠陥の縮小画像・番号・分類・面・位置を、点の横に出す）。
+  // 点が変わったときだけ中身を書き換える（指を動かすたびに画像を取り直さない）。点から離れる・MAP から出る・描き直すと消す
+  const mapPop = (() => {
+    const el = document.createElement("div"), ring = document.createElement("div");
+    el.className = "mpop"; el.hidden = true; ring.className = "mring"; ring.hidden = true;
+    document.body.append(el, ring);
+    let shown = null, raf = 0, last = null;
+    // 中身は一覧のカードと同じ物（画像表示の項目と値・欠陥No・分類）。画像の無い欠陥は、MAP の横・縦の値を出す
+    function fill(p) {
+      const m = p[4] ? S.imap[p[4]] : null, k = kindOf(p[3]), lab = S.map.labels || {}, u = p[4] ? thumbUrl({ img: p[4] }) : null;
+      const rows = m ? S.card.map((c, i) => [c.label, m.vals[i] ?? ""]) : [[lab.mapx || "横", p[0]], [lab.mapy || "縦", p[1]]];
+      el.innerHTML = `<div class="h">欠陥No:${esc((m ? m.no : p[5]) ?? "—")} ${esc(m ? m.kname : k.name)}${m ? markHtml(m) : `<span style="color:${k.color}">${esc(k.mark || "●")}</span>`}${faceTag({ side: p[2] })}</div>` +
+        (u ? `<img src="${u}" alt="">` : '<div class="noimg">画像なし</div>') +
+        rows.map(([a, b]) => `<div class="r"><span>${esc(a)}</span><b>${esc(b)}</b></div>`).join("") +
+        `<div class="k">${p[4] && (S.view === "grid" || S.view === "map") ? (S.view === "map" ? "押す＝画像情報へ・ダブルクリック＝拡大" : "押す＝一覧で選ぶ・ダブルクリック＝拡大") : S.view === "pairs" || S.view === "pitch" ? "押す＝候補を選ぶ" : "画像の無い欠陥です"}</div>`;
+    }
+    // 札の縮小画像の高さ（px）。MAP の枠が低いときは、札が枠に収まるまで画像を縮める（下限 72px）
+    const IMG_H = 168, IMG_MIN = 72;
+    const MAP_HEAD = 18;   // 札を MAP の面の見出し（表面・裏面。mapGeom の top）より下に止める
+    // 札は MAP の枠の中に、点の右（入らなければ左）へ出す。枠が札より狭い・低いとき（右の欄の小さな MAP）は、本体の領域（見出しと下の案内の行の間）に収める
+    function place(h, t) {
+      const gap = 14, f = t.cv.getBoundingClientRect(), M = document.querySelector("main").getBoundingClientRect();
+      el.style.setProperty("--ph", `${IMG_H}px`);
+      let b = el.getBoundingClientRect();
+      const fitW = f.width >= b.width * 2 + gap * 2, room = f.height - MAP_HEAD - 4;
+      if (fitW && b.height > room) { el.style.setProperty("--ph", `${Math.max(IMG_MIN, IMG_H - (b.height - room))}px`); b = el.getBoundingClientRect(); }
+      const fitH = room >= b.height;
+      const [L, R] = fitW ? [f.left + 4, f.right - 4] : [M.left + 8, M.right - 8], [T, B] = fitH ? [f.top + MAP_HEAD, f.bottom - 4] : [M.top + 8, M.bottom - 8];
+      let x = h.x + gap, y = h.y - b.height / 2;
+      if (!fitW) x = f.left - gap - b.width >= L ? f.left - gap - b.width : f.right + gap;   // 枠が狭ければ、MAP を覆わないよう枠の外（左を先に）へ
+      else if (x + b.width > R) x = h.x - gap - b.width;   // 右に入らなければ点の左へ
+      x = Math.max(L, Math.min(R - b.width, x));
+      y = Math.max(T, Math.min(B - b.height, y));
+      el.style.left = `${Math.round(x)}px`; el.style.top = `${Math.round(y)}px`;
+      ring.style.left = `${Math.round(h.x)}px`; ring.style.top = `${Math.round(h.y)}px`;
+    }
+    function hide() { cancelAnimationFrame(raf); last = null; if (!shown) return; shown = null; el.hidden = ring.hidden = true; }
+    function show(t, e) {
+      const h = mapHit(t, e);
+      if (!h) return hide();
+      if (shown !== h.p) { shown = h.p; fill(h.p); el.hidden = ring.hidden = false; }
+      place(h, t);
+    }
+    // 指の動きは 1 コマに 1 度だけ調べる（点が多いロットでも、動きに遅れない）
+    const at = (t, e) => { last = [t, { clientX: e.clientX, clientY: e.clientY }]; if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (last) show(...last); }); };
+    return { at, hide };
+  })();
+  function mapGeom(t = MAPS[0]) {
+    const cv = t.cv, pts = S.map.points;
     const sides = S.mapSide === "all" ? sideList().filter((s) => pts.some((p) => p[2] === s) || S.sides[s]) : [+S.mapSide];
-    const [W, H] = S.mapBox || [cv.clientWidth, cv.clientHeight], gap = 8, top = 16, left = 40, pad = 5;
+    // left: 縦軸の数の幅・bot: 横軸の数の段
+    const [W, H] = t.box || [cv.clientWidth, cv.clientHeight], gap = 8, top = 16, left = 46, bot = 18, pad = 5, ph = H - top - bot;
     const lw = (W - left - gap * Math.max(0, sides.length - 1)) / Math.max(1, sides.length);
     let x0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }
     x0 = Math.min(0, x0); if (x0 === x1) x1 = x0 + 1;
     const y0 = 0; y1 = Math.max(y1, S.map.len_m || 0, 1);
     const lane = (s) => sides.indexOf(s);
-    return { W, H, sides, lw, top, left, gap, x0, x1, y0, y1,
+    // mk: 記号を面の広さに合わせて大きくする倍率（右の欄の MAP の帯〈およそ 150×300〉を 1 として 1〜2.2 倍。自動のときだけ使う）
+    const mk = Math.max(1, Math.min(2.2, Math.sqrt((lw * ph) / (150 * 300))));
+    return { W, H, sides, lw, top, left, gap, ph, mk, x0, x1, y0, y1,
       sx: (p) => left + lane(p[2]) * (lw + gap) + pad + ((p[0] - x0) / (x1 - x0)) * (lw - pad * 2),
-      sy: (p) => top + pad + ((p[1] - y0) / (y1 - y0)) * (H - top - pad * 2) };
+      sy: (p) => top + pad + ((p[1] - y0) / (y1 - y0)) * (ph - pad * 2) };
   }
-  function drawMap() {
-    const cv = $("map"), dpr = window.devicePixelRatio || 1;
-    // 見えていない間（ロット表・右の列を畳んだ）は測らない。0×0 を書くと、高さを canvas の大きさから決めているので 0 のまま戻らない
+  function drawMap() { mapPop.hide(); for (const t of MAPS) drawMapOn(t); }
+  function drawMapOn(t) {
+    const cv = t.cv, dpr = window.devicePixelRatio || 1;
+    // 見えていない間（ロット表・右の列を畳んだ・中央の MAP を出していない）は測らない。0×0 を書くと、高さを canvas の大きさから決めているので 0 のまま戻らない
     if (!cv.clientWidth || !cv.clientHeight) return;
     // 大きさは解像度を書き換える前に測る（書き換えた直後は canvas の高さが一時的に変わり、測ると絵の下と右が切れる）
-    S.mapBox = [cv.clientWidth, cv.clientHeight];
-    cv.width = S.mapBox[0] * dpr; cv.height = S.mapBox[1] * dpr;
+    t.box = [cv.clientWidth, cv.clientHeight];
+    cv.width = t.box[0] * dpr; cv.height = t.box[1] * dpr;
     const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, cv.width, cv.height);
-    $("mapLegend").innerHTML = "";
+    t.legend.innerHTML = "";
     if (!S.map || !S.map.ok || !S.map.points.length) return;
-    const g = mapGeom();
+    const g = mapGeom(t);
     const sub = getComputedStyle(document.body).getPropertyValue("--sub");
     g.sides.forEach((s, i) => {
       const x = g.left + i * (g.lw + g.gap);
-      c.fillStyle = "rgba(127,127,127,.08)"; c.fillRect(x, g.top, g.lw, g.H - g.top);
-      c.strokeStyle = sideColor(s); c.lineWidth = 1.5; c.strokeRect(x + .5, g.top + .5, g.lw - 1, g.H - g.top - 1);
-      c.fillStyle = sideColor(s); c.font = "bold 11px 'Yu Gothic UI'"; c.fillText(sideName(s), x + 2, 11);
+      c.fillStyle = "rgba(127,127,127,.08)"; c.fillRect(x, g.top, g.lw, g.ph);
+      c.strokeStyle = sideColor(s); c.lineWidth = 1.5; c.strokeRect(x + .5, g.top + .5, g.lw - 1, g.ph - 1);
+      c.fillStyle = sideColor(s); c.font = `bold 12px ${AXIS_FONT}`; c.textAlign = "left"; c.fillText(sideName(s), x + 2, 12);
+      // 横軸の数（帯の左端・真ん中・右端。帯が狭いときは両端だけ）
+      c.fillStyle = sub; c.font = `12px ${AXIS_FONT}`;
+      const ticks = g.lw >= 140 ? [0, 0.5, 1] : [0, 1], yb = g.top + g.ph + 13;
+      for (const f of ticks) {
+        const v = g.x0 + (g.x1 - g.x0) * f;
+        c.textAlign = f === 0 ? "left" : f === 1 ? "right" : "center";
+        c.fillText(Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1), g.sx([v, 0, s]) + (f === 0 ? -5 : f === 1 ? 5 : 0), yb);
+      }
     });
-    c.fillStyle = sub; c.font = "10px Consolas";
+    // 縦軸の数（右寄せで帯の左に）
+    c.fillStyle = sub; c.font = `12px ${AXIS_FONT}`; c.textAlign = "right";
     for (let k = 0; k <= 4; k++) {
       const v = g.y0 + ((g.y1 - g.y0) * k) / 4;
-      const y = g.top + 5 + ((g.H - g.top - 10) * k) / 4;
-      c.fillText(v >= 100 ? Math.round(v) : v.toFixed(1), 0, y + 3);
+      const y = g.top + 5 + ((g.ph - 10) * k) / 4;
+      c.fillText(v >= 100 ? Math.round(v) : v.toFixed(1), g.left - 5, y + 4);
     }
+    c.textAlign = "left";
     const want = (p) => g.sides.includes(p[2]) && (!S.fd || S.fd.has(p[6]));
     const byI = new Map(S.map.points.map((p) => [p[6], p]));
     // transfer candidate lines (front <-> back)
@@ -1061,7 +1124,7 @@
       if (S.psel) line(S.psel[0], S.psel[1], "#e07800", 2.5);
     }
     if (S.map.bands?.length) {
-      const span = (g.H - g.top - 10) / Math.max(1e-9, g.y1 - g.y0);
+      const span = (g.ph - 10) / Math.max(1e-9, g.y1 - g.y0);
       c.fillStyle = "rgba(198,40,40,.28)";
       for (const [xa, xb, y, len, side] of S.map.bands) {
         if (!g.sides.includes(side)) continue;
@@ -1078,13 +1141,13 @@
       }
     }
     const pts = S.map.points.filter(want);
-    const hs = Math.max(7, markLook(pts.length).size * 0.65);
+    const hs = Math.max(7, markPx(g, pts.length) * 0.65);
     drawMarks(c, g, pts);
-    renderMarkUi(pts.length);
+    if (t.main) renderMarkUi(pts.length);
     if (S.fd) $("mapTitle").textContent = `${S.map.points.filter((p) => S.fd.has(p[6])).length}件（絞り込み中・全 ${S.map.points.length}）`;
     else $("mapTitle").textContent = `${S.map.points.length}件（画像あり ${S.map.points.filter((p) => p[4]).length}）`;
     const it = S.items[S.cur];
-    if (it && S.view === "grid") {
+    if (it && (S.view === "grid" || S.view === "map")) {
       const p = S.map.points.find((p) => p[4] === mkey(it));
       if (p && want(p)) { c.strokeStyle = "#1e5aa8"; c.lineWidth = 2; c.strokeRect(g.sx(p) - hs, g.sy(p) - hs, hs * 2, hs * 2); }
     }
@@ -1105,7 +1168,7 @@
     }
     const used = [...new Set(S.map.points.filter(want).map((p) => String(p[3])))].sort((a, b) => a - b);
     const lab = S.map.labels || {};
-    $("mapLegend").innerHTML = used.map((v) => { const k = kindOf(v); return `<span>${markIcon(k)} ${esc(k.name)} ${S.map.points.filter((p) => want(p) && String(p[3]) === v).length}</span>`; }).join("") +
+    t.legend.innerHTML = used.map((v) => { const k = kindOf(v); return `<span>${markIcon(k)} ${esc(k.name)} ${S.map.points.filter((p) => want(p) && String(p[3]) === v).length}</span>`; }).join("") +
       (S.map.points.some((p) => want(p) && !p[4]) ? `<span title="画像の無い欠陥は、分類の形のまま灰色で描きます">${markIcon({ mark: "●", color: "rgb(95,95,95)" })} 灰＝画像なし</span>` : "") +
       (S.map.bands?.length ? `<span title="多量（処理落ち）の範囲"><i style="background:rgba(198,40,40,.5);border-radius:0;width:12px"></i>多量 ${S.map.bands.length}</span>` : "") + (S.view === "pairs" ? `<span style="color:#e07800">― 転写候補</span>` : "") + (S.view === "pitch" ? `<span style="color:#7b3fb5">― ピッチ</span>` : "") +
       `<span>縦:${esc(lab.mapy || "")} 横:${esc(lab.mapx || "")}</span>`;
@@ -1124,8 +1187,11 @@
     else c.arc(x, y, r, 0, Math.PI * 2);
   }
   const markLook = (n) => ({ ...S.mk, ...(S.mk.auto ? autoMark(n) : {}) });
+  // 描く記号の大きさ（px）。自動なら面の広さに合わせて大きくする（手で決めた大きさは、つまみに出ている px のまま）
+  const markPx = (g, n) => markLook(n).size * (S.mk.auto ? g.mk : 1);
+  const AXIS_FONT = "'Yu Gothic UI','Meiryo UI',sans-serif";
   function drawMarks(c, g, pts) {
-    const m = markLook(pts.length), r = Math.max(0.5, m.size / 2);
+    const m = { ...markLook(pts.length), size: markPx(g, pts.length) }, r = Math.max(0.5, m.size / 2);
     c.save();
     if (m.density) {   // 重なりの数で地を塗る（4px の升目ごとに数え、対数で濃さに）
       const cell = 4, cnt = new Map();
@@ -1161,12 +1227,16 @@
     drawMap();
   }
   window.dtSetMark = setMark;   // 記号の設定（画面の部品と、案を撮る道具が使う）
-  $("map").addEventListener("click", (e) => {
-    if (!S.map?.ok) return;
-    const r = $("map").getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, g = mapGeom();
+  // 指した位置にいちばん近い欠陥（描いている物だけ）。近くに無ければ null。押す・ダブルクリック・指を乗せる（浮かせる札）のどれもこれで引く
+  function mapHit(t, e) {
+    if (!S.map?.ok || !t.box) return null;
+    const r = t.cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, g = mapGeom(t);
     let best = null, bd = 1e9;
-    for (const p of S.map.points) { if (!g.sides.includes(p[2]) || (S.fd && !S.fd.has(p[6]))) continue; if (S.view === "grid" && !p[4]) continue; const d = (g.sx(p) - mx) ** 2 + (g.sy(p) - my) ** 2; if (d < bd) { bd = d; best = p; } }
-    if (!best || bd >= 300) return;
+    for (const p of S.map.points) { if (!g.sides.includes(p[2]) || (S.fd && !S.fd.has(p[6]))) continue; const d = (g.sx(p) - mx) ** 2 + (g.sy(p) - my) ** 2; if (d < bd) { bd = d; best = p; } }
+    const reach = Math.max(12, markPx(g, S.map.points.length));   // 記号が大きいときは、記号の端でも当たる
+    return best && bd < reach * reach ? { p: best, x: r.left + g.sx(best), y: r.top + g.sy(best) } : null;
+  }
+  function mapPick(best) {
     if (S.view === "pitch") {
       const ci = (S.PT?.chains || []).findIndex((ch) => ch.members.some((m) => m.i === best[6]));
       if (ci >= 0) selPitch(ci, S.PT.chains[ci].members.findIndex((m) => m.i === best[6]));
@@ -1179,10 +1249,23 @@
       return;
     }
     const [cab, name] = best[4].split("/"); select(S.items.findIndex((x) => x.cab === cab && x.name === name));
-  });
-  // ブロックの大きさが変わったら（境目・たたむ・移す・欄の数: layout-view.js）描き直す。図の高さはブロックの高さから決まる
-  { let raf = 0; new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(drawMap); }).observe($("map")); }
-  $("map").addEventListener("dblclick", () => { if (S.view === "pairs") openPV(); else if (S.cur >= 0) openViewer(); });
+  }
+  // 描く先に、押す（選ぶ）・ダブルクリック（拡大）・指を乗せる（浮かせる札）と、大きさが変わったときの描き直しを付ける
+  function bindMap(t) {
+    // 押す・ダブルクリックは、浮かせる札と同じ点を使う（札で見た欠陥と選ばれる欠陥をずらさない）。画像の見方では画像の無い点は選ばない
+    const hit = (e) => { const h = mapHit(t, e); return h && (h.p[4] || (S.view !== "grid" && S.view !== "map")) ? h : null; };
+    t.cv.addEventListener("click", (e) => { const h = hit(e); if (h) mapPick(h.p); });
+    t.cv.addEventListener("dblclick", (e) => {
+      if (S.view === "pairs") return openPV();
+      const h = hit(e); if (h && (S.view === "grid" || S.view === "map")) mapPick(h.p);
+      if (S.cur >= 0) openViewer();
+    });
+    t.cv.addEventListener("pointermove", (e) => mapPop.at(t, e));
+    t.cv.addEventListener("pointerleave", () => mapPop.hide());
+    // ブロックの大きさが変わったら（境目・たたむ・移す・欄の数: layout-view.js）描き直す。図の高さはブロックの高さから決まる
+    let raf = 0; new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => drawMapOn(t)); }).observe(t.cv);
+  }
+  MAPS.forEach(bindMap);
   // mark size
   // 記号の部品: 描いた大きさ・濃さ（自動なら点の数で決めた値）を、つまみと数に出す
   function renderMarkUi(n) {
@@ -1210,24 +1293,40 @@
   const fmt2 = (v) => (v == null ? "—" : Number(v).toFixed(2));
   const sgn = (v, d = 2) => (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(d);
 
-  // v: 画像の見方（grid・pairs・pitch）か、ロット表（list）。ロット表は画面全体の切り替え（上の段のタブ）で、
+  // 中央の大きな MAP を出す・しまう。右の MAP の操作（面・記号・軸）は 1 か所にだけ置く: 出している間は中央の MAP の上へ移し、
+  // 右の MAP のブロックは貸し出し中としてたたんで見せる（利用者の配置は変えない。見出しを押すと戻る）
+  const MAP_CTL = [".mapbar", ".mkbar", ".slots", "#mapMsg"].map((s) => document.querySelector(`[data-blk="map"] ${s}`));
+  function lendMap(on) {
+    if (on) $("bigMapCtl").append(...MAP_CTL);
+    else { $("map").before(MAP_CTL[0], MAP_CTL[1]); $("mapLegend").after(MAP_CTL[2], MAP_CTL[3]); }
+    window.dtLayout?.away("map", on);
+    const b = $("mapBigBtn");
+    b.textContent = on ? "⤡ 右へ戻す" : "⤢ 中央で大きく";
+    b.title = on ? "中央の MAP をしまい、画像一覧に戻す" : "MAP を中央に大きく出す";
+  }
+  // v: 画像の見方（grid・map・pairs・pitch）か、ロット表（list）。ロット表は画面全体の切り替え（上の段のタブ）で、
   // 表と関わらない物（サマリ・画像の見方の段・右の列）を出さずに表を木の右いっぱいに広げる。画像を見るに戻ると前の見方へ
   function setView(v) {
+    const was = S.view;
     S.view = v;
     if (v !== "list") S.imgView = v;
+    if ((was === "map") !== (v === "map")) lendMap(v === "map");
     document.body.classList.toggle("mode-list", v === "list");
     document.querySelectorAll("#modeBar [data-mode]").forEach((b) => { const on = b.dataset.mode === (v === "list" ? "list" : "grid"); b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
     document.querySelectorAll("#viewSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
-    $("grid").hidden = v !== "grid"; $("fBar").hidden = v !== "grid"; $("pairView").hidden = v !== "pairs"; $("pitchView").hidden = v !== "pitch"; $("listView").hidden = v !== "list";
+    $("grid").hidden = v !== "grid"; $("bigMap").hidden = v !== "map"; $("fBar").hidden = v !== "grid" && v !== "map"; $("pairView").hidden = v !== "pairs"; $("pitchView").hidden = v !== "pitch"; $("listView").hidden = v !== "list";
     $("loadBand").classList.toggle("off", v === "list");   // 画像の読み込みの帯は画像の画面だけ
     setListScope();
     document.querySelector(".cardzone").style.display = v === "grid" ? "" : "none";
     $("sizerWrap").style.display = v === "grid" ? "" : "none";
+    if (v === "grid" && was === "map") $("grid").querySelector(".th.sel")?.scrollIntoView({ block: "nearest" });   // 中央の MAP で選んだ欠陥を一覧で見せる
     if (v === "pairs") { if (S.mapSide !== "all") { S.mapSide = "all"; renderMapSide(); } renderPairs(); }
     if (v === "pitch") renderPitch();
     drawMap();
   }
   $("viewSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setView(b.dataset.v); });
+  $("mapBigBtn").addEventListener("click", (e) => { e.stopPropagation(); setView(S.view === "map" ? "grid" : "map"); });
+  window.addEventListener("dt:away-back", (e) => { if (e.detail === "map" && S.view === "map") setView("grid"); });
   $("modeBar").addEventListener("click", (e) => { const b = e.target.closest("[data-mode]"); if (b) setView(b.dataset.mode === "list" ? "list" : S.imgView || "grid"); });
   $("baseSeg").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.b === PV.base));
   $("baseSeg").addEventListener("click", (e) => {

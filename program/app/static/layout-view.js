@@ -64,6 +64,9 @@
     return L;
   }
   let L = load(), prev = null;
+  // 貸し出し中のブロック（中身をほかの場所〈中央の大きな MAP〉へ貸している間だけ、たたんで見せる。利用者の配置〈L.fold〉は変えず、残さない）
+  const away = new Set();
+  const folded = (id) => !!L.fold[id] || away.has(id);
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ mode: L.mode, place: L.place, w: L.w, fold: L.fold, auto: L.auto })); } catch (_) { /* 覚えられなくても使える */ } };
   const where = (id) => COLS.find((c) => L.place[c].includes(id));
   const shown = (c) => MODES[L.mode].cols.includes(c);
@@ -108,17 +111,17 @@
       const sp = document.querySelector(`.split[data-split="${COL_EL[c]}"]`);
       if (sp) sp.hidden = !on;
       // 開いているブロックどうしの間に境目
-      const open = live.filter((id) => !L.fold[id]);
+      const open = live.filter((id) => !folded(id));
       for (let i = 0; i < live.length - 1; i++) {
         const a = live[i], b = live[i + 1];
         const sp2 = document.createElement("div");
         sp2.className = "hsplit"; sp2.title = "ドラッグで高さを変える（ダブルクリックで元の高さ）";
         sp2.dataset.a = a; sp2.dataset.b = b;
-        if (L.fold[a] && L.fold[b]) sp2.classList.add("off");
+        if (folded(a) && folded(b)) sp2.classList.add("off");
         blocks[a].after(sp2);
       }
       for (const id of ids) {
-        const b = blocks[id], f = !!L.fold[id];
+        const b = blocks[id], f = folded(id);
         b.classList.toggle("fold", f);
         b.style.setProperty("--w", L.w[id] || 1);
         b.querySelector(".bt").setAttribute("aria-expanded", String(!f));
@@ -138,14 +141,14 @@
     for (const b of Object.values(blocks)) {
       // data-min-to="選び方": その物の下端までは、ブロックの中を送らずに見える（仕分けの「＋ グループを作る」）
       const to = b.dataset.minTo && b.querySelector(b.dataset.minTo);
-      if (to && !b.hidden && !L.fold[b.dataset.blk]) {
+      if (to && !b.hidden && !folded(b.dataset.blk)) {
         const bb = b.querySelector(".bb"), r = to.getBoundingClientRect(), top = bb.getBoundingClientRect().top;
         if (r.height) b.style.minHeight = `${Math.ceil(b.querySelector(".bh").offsetHeight + r.bottom - top + bb.scrollTop + 8)}px`;
         continue;
       }
       if (to) { b.style.minHeight = ""; continue; }
       const grow = b.querySelector("[data-grow]");
-      if (!grow || b.hidden || L.fold[b.dataset.blk]) { b.style.minHeight = ""; continue; }
+      if (!grow || b.hidden || folded(b.dataset.blk)) { b.style.minHeight = ""; continue; }
       const bb = b.querySelector(".bb"), cs = getComputedStyle(bb);
       // 伸びる中身の最小は中の高さ（枠線の分を足す）
       let h = b.querySelector(".bh").offsetHeight + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + (+grow.dataset.grow || 0) + (grow.offsetHeight - grow.clientHeight);
@@ -181,7 +184,10 @@
     .observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
   // ---------------------------------------------------------------- 操作: たたむ・境目・移す
-  function toggleFold(id) { remember(); if (L.auto[id]) untell(); L.fold[id] = !L.fold[id]; delete L.auto[id]; apply(); }   // 手でたたむ・開いた物は自動の印を外す
+  function toggleFold(id) {
+    // 貸し出し中の見出しを押したら、貸した先から戻す（app.js が受ける）
+    if (away.has(id)) { window.dispatchEvent(new CustomEvent("dt:away-back", { detail: id })); return; }
+    remember(); if (L.auto[id]) untell(); L.fold[id] = !L.fold[id]; delete L.auto[id]; apply(); }   // 手でたたむ・開いた物は自動の印を外す
   function moveTo(id, col, index) {
     remember();
     const from = where(id);
@@ -203,7 +209,7 @@
     const el = $(COL_EL[col]), done = [];
     for (const id of FOLD_ORDER) {
       if (el.hidden || el.scrollHeight <= el.clientHeight + 1) break;
-      if (id === keep || !L.place[col].includes(id) || L.fold[id] || blocks[id].hidden) continue;
+      if (id === keep || !L.place[col].includes(id) || folded(id) || blocks[id].hidden) continue;
       L.fold[id] = true; L.auto[id] = true; done.push(blocks[id].dataset.title); render();
     }
     if (!done.length) return;
@@ -234,7 +240,7 @@
     const sp = e.target.closest(".hsplit");
     if (!sp || sp.classList.contains("off")) return;
     const a = blocks[sp.dataset.a], b = blocks[sp.dataset.b];
-    if (L.fold[sp.dataset.a] || L.fold[sp.dataset.b]) return;   // たたんだ側は動かさない
+    if (folded(sp.dataset.a) || folded(sp.dataset.b)) return;   // たたんだ側は動かさない
     e.preventDefault(); sp.setPointerCapture(e.pointerId); sp.classList.add("on");
     const y0 = e.clientY, ha = a.offsetHeight, hb = b.offsetHeight, sum = (L.w[sp.dataset.a] || 1) + (L.w[sp.dataset.b] || 1);
     const MIN = 64;
@@ -387,5 +393,5 @@
 
   render();
   // 覚える物（欄の数・置き場・高さの比率・たたみ）だけを返す（「元に戻す」の控えの幅などは含めない）
-  window.dtLayout = { get: () => JSON.parse(JSON.stringify({ mode: L.mode, place: L.place, w: L.w, fold: L.fold, auto: L.auto })), reset: () => { remember(); L = STD(); apply(); } };
+  window.dtLayout = { away: (id, on) => { if (on === away.has(id)) return; if (on) away.add(id); else away.delete(id); apply(); }, get: () => JSON.parse(JSON.stringify({ mode: L.mode, place: L.place, w: L.w, fold: L.fold, auto: L.auto })), reset: () => { remember(); L = STD(); apply(); } };
 })();
