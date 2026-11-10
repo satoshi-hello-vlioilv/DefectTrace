@@ -89,8 +89,8 @@ fn columns_of(res: &LotRes) -> Vec<Value> {
             continue;
         }
         // 計算で作る項目（検査幅など。表示項目と同じ鍵）を先に、元の欄をその後に
-        for (k, l, _) in lot::virtuals_of(&d) {
-            out.push(col(&format!("dat:{n}"), k, l, &format!("{n}.dat")));
+        for v in lot::virtuals_of(&d) {
+            out.push(col(&format!("dat:{n}"), v.key, v.label, &format!("{n}.dat")));
         }
         for f in d.value_fields() {
             let label = if f.label.is_empty() { f.name.clone() } else { f.label.clone() };

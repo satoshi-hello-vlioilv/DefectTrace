@@ -11,25 +11,48 @@
 //! - 既定の表示項目の一覧（list）に材質（d_list_mat）と欠陥数（d_list_dc）を足した（V48_ADDED）。/api/pins の答えと
 //!   ロットの情報・一覧の items など、答えのどこに出ても、この 2 つを除いて比べる
 //! - ロット一覧の印（flags）に no_image（画像なし: 画像総数が 0）を足した。除いて比べる
+//!
+//! 違ってよいと決めたこと（版 4.13.0。利用者の依頼）:
+//! - 元のアプリの欠陥詳細と同じ計算の項目（OS元幅・DS元幅・OS幅入後・DS幅入後・ランク・検出LSC。V413_VIRTUALS）を足した。
+//!   画像の情報（/api/imginfo の detect）の行から除いて比べる。式は tests/calc.rs
+//! - 既定の表示項目に、画像表示（card）の DS元幅・OS幅入後・DS幅入後・面積率・平均レベル暗・ランクと、一覧（list）の検査長(m)を足した
+//!   （V413_ADDED）。版 4.8.0 の物と同じく、答えのどこに出ても除いて比べる
 
 use dt_core::app::App;
 use dt_core::config::Config;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
-/// 版 4.8.0 で既定の表示項目に足した物（版 3.8 には無い）
-const V48_ADDED: [&str; 2] = ["d_list_mat", "d_list_dc"];
+/// 版 4.8.0・4.13.0 で既定の表示項目に足した物（版 3.8 には無い）
+const ADDED: [&str; 9] = ["d_list_mat", "d_list_dc", "d_list_len", "d_c_dso", "d_c_ost", "d_c_dst", "d_c_ar", "d_c_a2", "d_c_rank"];
+/// 版 4.13.0 で足した計算の項目（版 3.8 には無い）
+const V413_VIRTUALS: [&str; 6] = ["@os_orig", "@ds_orig", "@os_trim", "@ds_trim", "@rank", "@lsc_no"];
 
-/// 答えの木から、版 4.8.0 で足した物（V48_ADDED の表示項目・no_image の印）を除く。
-fn without_v48(v: &mut Value) {
+/// 答えの木から、版 4.8.0・4.13.0 で足した物（ADDED の表示項目・V413_VIRTUALS の行・no_image の印）を除く。
+fn without_added(v: &mut Value) {
     match v {
         Value::Array(a) => {
-            a.retain(|x| !V48_ADDED.contains(&x["id"].as_str().unwrap_or("")));
-            a.iter_mut().for_each(without_v48);
+            a.retain(|x| !ADDED.contains(&x["id"].as_str().unwrap_or("")) && !V413_VIRTUALS.contains(&x[0].as_str().unwrap_or("")));
+            a.iter_mut().for_each(without_added);
         }
         Value::Object(o) => {
             o.remove("no_image");
-            o.values_mut().for_each(without_v48);
+            // 版 4.13.0: 表示項目の値に、書式を当てる前の数（num・nums。画面が表示項目の数値の書式を当てる）を足した
+            o.remove("num");
+            o.remove("nums");
+            // 画像ごとの値（map.*.vals）は画像表示の項目（card）と位置で対応する。除く項目の位置を、値からも除く
+            let drop: Vec<usize> = o.get("card").and_then(Value::as_array).map_or(vec![], |c| {
+                c.iter().enumerate().filter(|(_, x)| ADDED.contains(&x["id"].as_str().unwrap_or(""))).map(|(i, _)| i).collect()
+            });
+            if let (false, Some(Value::Object(m))) = (drop.is_empty(), o.get_mut("map")) {
+                for e in m.values_mut() {
+                    if let Some(Value::Array(vals)) = e.get_mut("vals") {
+                        let keep: Vec<Value> = vals.iter().enumerate().filter(|(i, _)| !drop.contains(i)).map(|(_, v)| v.clone()).collect();
+                        *vals = keep;
+                    }
+                }
+            }
+            o.values_mut().for_each(without_added);
         }
         _ => {}
     }
@@ -188,7 +211,7 @@ fn answers_match_the_python_version() {
             }
         }
         // 版 4.8.0 で足した物（上の「違ってよいと決めたこと」）
-        without_v48(&mut got);
+        without_added(&mut got);
         let mut d = vec![];
         diff("", &got, &want, &mut d);
         if !d.is_empty() {

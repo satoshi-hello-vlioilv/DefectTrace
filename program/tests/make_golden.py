@@ -5,7 +5,10 @@
 
 Rust の答えとの突き合わせは desktop/tests/golden.rs。版 3.8 と違ってよいと決めたことは、ここ（下の「直したこと」）と golden.rs に書く。
 版 4.8.0 で足した物（既定の表示項目の一覧の 材質・欠陥数、ロット一覧の印 no_image〈画像なし〉）は版 3.8 に無い機能なので、
-正解データは版 3.8 の答えのまま作り、golden.rs が比べる前に除く（golden.rs の V48_ADDED と no_image）。
+正解データは版 3.8 の答えのまま作り、golden.rs が比べる前に除く（golden.rs の ADDED と no_image）。
+版 4.13.0 で足した物（元のアプリの欠陥詳細と同じ計算の項目〈OS元幅・DS元幅・OS幅入後・DS幅入後・ランク・検出LSC〉と、
+既定の表示項目の 画像表示の DS元幅・OS幅入後・DS幅入後・面積率・平均レベル暗・ランク、一覧の 検査長(m)）も同じく、
+正解データは作り直さず、golden.rs が比べる前に除く（golden.rs の ADDED と V413_VIRTUALS。式の試験は desktop/tests/calc.rs）。
 """
 import hashlib
 import importlib

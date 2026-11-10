@@ -29,7 +29,8 @@ aside[hidden],.split[hidden]{display:none!important}
 .chips,.summary,.slot{display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-height:24px;border:1px dashed var(--line);border-radius:4px;padding:2px 4px}
 .dzl{font-size:11px;color:var(--sub);font-weight:700;margin-right:2px}
 .pins{display:contents}
-.chip{display:inline-flex;align-items:center;gap:4px;background:var(--pinbg);border:1px solid #ecd9a8;border-radius:12px;padding:1px 4px 1px 8px;font-size:12px;cursor:grab;white-space:nowrap;max-width:100%;overflow:hidden}
+.chip{position:relative;display:inline-flex;align-items:center;gap:4px;background:var(--pinbg);border:1px solid #ecd9a8;border-radius:12px;padding:1px 4px 1px 8px;font-size:12px;cursor:grab;white-space:nowrap;max-width:100%}
+.chip .cl,.chip .cv{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .chip .cl{color:var(--pin);font-weight:700}
 .chip .cv{font-family:Consolas,monospace}
 .chip .x{border:none;background:none;padding:0 3px;color:var(--sub);line-height:14px}
@@ -708,3 +709,27 @@ body.lay-dragging,body.lay-dragging *{cursor:grabbing!important;user-select:none
 .bigmap .legend{font-size:12.5px;gap:2px 14px}
 .bm-go{border:1px solid #b7cbe6;background:var(--pane);color:var(--acc);border-radius:5px;padding:0 8px;font-size:12px;white-space:nowrap;margin-left:6px}
 .bm-go:hover{background:var(--accbg)}
+
+/* 表示項目の名前と書式（✎・ダブルクリックで開く小窓。形は 3 回の案出しと採点で決めた M: program/tools/proposals/2026-11-10-num-format*）
+   ✎ は札の右上の角・行の名前の右端に重ねて出す（札・行を広げない。× はそのまま押せる）。書式を決めた札・行は左上の小さな点（日時の hh:mm と同じ黄） */
+.pe{position:absolute;top:-7px;right:-5px;z-index:2;display:none;width:15px;height:15px;padding:0;border:1px solid var(--acc);border-radius:50%;background:var(--pane);color:var(--acc);font-size:11px;line-height:13px;text-align:center;cursor:pointer}
+/* ✎ が札の角からはみ出す分（上 7px・右 5px）だけ、札どうしの間を空ける（隣の札に掛けない） */
+.chips,.summary{row-gap:8px;column-gap:6px}
+.chip:hover .pe,.chip:focus-within .pe{display:block}
+table.kv td.k{position:relative}
+table.kv tr .pe{top:50%;right:2px;transform:translateY(-50%)}
+table.kv tr.pinned:hover .pe,table.kv tr.pinned:focus-within .pe{display:block}
+.fdot{position:absolute;left:2px;top:2px;width:5px;height:5px;border-radius:50%;background:#c9a227;pointer-events:auto}
+.pe-pop{position:fixed;z-index:80;width:330px;display:flex;flex-direction:column;gap:8px;padding:10px 12px;background:var(--pane);border:1px solid #9fb3cc;border-radius:8px;box-shadow:0 10px 28px rgba(15,30,60,.22);font-size:13px}
+.pe-pop[hidden]{display:none}
+.pe-h{display:flex;align-items:center;gap:8px}.pe-h b{color:var(--acc);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pe-h .sub{font-size:12px;white-space:nowrap}
+.pe-x{margin-left:auto;border:none;background:none;color:var(--sub);font-size:16px;padding:0 4px}
+.pe-row{display:flex;align-items:center;gap:8px;white-space:nowrap}.pe-row .sub{font-size:12px;width:42px;flex:none}.pe-row input{flex:1;min-width:0}
+#peFree{flex:1;font-family:Consolas,monospace}
+.pe-prev{font:12.5px Consolas,monospace;color:var(--sub);margin:-4px 0 0 50px;min-height:16px;overflow-wrap:anywhere}.pe-prev.err{color:var(--ng);font-family:inherit}
+.pe-sec{display:flex;align-items:baseline;gap:8px;font-size:12px;color:var(--sub);font-weight:600}.pe-sec .sub{font-weight:400;font-family:Consolas,monospace}
+.pe-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px}
+.pe-grid button{display:flex;justify-content:space-between;gap:8px;padding:3px 8px;background:none;border-color:var(--line2);font:12.5px Consolas,monospace}
+.pe-grid button i{font-style:normal;color:var(--sub);min-width:0;overflow:hidden;text-overflow:ellipsis}
+.pe-grid button.on{background:var(--accbg);border-color:var(--acc);color:var(--acc);font-weight:700}.pe-grid button.on i{color:var(--acc)}
+.pe-foot{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line2);padding-top:6px}.pe-msg{color:var(--ok);font-size:12px;min-width:0}.pe-foot button{margin-left:auto;font-size:12px;padding:1px 8px;flex:none}

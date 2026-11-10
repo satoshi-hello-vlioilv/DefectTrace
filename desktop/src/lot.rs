@@ -62,24 +62,107 @@ fn sub(a: Option<&V>, b: Option<&V>) -> Option<f64> {
     Some(a?.num()? - b?.num()?)
 }
 
-/// 計算で作る項目（鍵・名前・a − b の 2 つの欄）。DETECT_INFO の @os_x、INSP_INFO の @insp_width。
-pub const VIRTUALS: [(&str, &str, [&str; 2]); 2] =
-    [("@os_x", "幅方向OS～(mm)", ["x_mm", "base_x"]), ("@insp_width", "検査幅(mm)", ["insp_area_ed", "insp_area_st"])];
+/// 計算で作る項目の計算の仕方。
+#[derive(Debug, Clone, Copy)]
+pub enum Calc {
+    /// 同じ記録の 2 つの欄の差（a − b）
+    Diff(&'static str, &'static str),
+    /// 元のアプリの「DS元幅」: 検査幅 − OS元幅
+    DsOrig,
+    /// 「OS幅入後」: OS元幅 − 片側の落とし量（(検査幅 − 製品幅) ÷ 2。両側を同じだけ落とす）
+    OsTrim,
+    /// 「DS幅入後」: DS元幅 − 片側の落とし量
+    DsTrim,
+    /// ランクの名前（rankID を条件の xml の rank_conditions で引く）
+    Rank,
+    /// 0 から数えた番号を 1 から数える（元のアプリの表示と同じ）
+    Plus1(&'static str),
+}
+
+impl Calc {
+    /// 計算に要る、その記録の欄（無い .dat では作らない）
+    fn needs(self) -> Vec<&'static str> {
+        match self {
+            Calc::Diff(a, b) => vec![a, b],
+            Calc::DsOrig | Calc::OsTrim | Calc::DsTrim => vec!["x_mm", "base_x"],
+            Calc::Rank => vec!["rankID"],
+            Calc::Plus1(f) => vec![f],
+        }
+    }
+}
+
+/// 計算で作る項目（鍵・名前・どの .dat の記録から・計算の仕方）。名前は元のアプリ（欠陥詳細）と同じ。
+/// 元幅・幅入後の式は、元のアプリの 2 つのロットの欠陥詳細の値から割り出した（OS元幅 + DS元幅 = 検査幅、
+/// OS幅入後 + DS幅入後 = 製品幅、両側の落とし量が等しい。2026-11-10）。
+pub struct Virtual {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub dat: &'static str,
+    pub calc: Calc,
+}
+
+const fn vt(key: &'static str, label: &'static str, dat: &'static str, calc: Calc) -> Virtual {
+    Virtual { key, label, dat, calc }
+}
+
+pub const VIRTUALS: [Virtual; 8] = [
+    vt("@os_x", "幅方向OS～(mm)", "DETECT_INFO", Calc::Diff("x_mm", "base_x")),
+    vt("@insp_width", "検査幅(mm)", "INSP_INFO", Calc::Diff("insp_area_ed", "insp_area_st")),
+    vt("@os_orig", "OS元幅(mm)", "DETECT_INFO", Calc::Diff("x_mm", "base_x")),
+    vt("@ds_orig", "DS元幅(mm)", "DETECT_INFO", Calc::DsOrig),
+    vt("@os_trim", "OS幅入後(mm)", "DETECT_INFO", Calc::OsTrim),
+    vt("@ds_trim", "DS幅入後(mm)", "DETECT_INFO", Calc::DsTrim),
+    vt("@rank", "ランク", "DETECT_INFO", Calc::Rank),
+    vt("@lsc_no", "検出LSC", "DETECT_INFO", Calc::Plus1("lsc")),
+];
+
+fn virt(key: &str) -> Option<&'static Virtual> {
+    VIRTUALS.iter().find(|v| v.key == key)
+}
 
 pub fn virtual_label(key: &str) -> Option<&'static str> {
-    VIRTUALS.iter().find(|v| v.0 == key).map(|v| v.1)
+    virt(key).map(|v| v.label)
 }
 
-/// この .dat から作れる計算の項目（両方の欄がある物）。
-pub fn virtuals_of(d: &Dat) -> impl Iterator<Item = &'static (&'static str, &'static str, [&'static str; 2])> + '_ {
-    VIRTUALS.iter().filter(|v| v.2.iter().all(|f| d.col(f).is_some()))
+/// この .dat から作れる計算の項目（その .dat の項目で、計算に要る欄がある物）。
+pub fn virtuals_of<'a>(d: &'a Dat) -> impl Iterator<Item = &'static Virtual> + 'a {
+    VIRTUALS.iter().filter(move |v| v.dat.eq_ignore_ascii_case(&d.name) && v.calc.needs().iter().all(|f| d.col(f).is_some()))
 }
 
-/// 1 件の値（計算で作る項目も）。無ければ None。
-pub fn rec_get(d: &Dat, r: &Rec, key: &str) -> Option<V> {
-    match VIRTUALS.iter().find(|v| v.0 == key) {
-        Some((_, _, [a, b])) => sub(d.get(r, a), d.get(r, b)).map(V::F),
-        None => d.get(r, key).cloned(),
+/// 1 件の値（計算で作る項目も）。無ければ None。計算にロットの値（検査幅・製品幅・ランクの名前）を使う物があるので、ロットも渡す。
+pub fn rec_get(res: &LotRes, d: &Dat, r: &Rec, key: &str) -> Option<V> {
+    let Some(v) = virt(key) else { return d.get(r, key).cloned() };
+    let os = || sub(d.get(r, "x_mm"), d.get(r, "base_x"));
+    let c = res.lot_calc();
+    match v.calc {
+        Calc::Diff(a, b) => sub(d.get(r, a), d.get(r, b)).map(V::F),
+        Calc::DsOrig => Some(V::F(c.width? - os()?)),
+        Calc::OsTrim => Some(V::F(os()? - c.trim()?)),
+        Calc::DsTrim => Some(V::F(c.width? - os()? - c.trim()?)),
+        Calc::Rank => {
+            let id = d.get(r, "rankID")?.int()?;
+            // 名前の無い番号（ランクなし〈-1〉・条件に無い番号）は、番号のまま出す（隠さない）
+            Some(V::S(c.ranks.get(&id).cloned().unwrap_or_else(|| id.to_string())))
+        }
+        Calc::Plus1(f) => d.get(r, f)?.int().map(|i| V::I(i + 1)),
+    }
+}
+
+/// ロットごとに 1 度だけ求める、計算の項目の材料。
+#[derive(Debug, Default)]
+pub struct LotCalc {
+    /// 検査幅（INSP_INFO の insp_area_ed − insp_area_st）
+    pub width: Option<f64>,
+    /// 製品幅（条件の xml のコメント。何番目かは設定の product_width_comment。既定は 8 番目）
+    pub product: Option<f64>,
+    /// rank_id → rank_name（条件の xml の rank_conditions）
+    pub ranks: HashMap<i64, String>,
+}
+
+impl LotCalc {
+    /// 片側の落とし量（両側を同じだけ落とす）
+    pub fn trim(&self) -> Option<f64> {
+        Some((self.width? - self.product?) / 2.0)
     }
 }
 
@@ -230,6 +313,7 @@ pub struct LotRes {
     kinds: OnceLock<BTreeMap<String, Kind>>,
     sides: OnceLock<BTreeMap<i64, Side>>,
     system: OnceLock<System>,
+    calc: OnceLock<LotCalc>,
 }
 
 const WALK_SKIP: [&str; 3] = ["img", "fm_img", "wavedata"];
@@ -293,6 +377,7 @@ impl LotRes {
             kinds: OnceLock::new(),
             sides: OnceLock::new(),
             system: OnceLock::new(),
+            calc: OnceLock::new(),
         }
     }
 
@@ -406,6 +491,37 @@ impl LotRes {
         let mut c: Vec<&PathBuf> = self.files.iter().filter(|(n, _)| r.is_match(n)).map(|(_, p)| p).collect();
         c.sort_by(|a, b| natcmp(&name_of(a), &name_of(b)));
         c.first().map(|p| (*p).clone())
+    }
+
+    /// 計算の項目の材料（検査幅・製品幅・ランクの名前）。ロットごとに 1 度だけ求める。
+    pub fn lot_calc(&self) -> &LotCalc {
+        self.calc.get_or_init(|| {
+            let insp = self.dat("INSP_INFO");
+            let width = insp.first().and_then(|r| sub(insp.get(r, "insp_area_ed"), insp.get(r, "insp_area_st")));
+            let mut out = LotCalc { width, ..Default::default() };
+            let Some(p) = self.cond_xml() else { return out };
+            let pairs = xml::pairs(&p);
+            // 製品幅: 設定の product_width_comment 番目（1 から数える）のコメント
+            let n = self.cfg.v["product_width_comment"].as_u64().unwrap_or(8).max(1) - 1;
+            let key = format!("condition/target_conditions/target/roll_info/comments/comment[{n}]@value");
+            out.product = xml::match_values(&pairs, &key).first().and_then(|v| v.trim().parse::<f64>().ok());
+            static R: OnceLock<Regex> = OnceLock::new();
+            let r = R
+                .get_or_init(|| Regex::new(r"^condition/rank_conditions/rank_condition(?:\[(\d+)\])?/(rank_name|rank_id)@value$").unwrap());
+            let mut rows: BTreeMap<i64, (Option<i64>, Option<String>)> = BTreeMap::new();
+            for (k, v) in pairs.iter() {
+                if let Some(c) = r.captures(k) {
+                    let e = rows.entry(c.get(1).and_then(|m| m.as_str().parse().ok()).unwrap_or(0)).or_default();
+                    if &c[2] == "rank_id" {
+                        e.0 = v.trim().parse().ok();
+                    } else {
+                        e.1 = Some(v.trim().to_string());
+                    }
+                }
+            }
+            out.ranks = rows.into_values().filter_map(|(id, name)| Some((id?, name?))).collect();
+            out
+        })
     }
 
     /// 面（group 番号 → 名前・色。Common.xml の group_conditions）。
@@ -635,7 +751,7 @@ pub fn resolve_lot_pin(res: &LotRes, p: &Value) -> String {
         let d = res.dat(name);
         let Some(r) = d.first() else { return String::new() };
         let scale = p["scale"].as_f64();
-        return match rec_get(&d, r, key) {
+        return match rec_get(res, &d, r, key) {
             Some(v) if scale.is_some() => fmt_num(&v, scale),
             Some(v) => fmt_val(&v),
             None => String::new(),
@@ -654,7 +770,7 @@ pub fn resolve_lot_pin(res: &LotRes, p: &Value) -> String {
 pub fn rec_value(p: &Value, d: &Dat, r: Option<&Rec>, res: &LotRes, card: bool) -> String {
     let key = p["key"].as_str().unwrap_or("");
     let Some(r) = r else { return String::new() };
-    let Some(v) = rec_get(d, r, key) else { return String::new() };
+    let Some(v) = rec_get(res, d, r, key) else { return String::new() };
     if v == V::Null {
         return String::new();
     }
@@ -672,6 +788,27 @@ pub fn rec_value(p: &Value, d: &Dat, r: Option<&Rec>, res: &LotRes, card: bool) 
         return fmt_num(&v, scale);
     }
     fmt_val(&v)
+}
+
+/// 表示項目の、書式を当てる前の数（単位の倍率を掛けた物）。数でなければ None。
+/// 表示項目の数値の書式（fmt。Excel と同じ書式コード）は、画面がこの数に当てる（ロット表の列と同じ NumFormat: lotscope/num-format.js）。
+/// rec: 画像ごとの項目なら、その画像の記録（DETECT_INFO の 1 件）
+pub fn pin_num(res: &LotRes, p: &Value, rec: Option<(&Dat, &Rec)>) -> Option<f64> {
+    let (file, key) = (p["file"].as_str().unwrap_or(""), p["key"].as_str().unwrap_or(""));
+    let scale = p["scale"].as_f64().filter(|s| *s != 0.0).unwrap_or(1.0);
+    let x = if let Some((d, r)) = rec {
+        rec_get(res, d, r, key)?.num()?
+    } else if let Some(name) = file.strip_prefix("dat:") {
+        let d = res.dat(name);
+        rec_get(res, &d, d.first()?, key)?.num()?
+    } else if file.starts_with('@') {
+        return None;
+    } else {
+        res.glob(file)
+            .iter()
+            .find_map(|fp| xml::match_values(&xml::pairs(fp), key).into_iter().find_map(|v| v.trim().parse::<f64>().ok()))?
+    };
+    Some(x * scale).filter(|x| x.is_finite())
 }
 
 // ------------------------------------------------------------------ 確かめ
