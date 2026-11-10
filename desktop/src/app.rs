@@ -710,7 +710,7 @@ impl App {
             Some(res) => pins
                 .iter()
                 .filter(|p| p["place"] == "list")
-                .map(|p| json!({"id": p["id"], "label": p["label"], "key": p["key"], "file": p["file"], "value": resolve_lot_pin(res, p)}))
+                .map(|p| json!({"id": p["id"], "label": p["label"], "key": p["key"], "file": p["file"], "value": resolve_lot_pin(res, p), "num": lot::pin_num(res, p, None)}))
                 .collect(),
             None => vec![],
         };
@@ -796,7 +796,7 @@ impl App {
             .snapshot()
             .iter()
             .filter(|p| p["scope"] == "lot")
-            .map(|p| json!({"id": p["id"], "place": p["place"], "label": p["label"], "value": resolve_lot_pin(&res, p)}))
+            .map(|p| json!({"id": p["id"], "place": p["place"], "label": p["label"], "value": resolve_lot_pin(&res, p), "num": lot::pin_num(&res, p, None)}))
             .collect();
         let (mut xmls, mut files, mut total) = (vec![], vec![], 0u64);
         for fp in &res.rel {
@@ -937,7 +937,9 @@ impl App {
         let g = |k: &str| d.get(r, k).map(V::to_json).unwrap_or(Value::Null);
         json!({"no": g("detectNo"), "kind": g("kindID"), "kname": k.name, "kmark": k.mark, "kcolor": k.color, "side": g("group"),
                "sname": s.name, "scolor": s.color,
-               "vals": cpins.iter().map(|p| if p["file"] == "dat:DETECT_INFO" { rec_value(p, d, Some(r), res, true) } else { String::new() }).collect::<Vec<_>>()})
+               "vals": cpins.iter().map(|p| if p["file"] == "dat:DETECT_INFO" { rec_value(p, d, Some(r), res, true) } else { String::new() }).collect::<Vec<_>>(),
+               // 書式を当てる前の数（画面が表示項目の書式を当てる。数でない値は null）
+               "nums": cpins.iter().map(|p| if p["file"] == "dat:DETECT_INFO" { lot::pin_num(res, p, Some((d, r))) } else { None }).collect::<Vec<_>>()})
     }
 
     fn api_imgmap(&self, a: &Args) -> R {
@@ -998,7 +1000,8 @@ impl App {
             } else {
                 xml::match_values(&pairs, p["key"].as_str().unwrap_or("")).join(" ")
             };
-            let item = json!({"id": p["id"], "label": p["label"], "value": val});
+            let num = if p["file"] == "dat:DETECT_INFO" { rec.and_then(|r| lot::pin_num(&res, &p, Some((&det, r)))) } else { None };
+            let item = json!({"id": p["id"], "label": p["label"], "value": val, "num": num});
             if place == "card" {
                 card.push(item)
             } else {

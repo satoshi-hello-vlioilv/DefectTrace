@@ -16,7 +16,6 @@ pub mod locate;
 pub mod lot;
 pub mod lotlist;
 pub mod lotstore;
-pub mod numfmt;
 pub mod pins;
 pub mod pool;
 pub mod presence;

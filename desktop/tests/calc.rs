@@ -180,33 +180,24 @@ fn new_defaults_are_added_once_without_doubling_what_the_user_placed() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// 表示項目の数値の書式: 画像ごとの値・単位の倍率を掛けた値・条件の xml の数（板幅など）のどれにも当たる。書式が無ければ今までどおり
+/// 表示項目の、書式を当てる前の数（num）: 画像ごとの値・単位の倍率を掛けた値・条件の xml の数（板幅など）。数でない値は無し。
+/// 数値の書式（Excel と同じ書式コード）は、画面がこの数に当てる（lotscope/num-format.js。ロット表の列と同じ）
 #[test]
-fn number_format_of_a_pin_applies_everywhere() {
-    let root = temp("fmt");
+fn pin_num_is_the_value_before_formatting() {
+    let root = temp("num");
     let lot = make_lot(&root);
     let res = LotRes::new(&lot, Arc::new(Config::from_value(json!({}), &root.join("_home"))), None);
     let d = res.dat("DETECT_INFO");
-    let r = d.records.first();
-    let card = |p: serde_json::Value| lot::rec_value(&p, &d, r, &res, true);
-    let pin = |key: &str, extra: serde_json::Value| {
-        let mut p = json!({"file": "dat:DETECT_INFO", "key": key});
-        p.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
-        p
-    };
-    assert_eq!(card(pin("@ds_trim", json!({}))), "1071.73", "書式なし: 今までどおり小数 2 桁");
-    assert_eq!(card(pin("@ds_trim", json!({"fmt": "0.0"}))), "1071.7");
-    assert_eq!(card(pin("@ds_trim", json!({"fmt": "#,##0.000"}))), "1,071.728");
-    assert_eq!(card(pin("x_mm", json!({"scale": 0.001, "fmt": "0.000"}))), "0.418", "倍率を掛けてから書式（2 桁に丸めてからではない）");
-    assert_eq!(card(pin("@rank", json!({"fmt": "0.00"}))), "許容", "数でない値はそのまま");
-    let xml = |fmt: Option<&str>| {
-        let mut p = json!({"file": "cond/COND*.xml", "key": "condition/target_conditions/target/roll_info/comments/comment[7]@value"});
-        if let Some(f) = fmt {
-            p["fmt"] = json!(f);
-        }
-        lot::resolve_lot_pin(&res, &p)
-    };
-    assert_eq!(xml(None), "1070.0");
-    assert_eq!(xml(Some("#,##0")), "1,070");
+    let r = (&*d, &d.records[0]);
+    let num = |p: serde_json::Value, rec| lot::pin_num(&res, &p, rec);
+    let ds = num(json!({"file": "dat:DETECT_INFO", "key": "@ds_trim"}), Some(r)).unwrap();
+    assert!((ds - 1071.7278605).abs() < 1e-6, "{ds}");
+    let x = num(json!({"file": "dat:DETECT_INFO", "key": "x_mm", "scale": 0.001}), Some(r)).unwrap();
+    assert!((x - 0.417926836).abs() < 1e-12, "倍率を掛ける（丸めない）: {x}");
+    assert_eq!(num(json!({"file": "dat:DETECT_INFO", "key": "@rank"}), Some(r)), None, "数でない値（ランクの名前）は無し");
+    let w = json!({"file": "cond/COND*.xml", "key": "condition/target_conditions/target/roll_info/comments/comment[7]@value"});
+    assert_eq!(num(w, None), Some(1070.0), "条件の xml の数（板幅）");
+    assert_eq!(num(json!({"file": "dat:INSP_INFO", "key": "@insp_width"}), None).map(|v| (v * 1e6).round() / 1e6), Some(1126.628509));
+    assert_eq!(num(json!({"file": "@lot", "key": "time"}), None), None, "作業時刻は数でない");
     let _ = std::fs::remove_dir_all(&root);
 }

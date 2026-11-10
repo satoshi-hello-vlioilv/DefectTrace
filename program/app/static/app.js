@@ -128,7 +128,7 @@
       for (const [p, s] of Object.entries(res)) {
         const li = document.querySelector(`.lot[data-path="${CSS.escape(p)}"]`); if (!li) continue;
         li.innerHTML = s.items.length
-          ? s.items.map((x, i) => `<span class="${i === 0 ? "ln" : x.file === "@lot" ? "t" : "v"}">${esc(x.value || (i === 0 ? "—" : ""))}</span>`).join("")
+          ? s.items.map((x, i) => `<span class="${i === 0 ? "ln" : x.file === "@lot" ? "t" : "v"}">${esc(pinText(x.id, x.value, x.num) || (i === 0 ? "—" : ""))}</span>`).join("")
           : `<span class="ln">${esc(s.time)}</span>`;
         li.insertAdjacentHTML("beforeend", flagHtml(s.flags));
         const f = s.flags || {};
@@ -420,7 +420,7 @@
   function cardMeta(it, m) {
     const meta = m
       ? `<fieldset class="meta"><legend>${esc(m.kname)}${markHtml(m)}</legend>` +
-        S.card.map((c, i) => `<div class="rw"><span>${esc(c.label)}</span><b>${esc(m.vals[i] ?? "")}</b></div>`).join("") + `</fieldset>`
+        S.card.map((c, i) => `<div class="rw"><span>${esc(c.label)}</span><b>${esc(pinText(c.id, m.vals[i] ?? "", m.nums?.[i]))}</b></div>`).join("") + `</fieldset>`
       : `<fieldset class="meta"><legend class="sub">${Object.keys(S.imap).length ? "欠陥データなし" : "…"}</legend></fieldset>`;
     const pn = m ? S.pairN[m.d] || 0 : 0;
     const face = m ? `<span style="color:${m.scolor}">■ ${esc(m.sname)}${pn ? ` <span class="tbadge" data-pairs="${m.d}" title="転写候補を表示">転写候補 ${pn}</span>` : ""}</span>` : "<span></span>";
@@ -830,8 +830,8 @@
   function kv(k, v) { return `<tr><td class="k">${esc(k)}</td><td>${esc(v)}</td><td class="b"></td></tr>`; }
   const shortKey = (k) => k.split("/").slice(-2).join("/");
   function pinRow(p, place, num) {
-    const movable = place !== "x";
-    return `<tr class="pinned ${pinKind(p.id)}"${movable ? ` draggable="true" data-pid="${esc(p.id)}" data-place="${place}"` : ""}><td class="k" title="ドラッグで並べ替え・移動／ダブルクリックで名前変更">${esc(p.label || "（無題）")}</td><td${num ? ' class="num"' : ""}>${esc(p.value || "—")}</td><td class="b">${movable ? `<button type="button" class="pb" data-unpin="${esc(p.id)}" title="表示から外す">×</button>` : ""}</td></tr>`;
+    const movable = place !== "x", full = S.pins.find((x) => x.id === p.id);
+    return `<tr class="pinned ${pinKind(p.id)}"${movable ? ` draggable="true" data-pid="${esc(p.id)}" data-place="${place}"` : ""}><td class="k" title="ドラッグで並べ替え・移動／ダブルクリックで名前と書式">${fmtMark(full)}${esc(p.label || "（無題）")}${movable ? editBtn(p) : ""}</td><td${num ? ' class="num"' : ""}>${esc(pinText(p.id, p.value, p.num) || "—")}</td><td class="b">${movable ? `<button type="button" class="pb" data-unpin="${esc(p.id)}" title="表示から外す">×</button>` : ""}</td></tr>`;
   }
   const FMT = { time: [["hhmm", "hh:mm"], ["hhmmss", "hh:mm:ss"]], date: [["mmdd", "mm/dd"], ["yyyymmdd", "yyyy/mm/dd"]] };
   function chip(p, place, withVal) {
@@ -841,8 +841,93 @@
       const opts = FMT[full.key], cur = opts.find((o) => o[0] === full.fmt) || opts[0];
       fm = `<button type="button" class="fm" data-fmt="${esc(p.id)}" title="表示書式を切り替え">${esc(cur[1])}</button>`;
     }
-    return `<span class="chip ${pinKind(p.id)}" draggable="true" data-pid="${esc(p.id)}" data-place="${place}" title="ドラッグで並べ替え・移動／ダブルクリックで名前変更">${p.label ? `<span class="cl">${esc(p.label)}</span>` : ""}${fm}${withVal ? `<span class="cv">${esc(p.value || "—")}</span>` : ""}<button type="button" class="x" data-unpin="${esc(p.id)}" title="外す">×</button></span>`;
+    return `<span class="chip ${pinKind(p.id)}" draggable="true" data-pid="${esc(p.id)}" data-place="${place}" title="ドラッグで並べ替え・移動／ダブルクリックで名前と書式">${fmtMark(full)}${p.label ? `<span class="cl">${esc(p.label)}</span>` : ""}${fm}${withVal ? `<span class="cv">${esc(pinText(p.id, p.value, p.num) || "—")}</span>` : ""}<button type="button" class="x" data-unpin="${esc(p.id)}" title="外す">×</button>${editBtn(p)}</span>`;
   }
+
+  // ---------------------------------------------------------------- 表示項目の名前と書式（✎・ダブルクリック）
+  // 形は 3 回の案出しと別のエージェントの採点で決めた（M: program/tools/proposals/2026-11-10-num-format*）。どの置き場の札・行でも
+  // 同じ小窓: 名前・書式（よく使う形に見本の値・自由に）。形を押せばその場で決まり、「元に戻す」で開いたときの書式に戻る。
+  // 数値の書式は Excel と同じ書式コード（ロット表の列と同じ NumFormat: lotscope/num-format.js）。裏は書式を当てる前の数（num）を返す
+  const NUM_PRESETS = ["", "0", "0.0", "0.00", "0.000", "#,##0", "#,##0.0", "0.0%"];
+  const isTimePin = (p) => !!(p && p.file === "@lot" && FMT[p.key]);
+  const numFmtOk = (f) => !!f && !NumFormat.check(f).length;
+  /** 表示項目の値に書式を当てる（数値の書式があり、数のときだけ。それ以外は裏の値のまま） */
+  function pinText(pid, value, num) {
+    const p = S.pins.find((x) => x.id === pid), f = p && p.fmt;
+    return f && !isTimePin(p) && num != null && numFmtOk(f) ? NumFormat.text(num, f) : value;
+  }
+  const fmtMark = (p) => (p && p.fmt && !isTimePin(p) ? `<i class="fdot" title="書式 ${esc(p.fmt)}"></i>` : "");
+  const editBtn = (p) => `<button type="button" class="pe" data-pedit="${esc(p.id)}" title="名前と書式（ダブルクリックでも）" aria-label="${esc(p.label || "")}の名前と書式">✎</button>`;
+  /** 表示項目の、いま出している値と書式を当てる前の数（ロットの値・選んだ画像の値。見本に使う） */
+  function pinNow(pid) {
+    const x = (S.LOT && S.LOT.pinned.find((v) => v.id === pid)) || (S.img && [...S.img.card, ...S.img.pinned].find((v) => v.id === pid));
+    return x ? { value: x.value, num: x.num ?? null } : { value: "", num: null };
+  }
+  const PE = { el: null, id: "", orig: "", msg: "" };
+  function peClose() { if (PE.el) PE.el.hidden = true; PE.id = ""; }
+  function peOpen(pid, anchor) {
+    const p = S.pins.find((x) => x.id === pid); if (!p) return;
+    if (!PE.el) { PE.el = document.createElement("div"); PE.el.className = "pe-pop"; PE.el.setAttribute("role", "dialog"); document.body.append(PE.el); }
+    Object.assign(PE, { id: pid, orig: p.fmt || "", msg: "" });
+    PE.el.hidden = false; peRender();
+    // 置き場: 札・行の下（左の欄の札は右へ。直している札の値を隠さない）。窓の中に収める
+    const r = anchor.getBoundingClientRect(), b = PE.el.getBoundingClientRect(), left = anchor.closest("#treePane");
+    let x = left ? r.right + 8 : r.left, y = left ? r.top : r.bottom + 6;
+    if (!left && y + b.height > innerHeight - 8) y = r.top - b.height - 6;
+    PE.el.style.left = `${Math.max(8, Math.min(innerWidth - b.width - 8, x))}px`;
+    PE.el.style.top = `${Math.max(8, Math.min(innerHeight - b.height - 8, y))}px`;
+    PE.el.querySelector("#peName").focus();
+  }
+  function peRender() {
+    const p = S.pins.find((x) => x.id === PE.id); if (!p) return peClose();
+    const t = isTimePin(p), now = pinNow(p.id), cur = p.fmt || "";
+    const sample = (f) => (t || now.num == null ? "" : f ? NumFormat.text(now.num, f) : now.value);
+    const opts = t ? FMT[p.key].map(([k, l]) => [k, l, ""]) : NUM_PRESETS.map((k) => [k, k || "自動", sample(k)]);
+    const on = (k) => (t ? (cur || FMT[p.key][0][0]) === k : cur === k);
+    PE.el.innerHTML = `<div class="pe-h"><b>${esc(p.label || "（無題）")}</b><span class="sub">${esc(PLACE_SHORT[p.place] || "")}</span><button type="button" class="pe-x" data-peclose title="閉じる（Esc）" aria-label="閉じる">×</button></div>
+      <label class="pe-row"><span class="sub">名前</span><input id="peName" type="text" value="${esc(p.label || "")}"></label>
+      <div class="pe-sec">書式<span class="sub">いま ${esc(cur ? cur : "自動（今までの表示）")}</span></div>
+      <div class="pe-grid">${opts.map(([k, l, v]) => `<button type="button" data-pefmt="${esc(k)}"${on(k) ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"'}><span>${esc(l)}</span><i>${esc(v)}</i></button>`).join("")}</div>
+      ${t ? "" : `<label class="pe-row"><span class="sub">自由に</span><input id="peFree" type="text" value="${esc(opts.some(([k]) => k === cur) ? "" : cur)}" placeholder="例 0.000" title="Excel と同じ書式コード（例 0.000・#,##0・0.0%）。Enter で決める"><span id="pePrev" class="pe-prev"></span></label>`}
+      <div class="pe-foot"><span class="pe-msg">${esc(PE.msg)}</span><button type="button" data-peundo${cur === PE.orig ? " disabled" : ""}>元に戻す</button></div>`;
+  }
+  async function peApply(fmt) {
+    const p = S.pins.find((x) => x.id === PE.id); if (!p) return;
+    try {
+      await send("/api/pins/" + encodeURIComponent(p.id), { fmt }, "PATCH"); await afterPins();
+      const now = pinNow(p.id);
+      PE.msg = `✓ 決めました（${fmt || "自動"}${!isTimePin(p) && fmt && now.num != null ? "・" + NumFormat.text(now.num, fmt) : ""}）`;
+    } catch (er) { PE.msg = er.message; }
+    if (PE.id) peRender();
+  }
+  async function peName(v) {
+    const p = S.pins.find((x) => x.id === PE.id); if (!p || v.trim() === (p.label || "")) return;
+    await send("/api/pins/" + encodeURIComponent(p.id), { label: v.trim() }, "PATCH"); await afterPins();
+    PE.msg = "✓ 名前を変えました"; if (PE.id) peRender();
+  }
+  document.addEventListener("click", (e) => {
+    const ed = e.target.closest("[data-pedit]");
+    if (ed) { e.stopPropagation(); peOpen(ed.dataset.pedit, ed.closest("[data-pid]") || ed); return; }
+    if (!PE.id) return;
+    if (!e.target.closest(".pe-pop")) return peClose();
+    const f = e.target.closest("[data-pefmt]"); if (f) return peApply(f.dataset.pefmt);
+    if (e.target.closest("[data-peundo]")) return peApply(PE.orig);
+    if (e.target.closest("[data-peclose]")) return peClose();
+  }, true);
+  document.addEventListener("keydown", (e) => {
+    if (!PE.id) return;
+    if (e.key === "Escape") { e.stopPropagation(); peClose(); return; }
+    if (e.key !== "Enter") return;
+    if (e.target.id === "peName") peName(e.target.value);
+    if (e.target.id === "peFree") { const v = e.target.value.trim(); if (!v || numFmtOk(v)) peApply(v); }
+  }, true);
+  document.addEventListener("focusout", (e) => { if (PE.id && e.target.id === "peName") peName(e.target.value); });
+  document.addEventListener("input", (e) => {
+    if (e.target.id !== "peFree") return;
+    const v = e.target.value.trim(), now = pinNow(PE.id), w = v ? NumFormat.check(v) : [];
+    $("pePrev").textContent = !v ? "" : w.length ? w[0] : now.num != null ? `→ ${NumFormat.text(now.num, v)}（Enter で決める）` : "Enter で決める";
+    $("pePrev").classList.toggle("err", !!w.length);
+  });
 
   // ================================================================ drag & drop (set / move / reorder)
   let DRAG = null;
@@ -957,9 +1042,8 @@
   });
   document.addEventListener("dblclick", async (e) => {
     const el = e.target.closest("[data-pid]"); if (!el || e.target.closest(".th")) return;
-    const p = S.pins.find((x) => x.id === el.dataset.pid); if (!p) return;
-    const v = prompt("表示名", p.label); if (v == null) return;
-    await send("/api/pins/" + encodeURIComponent(p.id), { label: v.trim() }, "PATCH"); await afterPins();
+    if (!S.pins.some((x) => x.id === el.dataset.pid)) return;
+    peOpen(el.dataset.pid, el);
   });
   // 表示設定を初期化（見出しのボタンと、設定の「この PC」の頁の札の両方から）
   async function resetPins() {

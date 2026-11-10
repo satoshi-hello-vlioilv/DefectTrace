@@ -37,6 +37,9 @@ fn without_added(v: &mut Value) {
         }
         Value::Object(o) => {
             o.remove("no_image");
+            // 版 4.13.0: 表示項目の値に、書式を当てる前の数（num・nums。画面が表示項目の数値の書式を当てる）を足した
+            o.remove("num");
+            o.remove("nums");
             // 画像ごとの値（map.*.vals）は画像表示の項目（card）と位置で対応する。除く項目の位置を、値からも除く
             let drop: Vec<usize> = o.get("card").and_then(Value::as_array).map_or(vec![], |c| {
                 c.iter().enumerate().filter(|(_, x)| ADDED.contains(&x["id"].as_str().unwrap_or(""))).map(|(i, _)| i).collect()

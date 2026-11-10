@@ -288,17 +288,18 @@ impl Pins {
         if let Some(lab) = b.get("label") {
             l[i]["label"] = lab.clone();
         }
-        // 書式: 日時の形（FMTS）か、数値の書式（numfmt。表計算と同じ書式の文字）。空なら書式を外す（今までの表示に戻る）
+        // 書式: 日時の形（FMTS）か、数値の書式（Excel と同じ書式コード。画面が lotscope/num-format.js で確かめ、数に当てる）。
+        // 空なら書式を外す（今までの表示に戻る）
         if let Some(f) = b["fmt"].as_str() {
             let f = f.trim();
             if f.is_empty() {
                 if let Some(o) = l[i].as_object_mut() {
                     o.remove("fmt");
                 }
-            } else if FMTS.contains(&f) || crate::numfmt::parse(f).is_some() {
+            } else if f.chars().count() <= 64 {
                 l[i]["fmt"] = json!(f);
             } else {
-                return Err((400, format!("書式「{f}」は使えません（例: 0.00・#,##0・0.0%）")));
+                return Err((400, "書式が長すぎます（64 字まで）".into()));
             }
         }
         if let Some(place) = b.get("place") {

@@ -4,7 +4,6 @@
 use crate::cache::Lru;
 use crate::config::Config;
 use crate::dat::{self, Dat, Rec, V};
-use crate::numfmt;
 use crate::pyfmt::{fixed, fmt_float, natcmp, py_repr, round_to};
 use crate::xml;
 use regex::Regex;
@@ -753,7 +752,6 @@ pub fn resolve_lot_pin(res: &LotRes, p: &Value) -> String {
         let Some(r) = d.first() else { return String::new() };
         let scale = p["scale"].as_f64();
         return match rec_get(res, &d, r, key) {
-            Some(v) if numfmt::of_pin(p).is_some() && v.num().is_some() => pin_num(p, &v),
             Some(v) if scale.is_some() => fmt_num(&v, scale),
             Some(v) => fmt_val(&v),
             None => String::new(),
@@ -762,12 +760,7 @@ pub fn resolve_lot_pin(res: &LotRes, p: &Value) -> String {
     for fp in res.glob(file) {
         let vals = xml::match_values(&xml::pairs(&fp), key);
         if !vals.is_empty() {
-            // 数の値（板幅 "1070.0" など）にも、表示項目の数値の書式を当てる
-            let vals = vals.into_iter().filter(|v| !v.is_empty()).map(|v| match (numfmt::of_pin(p), v.trim().parse::<f64>()) {
-                (Some(_), Ok(x)) => pin_num(p, &V::F(x)),
-                _ => v,
-            });
-            return vals.collect::<Vec<_>>().join(" ");
+            return vals.into_iter().filter(|v| !v.is_empty()).collect::<Vec<_>>().join(" ");
         }
     }
     String::new()
@@ -790,9 +783,6 @@ pub fn rec_value(p: &Value, d: &Dat, r: Option<&Rec>, res: &LotRes, card: bool) 
     if KIND_KEYS.contains(&key) {
         return res.kind_info(Some(&v)).name;
     }
-    if numfmt::of_pin(p).is_some() && v.num().is_some() {
-        return pin_num(p, &v);
-    }
     let scale = p["scale"].as_f64().filter(|s| *s != 0.0);
     if card || scale.is_some() {
         return fmt_num(&v, scale);
@@ -800,13 +790,25 @@ pub fn rec_value(p: &Value, d: &Dat, r: Option<&Rec>, res: &LotRes, card: bool) 
     fmt_val(&v)
 }
 
-/// 表示項目の数値の書式で、数を出す（単位の倍率を掛けてから。丸めるのは書式だけ）。書式が無ければ今までどおり。
-pub fn pin_num(p: &Value, v: &V) -> String {
+/// 表示項目の、書式を当てる前の数（単位の倍率を掛けた物）。数でなければ None。
+/// 表示項目の数値の書式（fmt。Excel と同じ書式コード）は、画面がこの数に当てる（ロット表の列と同じ NumFormat: lotscope/num-format.js）。
+/// rec: 画像ごとの項目なら、その画像の記録（DETECT_INFO の 1 件）
+pub fn pin_num(res: &LotRes, p: &Value, rec: Option<(&Dat, &Rec)>) -> Option<f64> {
+    let (file, key) = (p["file"].as_str().unwrap_or(""), p["key"].as_str().unwrap_or(""));
     let scale = p["scale"].as_f64().filter(|s| *s != 0.0).unwrap_or(1.0);
-    match (numfmt::of_pin(p), v.num()) {
-        (Some(f), Some(x)) => f.apply(x * scale),
-        _ => fmt_num(v, Some(scale).filter(|s| *s != 1.0)),
-    }
+    let x = if let Some((d, r)) = rec {
+        rec_get(res, d, r, key)?.num()?
+    } else if let Some(name) = file.strip_prefix("dat:") {
+        let d = res.dat(name);
+        rec_get(res, &d, d.first()?, key)?.num()?
+    } else if file.starts_with('@') {
+        return None;
+    } else {
+        res.glob(file)
+            .iter()
+            .find_map(|fp| xml::match_values(&xml::pairs(fp), key).into_iter().find_map(|v| v.trim().parse::<f64>().ok()))?
+    };
+    Some(x * scale).filter(|x| x.is_finite())
 }
 
 // ------------------------------------------------------------------ 確かめ
