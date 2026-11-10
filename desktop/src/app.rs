@@ -969,8 +969,10 @@ impl App {
         let rec = di.map(|i| &det.records[i]);
         let mut fields = vec![];
         if let Some(r) = rec {
-            for vk in ["@os_x", "@insp_width"] {
-                let v = rec_get(&det, r, vk).unwrap_or(V::Null);
+            // 計算で作る項目（画像の記録から作れる物。検査幅はロットの値なので画像では「—」。版 3.8 と同じ並びで先頭に）
+            let vks = ["@os_x", "@insp_width"].into_iter().chain(lot::virtuals_of(&det).map(|v| v.key).filter(|k| *k != "@os_x"));
+            for vk in vks {
+                let v = rec_get(&res, &det, r, vk).unwrap_or(V::Null);
                 fields.push(json!([vk, fmt_num(&v, None), lot::virtual_label(vk)]));
             }
             for (f, v) in det.value_fields().zip(&r.vals) {
@@ -1040,7 +1042,8 @@ impl App {
             if det.get(r, "type").map(|t| t.int() != Some(1)).unwrap_or(false) {
                 continue;
             }
-            let (Some(x), Some(y)) = (lot::to_num(rec_get(&det, r, kx).as_ref(), sx), lot::to_num(rec_get(&det, r, ky).as_ref(), sy))
+            let (Some(x), Some(y)) =
+                (lot::to_num(rec_get(&res, &det, r, kx).as_ref(), sx), lot::to_num(rec_get(&res, &det, r, ky).as_ref(), sy))
             else {
                 continue;
             };
@@ -1069,7 +1072,7 @@ impl App {
                 if !lot::is_overload(&det, r, &types, &kids, &Default::default()) {
                     continue;
                 }
-                let Some(xc) = lot::to_num(rec_get(&det, r, kx).as_ref(), None) else { continue };
+                let Some(xc) = lot::to_num(rec_get(&res, &det, r, kx).as_ref(), None) else { continue };
                 let Some(y) = det.get(r, "y_mm").and_then(V::num) else { continue };
                 let w = det.get(r, "width_mm").and_then(V::num).unwrap_or(0.0);
                 let ln = det.get(r, "length_mm").and_then(V::num).unwrap_or(0.0);

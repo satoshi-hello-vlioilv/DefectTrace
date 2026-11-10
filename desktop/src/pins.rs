@@ -58,6 +58,8 @@ pub fn defaults() -> Vec<Value> {
         // 版 4.8.0: 一覧にも材質と欠陥数（サマリと同じ項目・同じ名前）
         p("d_list_mat", "lot", "list", "材質", "cond/COND*.xml", &c(4), None, None),
         p("d_list_dc", "lot", "list", "欠陥数", I, "detect_total_cnt", None, None),
+        // 版 4.13.0: 一覧に検査長(m)（サマリと同じ項目・同じ名前・同じ単位）
+        p("d_list_len", "lot", "list", "検査長(m)", I, "insp_end_y", Some(0.001), Some("0")),
         p("d_s_lot", "lot", "summary", "ロットNo", "cond/COND*.xml", &c(0), None, None),
         p("d_s_mat", "lot", "summary", "材質", "cond/COND*.xml", &c(4), None, None),
         p("d_s_tmp", "lot", "summary", "調質", "cond/COND*.xml", &c(5), None, None),
@@ -78,8 +80,15 @@ pub fn defaults() -> Vec<Value> {
         p("d_l_ed", "lot", "lot", "検査終了日時", I, "end_time", None, None),
         p("d_l_ic", "lot", "lot", "画像数", I, "image_total_cnt", None, None),
         p("d_c_x", "image", "card", "幅方向OS～(mm)", D, "@os_x", None, None),
+        // 版 4.13.0: 元のアプリの欠陥詳細と同じ名前・同じ値の計算の項目（OS元幅は幅方向OS～と同じ値なので重ねない）・面積率・平均レベル暗・ランク
+        p("d_c_dso", "image", "card", "DS元幅(mm)", D, "@ds_orig", None, None),
+        p("d_c_ost", "image", "card", "OS幅入後(mm)", D, "@os_trim", None, None),
+        p("d_c_dst", "image", "card", "DS幅入後(mm)", D, "@ds_trim", None, None),
         p("d_c_y", "image", "card", "長さ方向(m)", D, "y_mm", Some(0.001), None),
         p("d_c_a", "image", "card", "面積(mm²)", D, "area_mm", None, None),
+        p("d_c_ar", "image", "card", "面積率", D, "area_rate", None, None),
+        p("d_c_a2", "image", "card", "平均レベル暗", D, "ave_level2", None, None),
+        p("d_c_rank", "image", "card", "ランク", D, "@rank", None, None),
         p("d_i_w", "image", "image", "幅(mm)", D, "width_mm", None, None),
         p("d_i_l", "image", "image", "長さ(mm)", D, "length_mm", None, None),
         p("d_i_p1", "image", "image", "ピークレベル明", D, "peek_level1", None, None),
@@ -179,7 +188,10 @@ impl Pins {
                     .and_then(|m| m["seen_defaults"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()))
                     .unwrap_or_else(|| V33.iter().map(|s| s.to_string()).collect());
                 for (i, d) in defs.iter().enumerate() {
-                    if seen.iter().any(|s| s == id(d)) || pins.iter().any(|x| id(x) == id(d)) {
+                    // 同じ表示先に同じ項目を利用者が置いていれば足さない（同じ値が 2 つ並ばないように。版 4.13.0）
+                    if seen.iter().any(|s| s == id(d))
+                        || pins.iter().any(|x| id(x) == id(d) || (x["place"] == d["place"] && same_item(d, x)))
+                    {
                         continue;
                     }
                     // 同じ表示先の 1 つ前の既定の後ろへ
@@ -276,8 +288,18 @@ impl Pins {
         if let Some(lab) = b.get("label") {
             l[i]["label"] = lab.clone();
         }
-        if let Some(f) = b["fmt"].as_str().filter(|f| FMTS.contains(f)) {
-            l[i]["fmt"] = json!(f);
+        // 書式: 日時の形（FMTS）か、数値の書式（numfmt。表計算と同じ書式の文字）。空なら書式を外す（今までの表示に戻る）
+        if let Some(f) = b["fmt"].as_str() {
+            let f = f.trim();
+            if f.is_empty() {
+                if let Some(o) = l[i].as_object_mut() {
+                    o.remove("fmt");
+                }
+            } else if FMTS.contains(&f) || crate::numfmt::parse(f).is_some() {
+                l[i]["fmt"] = json!(f);
+            } else {
+                return Err((400, format!("書式「{f}」は使えません（例: 0.00・#,##0・0.0%）")));
+            }
         }
         if let Some(place) = b.get("place") {
             let pl = place.as_str().unwrap_or("");
