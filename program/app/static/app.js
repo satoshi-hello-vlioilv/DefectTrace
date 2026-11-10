@@ -888,7 +888,7 @@
       <label class="pe-row"><span class="sub">名前</span><input id="peName" type="text" value="${esc(p.label || "")}"></label>
       <div class="pe-sec">書式<span class="sub">いま ${esc(cur ? cur : "自動（今までの表示）")}</span></div>
       <div class="pe-grid">${opts.map(([k, l, v]) => `<button type="button" data-pefmt="${esc(k)}"${on(k) ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"'}><span>${esc(l)}</span><i>${esc(v)}</i></button>`).join("")}</div>
-      ${t ? "" : `<label class="pe-row"><span class="sub">自由に</span><input id="peFree" type="text" value="${esc(opts.some(([k]) => k === cur) ? "" : cur)}" placeholder="例 0.000" title="Excel と同じ書式コード（例 0.000・#,##0・0.0%）。Enter で決める"><span id="pePrev" class="pe-prev"></span></label>`}
+      ${t ? "" : `<label class="pe-row"><span class="sub">自由に</span><input id="peFree" type="text" value="${esc(opts.some(([k]) => k === cur) ? "" : cur)}" placeholder="例 0.000" title="Excel と同じ書式コード（例 0.000・#,##0・0.0%）。Enter で決める"></label><div id="pePrev" class="pe-prev"></div>`}
       <div class="pe-foot"><span class="pe-msg">${esc(PE.msg)}</span><button type="button" data-peundo${cur === PE.orig ? " disabled" : ""}>元に戻す</button></div>`;
   }
   async function peApply(fmt) {

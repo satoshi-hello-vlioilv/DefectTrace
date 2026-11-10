@@ -712,7 +712,9 @@ body.lay-dragging,body.lay-dragging *{cursor:grabbing!important;user-select:none
 
 /* 表示項目の名前と書式（✎・ダブルクリックで開く小窓。形は 3 回の案出しと採点で決めた M: program/tools/proposals/2026-11-10-num-format*）
    ✎ は札の右上の角・行の名前の右端に重ねて出す（札・行を広げない。× はそのまま押せる）。書式を決めた札・行は左上の小さな点（日時の hh:mm と同じ黄） */
-.pe{position:absolute;top:-7px;right:-7px;z-index:2;display:none;width:18px;height:18px;padding:0;border:1px solid var(--acc);border-radius:50%;background:var(--pane);color:var(--acc);font-size:11px;line-height:16px;text-align:center;cursor:pointer}
+.pe{position:absolute;top:-7px;right:-5px;z-index:2;display:none;width:15px;height:15px;padding:0;border:1px solid var(--acc);border-radius:50%;background:var(--pane);color:var(--acc);font-size:11px;line-height:13px;text-align:center;cursor:pointer}
+/* ✎ が札の角からはみ出す分（上 7px・右 5px）だけ、札どうしの間を空ける（隣の札に掛けない） */
+.chips,.summary{row-gap:8px;column-gap:6px}
 .chip:hover .pe,.chip:focus-within .pe{display:block}
 table.kv td.k{position:relative}
 table.kv tr .pe{top:50%;right:2px;transform:translateY(-50%)}
@@ -723,8 +725,8 @@ table.kv tr.pinned:hover .pe,table.kv tr.pinned:focus-within .pe{display:block}
 .pe-h{display:flex;align-items:center;gap:8px}.pe-h b{color:var(--acc);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pe-h .sub{font-size:12px;white-space:nowrap}
 .pe-x{margin-left:auto;border:none;background:none;color:var(--sub);font-size:16px;padding:0 4px}
 .pe-row{display:flex;align-items:center;gap:8px;white-space:nowrap}.pe-row .sub{font-size:12px;width:42px;flex:none}.pe-row input{flex:1;min-width:0}
-#peFree{flex:0 0 130px;font-family:Consolas,monospace}
-.pe-prev{font:12.5px Consolas,monospace;color:var(--sub);min-width:0;overflow:hidden;text-overflow:ellipsis}.pe-prev.err{color:var(--ng);font-family:inherit}
+#peFree{flex:1;font-family:Consolas,monospace}
+.pe-prev{font:12.5px Consolas,monospace;color:var(--sub);margin:-4px 0 0 50px;min-height:16px;overflow-wrap:anywhere}.pe-prev.err{color:var(--ng);font-family:inherit}
 .pe-sec{display:flex;align-items:baseline;gap:8px;font-size:12px;color:var(--sub);font-weight:600}.pe-sec .sub{font-weight:400;font-family:Consolas,monospace}
 .pe-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px}
 .pe-grid button{display:flex;justify-content:space-between;gap:8px;padding:3px 8px;background:none;border-color:var(--line2);font:12.5px Consolas,monospace}

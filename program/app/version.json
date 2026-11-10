@@ -1,7 +1,7 @@
 {
  "_": ["アプリの版と更新履歴の正本（窓〈desktop/src/update.rs〉と作業用の道具〈desktop/xtask〉が読む）。", "version は「大.中.小」。配るたびに上げる（直した・足した: 小、画面や使い方が変わる: 中、作り直し: 大）。desktop/Cargo.toml・tauri.conf.json の version も同じにする。", "changelog の先頭は version と同じ。新しい版を上に足す（notes は利用者に見せる言葉。GitHub の Releases の説明になる）。", "release は「配った版と、そのときの配る物の中身の要約」。手で書かず cd desktop && cargo xtask release で書く（まだ配っていない版を直しただけなら --amend）。"],
  "version": "4.13.0",
- "release": {"version": "4.13.0", "digest": "988516d56a7d6342"},
+ "release": {"version": "4.13.0", "digest": "9f375a91ad105582"},
  "changelog": [
  {"version": "4.13.0", "date": "2026-11-10", "notes": [
    "元のアプリの欠陥詳細と同じ項目を足しました: OS元幅(mm)・DS元幅(mm)・OS幅入後(mm)・DS幅入後(mm)・ランク・検出LSC。元幅は両端から測った位置、幅入後は両側の屑を落とした後の位置です（検査幅と製品幅〈条件の 8 番目のコメント〉から、元のアプリと同じ式で計算します）。ランクは条件の名前（一般・許容など）で出します。データ項目の窓から、どこへでも置けます。",
