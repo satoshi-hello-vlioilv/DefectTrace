@@ -80,8 +80,11 @@ aside[hidden],.split[hidden]{display:none!important}
 .th{--sc:#9aa3ad;position:relative;width:calc(var(--ts) + 40px);cursor:pointer;user-select:none;background:var(--card);padding:2px;border-radius:3px;outline:3px solid transparent;outline-offset:1px}
 .th:hover{outline-color:#b9c8dc}
 /* 画面の外のカードは描かない（数万枚でも並べる・送るが重くならない）。大きさは最後に描いた時の物を使う */
-#grid .th{content-visibility:auto;contain-intrinsic-size:auto calc(var(--ts) + 48px) auto calc(var(--ts) + 80px + var(--rows) * 15px)}
-#grid .th:empty{height:calc(var(--ts) + 80px + var(--rows) * 15px)}
+/* 見えていないカードは描かない（content-visibility）。その間の高さは、描いたカードを測った高さ（--cardH: app.js の measureCard）。
+   式で見積もると、書体の行の高さ（Windows と Linux で違う）だけずれ、送るたびに全体の長さが伸び縮みしてスクロールバーのつまみがマウスに付いてこない。
+   描いたカードも同じ高さにそろえる（欠陥データの無いカードも同じ高さ。全体の長さが変わらない） */
+#grid .th{content-visibility:auto;--ch:var(--cardH,calc(var(--ts) + 80px + var(--rows) * 15px));contain-intrinsic-size:auto calc(var(--ts) + 40px) var(--ch);min-height:var(--ch)}
+#grid .th:empty{height:var(--ch)}
 #grid{--rows:3}
 .th.sel{outline-color:var(--acc)}
 .th fieldset{margin:0;border:2px solid var(--sc);padding:4px 6px 6px;min-width:0}

@@ -192,6 +192,8 @@ pub struct Job {
     started: Instant,
     /// 開いた順の番号（新しく開いたロットほど大きい。裏の仕事の優先度に使う）
     pub generation: AtomicU64,
+    /// BMP の行をファイルに並んだ順（上から）として描く（設定 bmp_rows_as_stored。thumb::rows_as_stored）
+    rows_as_stored: bool,
 }
 
 /// 優先度: いま開いたロット（世代）を先に、その中は画面の並びの順。画面が欲しがった CAB は最優先へ。
@@ -207,7 +209,7 @@ fn key(g: &str, stem: &str, name: &str) -> String {
 
 impl Job {
     /// 塊の一覧だけで作る（名前はまだ。Images::name_units が裏で読む）。
-    fn new(lot: &Path, cache: PathBuf) -> Job {
+    fn new(lot: &Path, cache: PathBuf, rows_as_stored: bool) -> Job {
         let units = image_groups(lot)
             .into_iter()
             .flat_map(|(g, us)| {
@@ -231,6 +233,25 @@ impl Job {
             named_cv: Condvar::new(),
             started: Instant::now(),
             generation: AtomicU64::new(0),
+            rows_as_stored,
+        }
+    }
+
+    /// 縮小画像のファイル名の終わり。向きを変えると名前が変わり、前の向きで作った物を使い回さない
+    fn thumb_ext(&self) -> &'static str {
+        if self.rows_as_stored {
+            ".r.jpg"
+        } else {
+            ".jpg"
+        }
+    }
+
+    /// 画像のバイトを、表示する向きにする（BMP の行の並びの扱い。原寸・縮小画像・計測・仕分けで同じ向き）
+    fn orient<'a>(&self, b: &'a [u8]) -> std::borrow::Cow<'a, [u8]> {
+        if self.rows_as_stored {
+            thumb::rows_as_stored(b)
+        } else {
+            std::borrow::Cow::Borrowed(b)
         }
     }
 
@@ -248,7 +269,7 @@ impl Job {
             .into_iter()
             .flatten()
             .flatten()
-            .filter_map(|e| e.file_name().to_string_lossy().strip_suffix(".jpg").map(str::to_string))
+            .filter_map(|e| e.file_name().to_string_lossy().strip_suffix(self.thumb_ext()).map(str::to_string))
             .collect();
         (r, made)
     }
@@ -308,7 +329,7 @@ impl Job {
     }
 
     fn thumb_path(&self, g: &str, stem: &str, name: &str) -> PathBuf {
-        self.cache.join(g).join(stem).join(format!("{name}.jpg"))
+        self.cache.join(g).join(stem).join(format!("{name}{}", self.thumb_ext()))
     }
 
     fn unit(&self, g: &str, stem: &str) -> Option<Unit> {
@@ -357,6 +378,7 @@ impl Job {
 
     /// 縮小画像を 1 枚作って書き、済んだことを知らせる。
     fn store_thumb(&self, g: &str, stem: &str, name: &str, src: &[u8], size: usize) {
+        let src = &*self.orient(src);
         let r =
             thumb::thumb_bytes(src, size).and_then(|j| thumb::write_atomic(&self.thumb_path(g, stem, name), &j).map_err(|e| e.to_string()));
         self.thumbs.lock().unwrap().heads.insert(key(g, stem, name), thumb::bmp_size(src));
@@ -487,7 +509,7 @@ impl Images {
         if !lot.is_dir() {
             return Err("lot not found".into());
         }
-        let fresh = Arc::new(Job::new(lot, self.cache_of(lot)));
+        let fresh = Arc::new(Job::new(lot, self.cache_of(lot), self.cfg.v["bmp_rows_as_stored"].as_bool().unwrap_or(true)));
         let j = self.jobs.lock().unwrap().entry(k).or_insert(fresh.clone()).clone();
         if Arc::ptr_eq(&j, &fresh) {
             let (me, j2) = (self.clone(), j.clone());
@@ -666,7 +688,7 @@ impl Images {
             "cab" => self.unpacked(j, g, &u)?.get(name).map(|b| b.to_vec()).ok_or("ありません")?,
             _ => std::fs::read(u.path.join(name)).map_err(|_| "ありません".to_string())?,
         };
-        Ok((image_mime(name).into(), bytes))
+        Ok((image_mime(name).into(), j.orient(&bytes).into_owned()))
     }
 
     /// 縮小画像（GET /thumb）。まだなら、その塊を最優先にして待つ。

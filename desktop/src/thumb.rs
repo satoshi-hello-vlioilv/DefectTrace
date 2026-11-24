@@ -32,6 +32,21 @@ pub fn bmp_size(head: &[u8]) -> (i64, i64, i64) {
     (w, h, bits)
 }
 
+/// BMP の行を、ファイルに並んだ順（上の行から）として描かせる（頭の高さの符号を負にする。画素は動かさない）。
+/// 検査計の BMP は、頭の高さが正（BMP の決まりでは「下の行から並べた」の印）なのに、行を上から順に書いている。元のアプリ
+/// （検査データモニター）はファイルの並びのまま描くので、BMP の決まりどおりに描くと上下が逆になる（2026-11-24。LS3 の
+/// 0005.cab の 534.bmp を、元のアプリの欠陥詳細の画像と見比べて確かめた）。高さが負（上から並べた印）の BMP・BMP でない画像はそのまま。
+pub fn rows_as_stored(b: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+    match (b.get(..2), le32(b, 22).map(|h| h as i32)) {
+        (Some(b"BM"), Some(h)) if h > 0 => {
+            let mut v = b.to_vec();
+            v[22..26].copy_from_slice(&(-h).to_le_bytes());
+            std::borrow::Cow::Owned(v)
+        }
+        _ => std::borrow::Cow::Borrowed(b),
+    }
+}
+
 /// 無圧縮の BMP（1・4・8 ビットのパレット、16・24・32 ビット）を読む。読めない形は None。
 pub fn decode_bmp(b: &[u8]) -> Option<Raster> {
     if b.get(..2)? != b"BM" {

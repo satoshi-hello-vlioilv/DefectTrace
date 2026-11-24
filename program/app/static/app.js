@@ -401,6 +401,7 @@
   const seenCards = new Set();
   const cardIO = new IntersectionObserver((es) => {
     for (const e of es) { if (e.isIntersecting) { seenCards.add(e.target); fillCard(e.target); } else seenCards.delete(e.target); }
+    remeasure();
   }, { root: $("grid"), rootMargin: "800px 0px" });
   function fillCard(th) {
     if (th.dataset.v === String(S.cardVer)) return;
@@ -459,6 +460,7 @@
     if (seg.childElementCount !== max) seg.innerHTML = Array.from({ length: max }, (_, i) => `<button type="button" data-cols="${i + 1}">${i + 1}</button>`).join("");
     seg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", +b.dataset.cols === k));
     $("sizerWrap").title = `一覧の幅に合わせて、この列の数で並べる（今の幅とカードの項目では最大 ${max} 列。項目を減らすか窓を広げると増える）`;
+    measureCard();
   }
   // 描いたカードの中身を書き替える（対応付け・転写候補が届いたとき）。いま見えている枠だけ。ほかは見えたときに描く
   function updateCards() {
@@ -466,6 +468,23 @@
     $("grid").style.setProperty("--rows", S.card.length);
     fitThumbs();
     for (const th of seenCards) if (th.isConnected) fillCard(th); else seenCards.delete(th);
+  }
+  // カードの高さを測り、見えていないカードの高さ（--cardH）にする。式の見積もりは書体でずれる（Windows の行の高さ）。
+  // 項目の数・画像の大きさ・データの有無が変わったら測り直す。同じ高さなら書き替えない（全体の長さを動かさない）
+  let measureRaf = 0;
+  const remeasure = () => { if (!measureRaf) measureRaf = requestAnimationFrame(() => { measureRaf = 0; measureCard(); }); };
+  function measureCard() {
+    const g = $("grid"), probe = document.createElement("div");
+    const it = S.items.find((x) => S.imap[mkey(x)]) || S.items[0]; if (!it) return;
+    probe.className = "th"; probe.style.cssText = "position:absolute;visibility:hidden;content-visibility:visible;contain:layout style paint;min-height:0";   // 見えているカードと同じ閉じ込め（中身の配置が同じになる）
+    probe.innerHTML = `<fieldset><legend>${cardHead(it, S.imap[mkey(it)])}</legend><div class="ph-img"><img alt="" style="opacity:0"></div></fieldset><div class="cm">${cardMeta(it, S.imap[mkey(it)])}</div>`;
+    // いちばん高い形で測る（転写候補の札が付くカードは 1px 高い）
+    const face = probe.querySelector(".nm2>span"); if (face && !face.querySelector(".tbadge")) face.insertAdjacentHTML("beforeend", ' <span class="tbadge">転写候補 9</span>');
+    // 見えている本物のカード（の写し。引き伸ばし・最小の高さを外した中身の高さ）も測り、いちばん高い値にする
+    const real = [...seenCards].filter((t) => t.isConnected && t.firstChild).slice(0, 24).map((t) => { const c = t.cloneNode(true); c.style.cssText = probe.style.cssText; return c; });
+    g.append(probe, ...real);
+    const h = Math.ceil(Math.max(...[probe, ...real].map((x) => x.getBoundingClientRect().height))); probe.remove(); real.forEach((x) => x.remove());
+    if (h > 0 && g.style.getPropertyValue("--cardH") !== h + "px") g.style.setProperty("--cardH", h + "px");
   }
   $("grid").addEventListener("click", (e) => { const th = e.target.closest(".th"); if (th && !e.target.closest(".tbadge")) select(idxOf(itemOf(th))); });
   $("grid").addEventListener("dblclick", (e) => { const th = e.target.closest(".th"); if (th) { select(idxOf(itemOf(th))); openViewer(); } });
