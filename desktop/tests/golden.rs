@@ -12,6 +12,10 @@
 //!   ロットの情報・一覧の items など、答えのどこに出ても、この 2 つを除いて比べる
 //! - ロット一覧の印（flags）に no_image（画像なし: 画像総数が 0）を足した。除いて比べる
 //!
+//! 違ってよいと決めたこと（版 4.14.0。利用者の報告）:
+//! - 表示する画像の上下: 検査計の BMP は行を上から書いているのに、頭の高さが正（下から並べた印）。版 3.8 は BMP の決まりどおりに描き、
+//!   元のアプリと上下が逆だった。既定を元のアプリと同じ向きにした（設定 bmp_rows_as_stored）。ここでは版 3.8 と比べるため外す
+//!
 //! 違ってよいと決めたこと（版 4.13.0。利用者の依頼）:
 //! - 元のアプリの欠陥詳細と同じ計算の項目（OS元幅・DS元幅・OS幅入後・DS幅入後・ランク・検出LSC。V413_VIRTUALS）を足した。
 //!   画像の情報（/api/imginfo の detect）の行から除いて比べる。式は tests/calc.rs
@@ -135,7 +139,8 @@ fn answers_match_the_python_version() {
     let home = root.join("_home");
     let cfg = Config::from_value(
         json!({"equipments": [{"name": "LS3", "path": format!("{rs}/LS3")}, {"name": "DL2", "path": format!("{rs}/DL2")}, {"name": "NS1", "path": format!("{rs}/NS1")}],
-               "workers": 4}),
+               // 版 3.8 は BMP の決まりどおりの向き（版 4.14.0 で、元のアプリと同じ向きを既定にした。試験は tests/calc.rs）
+               "workers": 4, "bmp_rows_as_stored": false}),
         &home,
     );
     let app = App::new(cfg, None);

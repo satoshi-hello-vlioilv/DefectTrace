@@ -34,6 +34,8 @@ pub fn defaults() -> Value {
         "update_source": "",
         "release_users": [],
         "memory_mb": 160,
+        // BMP の行を、ファイルに並んだ順（上から）として描く（検査計と元のアプリの向き。false で BMP の決まりどおり: thumb::rows_as_stored）
+        "bmp_rows_as_stored": true,
     })
 }
 

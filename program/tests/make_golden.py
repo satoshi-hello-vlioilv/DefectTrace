@@ -9,6 +9,8 @@ Rust の答えとの突き合わせは desktop/tests/golden.rs。版 3.8 と違�
 版 4.13.0 で足した物（元のアプリの欠陥詳細と同じ計算の項目〈OS元幅・DS元幅・OS幅入後・DS幅入後・ランク・検出LSC〉と、
 既定の表示項目の 画像表示の DS元幅・OS幅入後・DS幅入後・面積率・平均レベル暗・ランク、一覧の 検査長(m)）も同じく、
 正解データは作り直さず、golden.rs が比べる前に除く（golden.rs の ADDED と V413_VIRTUALS。式の試験は desktop/tests/calc.rs）。
+版 4.14.0 で、表示する画像の上下を元のアプリと同じ向きにした（BMP の行をファイルに並んだ順に描く。設定 bmp_rows_as_stored）。
+版 3.8 は BMP の決まりどおりなので、golden.rs はこの設定を外して比べる（正解データは作り直さない）。
 """
 import hashlib
 import importlib

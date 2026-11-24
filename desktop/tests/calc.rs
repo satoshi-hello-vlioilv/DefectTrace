@@ -201,3 +201,41 @@ fn pin_num_is_the_value_before_formatting() {
     assert_eq!(num(json!({"file": "@lot", "key": "time"}), None), None, "作業時刻は数でない");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// 表示する画像の上下（版 4.14.0。利用者の報告）: 検査計の BMP は行を上から書いているのに、頭の高さが正（下から並べた印）。
+/// 元のアプリはファイルの並びのまま描く。既定では、原寸（/img）も縮小画像も、ファイルの 1 行目を上に描く（頭の高さを負にする）。
+/// 設定 bmp_rows_as_stored を false にすると、BMP の決まりどおり（版 3.8 と同じ）
+#[test]
+fn bmp_rows_are_drawn_in_file_order_like_the_original_app() {
+    use dt_core::thumb;
+    // 2×2 の 8 ビット濃淡の BMP（検査計と同じ形: 頭の高さは正）。ファイルの 1 行目を 0（黒）、2 行目を 255（白）
+    let first_row = 0u8;
+    let mut b = vec![];
+    b.extend(b"BM");
+    b.extend((14 + 40 + 1024 + 8u32).to_le_bytes());
+    b.extend([0u8; 4]);
+    b.extend((14 + 40 + 1024u32).to_le_bytes());
+    for v in [40u32, 2, 2] {
+        b.extend(v.to_le_bytes());
+    }
+    b.extend(1u16.to_le_bytes());
+    b.extend(8u16.to_le_bytes());
+    b.extend([0u8; 24]);
+    for i in 0..=255u8 {
+        b.extend([i, i, i, 0]);
+    }
+    b.extend([first_row, first_row, 0, 0, 255, 255, 0, 0]);
+    // BMP の決まりどおり: ファイルの 1 行目は画像の下
+    let std = thumb::decode_bmp(&b).unwrap();
+    assert_eq!(std.px[std.w * (std.h - 1)], first_row, "決まりどおりなら 1 行目は下");
+    // 元のアプリの向き: ファイルの 1 行目を上に
+    let flipped = thumb::rows_as_stored(&b);
+    let r = thumb::decode_bmp(&flipped).unwrap();
+    assert_eq!(r.px[0], first_row, "ファイルの 1 行目が上");
+    assert_eq!(i32::from_le_bytes(flipped[22..26].try_into().unwrap()), -2, "頭の高さを負に（画素は動かさない）");
+    assert_eq!(&flipped[26..], &b[26..]);
+    // もう上から並べた印の BMP・BMP でない物はそのまま
+    b[22..26].copy_from_slice(&(-2i32).to_le_bytes());
+    assert!(matches!(thumb::rows_as_stored(&b), std::borrow::Cow::Borrowed(_)));
+    assert!(matches!(thumb::rows_as_stored(b"\xff\xd8\xff"), std::borrow::Cow::Borrowed(_)));
+}
